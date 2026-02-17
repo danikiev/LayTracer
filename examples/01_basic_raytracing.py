@@ -13,6 +13,7 @@ velocity model using LayTracer.
 import numpy as np
 import pandas as pd
 import laytracer
+import matplotlib.pyplot as plt
 
 # sphinx_gallery_thumbnail_number = 2
 
@@ -113,3 +114,8 @@ fig = laytracer.plot.rays_3d(
     receivers=rcvs,
 )
 fig
+
+###############################################################################
+# Show all plots when running from the command line.
+
+plt.show()

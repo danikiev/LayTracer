@@ -184,3 +184,54 @@ class TestSolve:
         stack = laytracer.build_layer_stack(df, z_src=500.0, z_rcv=1500.0)
         res = laytracer.solve(stack, epicentral_dist=3000.0, z_src=500.0, z_rcv=1500.0)
         assert res.ray_parameter >= 0
+
+    def test_snell_law_upward_ray(self):
+        """Snell's law: sin(theta_k)/v_k = p is constant across layers for upward ray."""
+        df = _simple_model()
+        stack = laytracer.build_layer_stack(df, z_src=2500.0, z_rcv=0.0)
+        res = laytracer.solve(stack, epicentral_dist=5000.0, z_src=2500.0, z_rcv=0.0)
+        p = res.ray_parameter
+
+        # Verify from ray geometry: sin(theta_k)/v_k should equal p
+        for k in range(stack.n_layers):
+            x0, z0 = res.ray_path[k]
+            x1, z1 = res.ray_path[k + 1]
+            dx = abs(x1 - x0)
+            dz = abs(z1 - z0)
+            seg_len = np.sqrt(dx**2 + dz**2)
+            sin_theta = dx / seg_len
+            # Which velocity does this segment use?
+            # Upward ray: segment 0 is deepest, so idx = N-1-k
+            idx = stack.n_layers - 1 - k
+            p_from_geom = sin_theta / stack.vp[idx]
+            assert p_from_geom == pytest.approx(p, rel=1e-3), (
+                f"Segment {k} (layer idx {idx}): p_geom={p_from_geom:.6e}, "
+                f"p_solver={p:.6e}"
+            )
+
+    def test_ray_angle_steeper_in_slow_layer(self):
+        """Ray is steeper (smaller angle from vertical) in slower layers."""
+        df = _simple_model()
+        # Upward ray: source deep, receiver shallow
+        stack = laytracer.build_layer_stack(df, z_src=2500.0, z_rcv=0.0)
+        res = laytracer.solve(stack, epicentral_dist=5000.0, z_src=2500.0, z_rcv=0.0)
+
+        # Compute dx/dz for each segment from ray path
+        # The ray goes upward, so layer order in path is: deepest first
+        ratios = []
+        for k in range(stack.n_layers):
+            x0, z0 = res.ray_path[k]
+            x1, z1 = res.ray_path[k + 1]
+            dx = abs(x1 - x0)
+            dz = abs(z1 - z0)
+            ratios.append(dx / dz)  # larger = flatter = faster layer
+
+        # Ratios should increase from first segment (deepest=fastest)
+        # to last segment (shallowest=slowest)... wait no:
+        # Deepest layer has highest velocity → flatter ray → larger ratio
+        # Shallowest layer has lowest velocity → steeper ray → smaller ratio
+        # Since upward ray: segment 0 is deepest (fastest), last is shallowest (slowest)
+        assert ratios[0] > ratios[-1], (
+            f"Ray should be flatter in fast deep layer (dx/dz={ratios[0]:.3f}) "
+            f"than in slow shallow layer (dx/dz={ratios[-1]:.3f})"
+        )

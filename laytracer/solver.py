@@ -397,23 +397,27 @@ def solve(
     z_cum = z_src
 
     for k in range(N):
-        eta_k = np.sqrt(1.0 / (v[k] ** 2) - p ** 2)
-        dx_k = h[k] * p / eta_k
-        dt_k = h[k] / (v[k] ** 2 * eta_k)  # = h / (v² η)
+        # When going upward, the ray starts in the deepest layer
+        # but the stack is ordered shallow-to-deep, so reverse the index.
+        idx = (N - 1 - k) if not going_down else k
+        eta_k = np.sqrt(1.0 / (v[idx] ** 2) - p ** 2)
+        dx_k = h[idx] * p / eta_k
+        dt_k = h[idx] / (v[idx] ** 2 * eta_k)  # = h / (v² η)
 
         tt += dt_k
         x_cum += dx_k
-        z_cum += h[k] if going_down else -h[k]
+        z_cum += h[idx] if going_down else -h[idx]
         pts[k + 1] = [x_cum, z_cum]
 
         # inline t*
         if compute_amplitude and Q_arr is not None:
-            tstar_val += dt_k / Q_arr[k]
+            tstar_val += dt_k / Q_arr[idx]
 
         # transmission coefficient at top of this layer (interface k)
         if compute_amplitude and k > 0:
+            idx_prev = (N - 1 - (k - 1)) if not going_down else (k - 1)
             trans_prod_val *= _interface_transmission(
-                p, k - 1, k, stack, vel_type, transcoef_method
+                p, idx_prev, idx, stack, vel_type, transcoef_method
             )
 
     # ── Geometrical spreading ──
@@ -426,8 +430,10 @@ def solve(
             dqdp = vmax / denom_dp ** 1.5
             dXdp = dXdq * dqdp
 
-            cos_is = np.sqrt(max(1.0 - (p * v[0]) ** 2, 0.0))
-            cos_ir = np.sqrt(max(1.0 - (p * v[-1]) ** 2, 0.0))
+            i_src = N - 1 if not going_down else 0
+            i_rcv = 0 if not going_down else N - 1
+            cos_is = np.sqrt(max(1.0 - (p * v[i_src]) ** 2, 0.0))
+            cos_ir = np.sqrt(max(1.0 - (p * v[i_rcv]) ** 2, 0.0))
 
             denom = cos_is * cos_ir
             if denom > 1e-15 and abs(dXdp) > 0:
