@@ -29,6 +29,43 @@ vel_df = pd.DataFrame({
     "Qs":    [100.0,  200.0,  300.0,  400.0],
 })
 
+print(vel_df)
+
+###############################################################################
+# Plot velocity model
+# -------------------
+#
+# Visualise the P-wave velocity, S-wave velocity, and density profiles
+# that will be used for the amplitude calculations.
+
+fig, axes = plt.subplots(1, 3, figsize=(10, 5), sharey=True)
+
+laytracer.plot.velocity_profile(vel_df, vel_type="Vp", ax=axes[0])
+laytracer.plot.velocity_profile(vel_df, vel_type="Vs", ax=axes[1], color="tab:orange")
+axes[1].set_title("Vs profile")
+
+# Density profile (reuse the step-profile pattern)
+depths = vel_df["Depth"].values
+rho = vel_df["Rho"].values
+n = len(depths)
+z_plot, r_plot = [], []
+for i in range(n):
+    z_top = depths[i]
+    z_bot = depths[i + 1] if i + 1 < n else z_top + (depths[-1] - depths[0]) * 0.3
+    z_plot.extend([z_top, z_bot])
+    r_plot.extend([rho[i], rho[i]])
+
+axes[2].plot(r_plot, z_plot, color="tab:green")
+axes[2].invert_yaxis()
+axes[2].set_xlabel(r"$\rho$ (kg/m³)")
+axes[2].set_title("Density profile")
+
+fig.suptitle("Velocity model", fontsize=14)
+fig.tight_layout()
+plt.show()
+
+#%%
+
 ###############################################################################
 # Trace rays with amplitude computation
 # --------------------------------------
