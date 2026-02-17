@@ -51,8 +51,11 @@ result = laytracer.trace_rays(
 )
 
 ###############################################################################
-# Plot travel time vs offset
-# --------------------------
+# Plot amplitude quantities vs offset
+# ------------------------------------
+#
+# We plot travel time, :math:`t^*`, geometrical spreading, and
+# transmission coefficient product side by side.
 
 fig, axes = plt.subplots(2, 2, figsize=(10, 8))
 
@@ -62,19 +65,11 @@ axes[0, 0].set_ylabel("Travel time (s)")
 axes[0, 0].set_title("Travel time")
 axes[0, 0].grid(True, alpha=0.3)
 
-###############################################################################
-# Plot t* vs offset
-# -----------------
-
 axes[0, 1].plot(offsets / 1000, result.tstar, "o-", markersize=3, color="tab:orange")
 axes[0, 1].set_xlabel("Offset (km)")
 axes[0, 1].set_ylabel(r"$t^*$ (s)")
 axes[0, 1].set_title(r"Attenuation operator $t^*$")
 axes[0, 1].grid(True, alpha=0.3)
-
-###############################################################################
-# Plot spreading vs offset
-# ------------------------
 
 if result.spreading is not None:
     valid = result.spreading > 0
@@ -86,10 +81,6 @@ axes[1, 0].set_xlabel("Offset (km)")
 axes[1, 0].set_ylabel("Spreading factor")
 axes[1, 0].set_title("Geometrical spreading")
 axes[1, 0].grid(True, alpha=0.3)
-
-###############################################################################
-# Plot transmission product vs offset
-# ------------------------------------
 
 axes[1, 1].plot(
     offsets / 1000, result.trans_product,
