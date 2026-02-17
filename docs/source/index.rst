@@ -1,8 +1,8 @@
 .. LayTracer documentation master file
 
-========
+=========
 LayTracer
-========
+=========
 
 **LayTracer** is a Python implementation of fast two-point seismic ray
 tracing in 1-D layered media with constant layer velocity, based on

@@ -209,6 +209,84 @@ at each interface.
 
 ----
 
+Extension to 3-D layered media
+===============================
+
+All the formulae above are derived in a **2-D vertical plane**
+containing both the source and the receiver.  Because horizontally
+layered media possess *cylindrical symmetry* about the vertical axis
+through the source, any source–receiver pair in three-dimensional space
+can be **reduced to an equivalent 2-D problem** without loss of
+generality (:footcite:t:`Cerveny2001`, Ch. 3;
+:footcite:t:`AkiRichards2002`, Ch. 4).
+
+Coordinate projection
+---------------------
+
+Let the source position be :math:`\mathbf{s} = (x_s, y_s, z_s)` and the
+receiver position :math:`\mathbf{r} = (x_r, y_r, z_r)`.  The
+**epicentral distance** (horizontal distance) is
+
+.. math::
+   \Delta = \sqrt{(x_r - x_s)^2 + (y_r - y_s)^2}
+
+and the **unit direction vector** from source to receiver in the
+horizontal plane is
+
+.. math::
+   \hat{\mathbf{u}} = \frac{1}{\Delta}
+       \begin{pmatrix} x_r - x_s \\ y_r - y_s \end{pmatrix},
+   \qquad \Delta > 0
+
+(for vanishing :math:`\Delta` the azimuth is arbitrary, and we default to
+:math:`\hat{\mathbf{u}} = (1,\,0)`).
+
+The 2-D ray tracing problem is then solved exactly as described in the
+preceding sections, with the epicentral distance :math:`\Delta` playing
+the role of the target offset :math:`X_R` and the depth coordinates
+:math:`z_s, z_r` determining the traversed layers.
+
+Back-projection to 3-D
+-----------------------
+
+Once the 2-D ray path :math:`\{(x_k^{(2\mathrm{D})},\, z_k)\}_{k=0}^M`
+has been computed, it is mapped back to 3-D Cartesian coordinates via
+
+.. math::
+   \begin{aligned}
+   X_k &= x_s + x_k^{(2\mathrm{D})}\;\hat{u}_x, \\
+   Y_k &= y_s + x_k^{(2\mathrm{D})}\;\hat{u}_y, \\
+   Z_k &= z_k.
+   \end{aligned}
+
+This simply *sweeps* the 2-D ray along the source–receiver azimuth.
+
+Validity of amplitude attributes
+---------------------------------
+
+Because the medium properties depend only on depth, every quantity
+computed from the 2-D ray remains valid in 3-D:
+
+- **Ray parameter** :math:`p` — determined solely by Snell's law across
+  horizontal interfaces.
+- **Travel time** — sum of vertical-slowness contributions
+  :math:`\Delta t_k`, unchanged by azimuth.
+- **Attenuation operator** :math:`t^*` — depends only on
+  :math:`\Delta t_k` and :math:`Q_k`.
+- **Geometrical spreading** — the formula
+  :math:`L = \sqrt{X\,|\partial X/\partial p|\,/\,
+  (\cos\theta_s\cos\theta_r)}` already accounts for 3-D cylindrical
+  divergence because it includes the factor :math:`X` (epicentral
+  distance) that captures the out-of-plane ray-tube expansion
+  (:footcite:t:`Cerveny2001`, §4.10).
+- **Transmission coefficients** — depend on ray parameter and layer
+  impedances, not on azimuth.
+
+Thus, the layered-media solver need only operate in the 2-D ray plane;
+the full 3-D solution is recovered by geometry alone.
+
+----
+
 References
 ==========
 

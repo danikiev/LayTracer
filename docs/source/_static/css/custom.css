@@ -1,0 +1,21 @@
+@import 'theme.css'; 
+
+.sphx-glr-multi-img {
+    max-width: 100%;
+}
+
+/* Light theme customization */
+html[data-theme="light"] .sd-card .sd-card-header {
+    background-color: #f3f4f5;
+}
+html[data-theme="light"] {
+    --sd-color-card-background: #ffffff;     
+}
+
+/* Dark theme customization */
+html[data-theme="dark"] .sd-card .sd-card-header {
+    background-color: #29313d;
+}
+html[data-theme="dark"] {
+    --sd-color-card-background: #222832;
+}
