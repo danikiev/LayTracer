@@ -1,0 +1,30 @@
+name: laytracer
+channels:
+  - conda-forge
+  - plotly
+  - defaults
+dependencies:
+  - python>=3.8, <3.13
+  - pip
+  - numpy>=1.20, <2
+  - scipy
+  - pandas
+  - numba
+  - matplotlib
+  - plotly::plotly  
+  - cmcrameri
+  - psutil
+  - joblib
+  - ipython  
+  - jupyter
+  - ipywidgets
+  - pytest
+  - sphinx
+  - pydata-sphinx-theme
+  - sphinx-gallery
+  - sphinxcontrib-bibtex
+  - sphinx-design
+  - numpydoc
+  - spyder
+  - pip:
+    - setuptools_scm

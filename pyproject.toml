@@ -1,0 +1,46 @@
+[build-system]
+requires = [
+    "setuptools >= 65",
+    "setuptools_scm[toml]",
+    "wheel",
+]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "laytracer"
+description = "LayTracer — a Python implementation of two-point seismic ray tracing in layered media"
+readme = "README.md"
+authors = [    
+    {name = "Denis Anikiev", email = "danikiev@gmail.com"},
+]
+keywords = ["geophysics", "seismology", "ray tracing", "layered media"]
+classifiers = [
+    "Natural Language :: English",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+dependencies = [
+    "numpy",
+    "scipy",
+    "pandas",
+    "numba",
+    "matplotlib",
+    "plotly",
+    "cmcrameri",
+    "psutil"
+]
+dynamic = ["version"]
+
+[tool.setuptools.packages.find]
+exclude = ["pytests", "tests"]
+
+[tool.setuptools_scm]
+version_file = "laytracer/version.py"
+
+[project.scripts]
+laytracer = 'gui.helloworld:main'
