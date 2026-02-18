@@ -68,7 +68,7 @@ plt.show()
 
 ###############################################################################
 # Trace rays with amplitude computation
-# --------------------------------------
+# -------------------------------------
 #
 # Trace P-waves from a deep source to receivers at varying offsets,
 # requesting :math:`t^*`, spreading, and transmission.
@@ -89,7 +89,7 @@ result = laytracer.trace_rays(
 
 ###############################################################################
 # Plot amplitude quantities vs offset
-# ------------------------------------
+# -----------------------------------
 #
 # We plot travel time, :math:`t^*`, geometrical spreading, and
 # transmission coefficient product side by side.
@@ -161,8 +161,8 @@ plt.show()
 #%%
 
 ###############################################################################
-# Validation: Ammon MATLAB Exercise L3 — Figure 2
-# -------------------------------------------------
+# P-SV reflection & transmission test
+# -----------------------------------
 #
 # Reproduction of the classic P-SV reflection & transmission test case from
 # Charles J. Ammon's MATLAB Exercise L3 (Lay & Wallace, 1995, Figure 3.28).
@@ -194,7 +194,7 @@ RT = laytracer.psv_rt_coefficients(
 
 ###############################################################################
 # Incident P-wave coefficients
-# ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+# ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 # Incidence angle (P-wave): θ = arcsin(p · Vp)
 angle_P = np.rad2deg(np.arcsin(np.clip(p_vec * mi_vp, -1, 1)))
@@ -202,7 +202,7 @@ crit_P = np.rad2deg(np.arcsin(mi_vp / mt_vp))
 
 fig, axes = plt.subplots(2, 2, figsize=(12, 9))
 fig.suptitle(
-    "Ammon L3 — Incident P-wave\n"
+    "Incident P-wave\n"
     f"Inc: Vp={mi_vp}, Vs={mi_vs}, ρ={mi_rho}  →  "
     f"Trans: Vp={mt_vp}, Vs={mt_vs}, ρ={mt_rho}  "
     f"(P crit. {crit_P:.1f}°)",
@@ -236,7 +236,7 @@ plt.show()
 
 ###############################################################################
 # Incident SV-wave coefficients
-# ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+# ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 # Incidence angle (SV-wave): θ = arcsin(p · Vs)
 angle_SV = np.rad2deg(np.arcsin(np.clip(p_vec * mi_vs, -1, 1)))
@@ -244,7 +244,7 @@ crit_SV = np.rad2deg(np.arcsin(mi_vs / mi_vp))
 
 fig, axes = plt.subplots(2, 2, figsize=(12, 9))
 fig.suptitle(
-    "Ammon L3 — Incident SV-wave\n"
+    "Incident SV-wave\n"
     f"Inc: Vp={mi_vp}, Vs={mi_vs}, ρ={mi_rho}  →  "
     f"Trans: Vp={mt_vp}, Vs={mt_vs}, ρ={mt_rho}  "
     f"(SV crit. {crit_SV:.1f}°)",
