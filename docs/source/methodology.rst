@@ -182,26 +182,158 @@ analytically via the chain rule:
 
 ----
 
-Transmission coefficients
-=========================
+Reflection and transmission coefficients
+========================================
 
-Normal incidence
-----------------
+In layered media, wave amplitudes are modified at every crossed interface.
+LayTracer supports two methods for computing interface coefficients.
 
-The displacement amplitude transmission coefficient at normal incidence
-(:footcite:t:`Shearer2019`) is
+Normal-incidence (impedance-only) approximation
+------------------------------------------------
+
+For a wave crossing an interface from medium 1 to medium 2 at normal
+incidence,
 
 .. math::
-   T = \frac{2\,Z_1}{Z_1 + Z_2}, \qquad Z_i = \rho_i\,v_i
+   T = \frac{2 Z_1}{Z_1 + Z_2},
+   \qquad Z_i = \rho_i v_i,
 
-Angle-dependent (Zoeppritz)
----------------------------
+where :math:`Z_i` is the acoustic impedance and :math:`v_i` is the wave speed
+of the considered mode (P or S).
 
-For oblique incidence, LayTracer solves the full 4×4 Zoeppritz system
-(:footcite:t:`AkiRichards2002`, Eqs. 5.40–5.42).  The system relates
-the reflected and transmitted P-SV amplitudes to the incident
-wave amplitude through displacement and stress continuity conditions
-at each interface.
+Angle-dependent P-SV formulation (welded solid-solid interface)
+---------------------------------------------------------------
+
+For horizontal slowness (ray parameter) :math:`p`, the vertical slownesses are
+
+.. math::
+   \eta_{\alpha i} = \sqrt{\frac{1}{v_{Pi}^2} - p^2},
+   \qquad
+   \eta_{\beta i} = \sqrt{\frac{1}{v_{Si}^2} - p^2},
+
+and the auxiliary quantities
+
+.. math::
+   a = \rho_2\!\left(1-2v_{S2}^2p^2\right)-\rho_1\!\left(1-2v_{S1}^2p^2\right),
+
+.. math::
+   b = \rho_2\!\left(1-2v_{S2}^2p^2\right)+2\rho_1v_{S1}^2p^2,
+
+.. math::
+   c = \rho_1\!\left(1-2v_{S1}^2p^2\right)+2\rho_2v_{S2}^2p^2,
+
+.. math::
+   d = 2\left(\rho_2v_{S2}^2-\rho_1v_{S1}^2\right).
+
+Define the cosine-dependent intermediate terms
+
+.. math::
+   E=b\,\eta_{\alpha1}+c\,\eta_{\alpha2},
+   \quad
+   F=b\,\eta_{\beta1}+c\,\eta_{\beta2},
+   \quad
+   G=a-d\,\eta_{\alpha1}\eta_{\beta2},
+   \quad
+   H=a-d\,\eta_{\alpha2}\eta_{\beta1},
+
+and the system determinant
+
+.. math::
+   D = EF + GH\,p^2.
+
+The complete :math:`4\times 4` scattering matrix
+(:footcite:t:`AkiRichards2002`, Eqs. 5.38–5.40) is computed by LayTracer.
+The eight independent P-SV coefficients are listed below.
+
+**Incident P-wave** — reflection and transmission:
+
+.. math::
+   R_{PP} = \frac{\left(b\,\eta_{\alpha1}-c\,\eta_{\alpha2}\right)F
+             - \left(a+d\,\eta_{\alpha1}\eta_{\beta2}\right)H\,p^2}{D},
+
+.. math::
+   R_{PS} = -\frac{2\,\eta_{\alpha1}\left(ab+cd\,\eta_{\alpha2}\eta_{\beta2}\right)
+             p\,(v_{P1}/v_{S1})}{D},
+
+.. math::
+   T_{PP} = \frac{2\rho_1\,\eta_{\alpha1}\,F\,(v_{P1}/v_{P2})}{D},
+
+.. math::
+   T_{PS} = \frac{2\rho_1\,\eta_{\alpha1}\,H\,p\,(v_{P1}/v_{S2})}{D}.
+
+**Incident SV-wave** — reflection and transmission:
+
+.. math::
+   R_{SP} = -\frac{2\,\eta_{\beta1}\left(ab+cd\,\eta_{\alpha2}\eta_{\beta2}\right)
+             p\,(v_{S1}/v_{P1})}{D},
+
+.. math::
+   R_{SS} = -\frac{\left(b\,\eta_{\beta1}-c\,\eta_{\beta2}\right)E
+             - \left(a+d\,\eta_{\alpha2}\eta_{\beta1}\right)G\,p^2}{D},
+
+.. math::
+   T_{SP} = -\frac{2\rho_1\,\eta_{\beta1}\,G\,p\,(v_{S1}/v_{P2})}{D},
+
+.. math::
+   T_{SS} = \frac{2\rho_1\,\eta_{\beta1}\,E\,(v_{S1}/v_{S2})}{D}.
+
+For references and details on the derivation of these formulas, see
+:footcite:t:`LayWallace1995` (Table 3.1, note the sign error in the second
+term of :math:`b`) and :footcite:t:`AkiRichards2002` (Equations 5.38–5.40).
+
+The angle-dependent formulation is used by default. It reduces to the
+normal-incidence expression for :math:`p=0`.
+For post-critical incidence the coefficients may become complex; for
+amplitude modelling the software uses :math:`|T_l|`.
+
+Critical angles
+---------------
+
+A **critical angle** occurs when the transmitted wave in a faster medium
+becomes evanescent.  For an incident P-wave crossing into a layer where
+:math:`v_{P2} > v_{P1}`, the P-critical angle is
+
+.. math::
+   \theta_c^{P} = \arcsin\!\left(\frac{v_{P1}}{v_{P2}}\right).
+
+Similarly, when :math:`v_{S2} > v_{P1}` an S-to-P critical angle exists:
+
+.. math::
+   \theta_c^{S} = \arcsin\!\left(\frac{v_{P1}}{v_{S2}}\right).
+
+For an incident SV-wave the same logic applies with :math:`v_{S1}` in the
+numerator.  Beyond the critical angle the corresponding vertical slowness
+becomes imaginary, the coefficient becomes complex, and total reflection
+occurs for that mode.
+
+Brewster angles
+---------------
+
+By analogy with optics, a **Brewster angle** is an incidence angle at which a
+reflection or transmission coefficient passes through zero or a deep minimum.
+In electromagnetic theory, Brewster's angle is the incidence angle at which
+:math:`R_p = 0` for p-polarised light at a dielectric interface.  In
+elastodynamics, the same phenomenon occurs: certain combinations of elastic
+parameters produce incidence angles where one of the P-SV scattering
+coefficients vanishes.
+
+Unlike critical angles, which depend only on velocity ratios, Brewster angles
+depend on *all six* elastic parameters (:math:`v_{P1}`, :math:`v_{S1}`,
+:math:`\rho_1`, :math:`v_{P2}`, :math:`v_{S2}`, :math:`\rho_2`).
+Physically, they arise from destructive interference between the P and SV
+displacement potentials at the welded interface: the two potential
+contributions to a particular scattered mode cancel exactly, driving that
+coefficient to zero.
+
+For example, the reflected P coefficient :math:`R_{PP}` may vanish at an
+angle well below the critical angle.  At this Brewster angle the incident
+energy is partitioned entirely into the transmitted P-wave and the
+mode-converted waves, with no same-mode reflection.
+
+LayTracer provides the function :func:`~laytracer.amplitude.find_brewster_angles`
+which numerically detects these minima in the computed coefficient curves by
+searching for local minima of :math:`|C(\theta)|` whose value falls below a
+user-specified threshold.
 
 ----
 
