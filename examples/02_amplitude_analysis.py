@@ -197,17 +197,42 @@ RT = laytracer.psv_rt_coefficients(
 ###############################################################################
 # Incident P-wave coefficients
 # ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+#
+# For an incident P-wave the ray parameter sweeps from 0 to
+# :math:`1/V_P` (grazing P incidence), covering the full 0–90° range.
+#
+# **Critical angle** (dashed red line):
+#
+# * Transmitted P becomes evanescent at
+#   :math:`\theta_c^{T(P)} = \arcsin(V_P^{(1)}/V_P^{(2)}) \approx 38.5°`.
+#   Beyond this angle :math:`|R_{PP}| \to 1` (total reflection).
+#   There is no transmitted-SV critical angle because
+#   :math:`V_P^{(1)} > V_S^{(2)}` for this model.
+#
+# **Brewster angles** (dotted purple lines):
+#
+# * :math:`|R_{PS}|` has a near-zero at ≈37.9°, just before the
+#   critical angle.  This is the P-to-SV mode-conversion null,
+#   analogous to the optical Brewster angle.  Its position depends
+#   on all six elastic parameters, not just the velocity ratio.
 
 # Incidence angle (P-wave): θ = arcsin(p · Vp)
 angle_P = np.rad2deg(np.arcsin(np.clip(p_vec * mi_vp, -1, 1)))
-crit_P = np.rad2deg(np.arcsin(mi_vp / mt_vp))
+crit_P = np.rad2deg(np.arcsin(mi_vp / mt_vp))   # transmitted P critical
+
+# Detect Brewster angles for all P-incident coefficients
+brew_P = laytracer.find_brewster_angles(RT, angle_P, keys=["Rpp", "Rps", "Tpp", "Tps"])
+
+# Shared y-limit across all four P-incident panels
+p_keys = ["Rpp", "Rps", "Tpp", "Tps"]
+ymax_P = max(np.nanmax(np.abs(RT[k])) for k in p_keys) * 1.1
+ymax_P = max(ymax_P, 0.5)
 
 fig, axes = plt.subplots(2, 2, figsize=(12, 9))
 fig.suptitle(
     "Incident P-wave\n"
     f"Inc: Vp={mi_vp}, Vs={mi_vs}, ρ={mi_rho}  →  "
-    f"Trans: Vp={mt_vp}, Vs={mt_vs}, ρ={mt_rho}  "
-    f"(P crit. {crit_P:.1f}°)",
+    f"Trans: Vp={mt_vp}, Vs={mt_vs}, ρ={mt_rho}",
     fontsize=11,
 )
 
@@ -222,13 +247,17 @@ for row, col, key, ylabel, title in labels:
     ax = axes[row, col]
     ax.plot(angle_P, np.abs(RT[key]), "k-", lw=1.5)
     ax.axvline(crit_P, color="r", ls="--", lw=0.8,
-               label=f"P crit. {crit_P:.1f}°")
+               label=f"T(P) crit. {crit_P:.1f}°")
+    # Brewster lines for this coefficient
+    for ba in brew_P.get(key, []):
+        ax.axvline(ba, color="tab:purple", ls=":", lw=0.8,
+                   label=f"Brewster {ba:.1f}°")
     ax.set_xlim(0, 90)
-    ax.set_ylim(-0.1, 2.0)
+    ax.set_ylim(-0.05, ymax_P)
     ax.set_xlabel("Incidence angle (°)")
     ax.set_ylabel(ylabel)
     ax.set_title(title)
-    ax.legend(fontsize=8)
+    ax.legend(fontsize=7, loc="upper right")
     ax.grid(True, alpha=0.3)
 
 fig.tight_layout()
@@ -239,17 +268,54 @@ plt.show()
 ###############################################################################
 # Incident SV-wave coefficients
 # ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+#
+# For an incident SV-wave the ray parameter sweeps from 0 to
+# :math:`1/V_S` (grazing SV incidence), covering the full 0–90° range.
+#
+# **Critical angles** (coloured lines) – three distinct thresholds:
+#
+# * :math:`\theta_c^{T(P)} = \arcsin(V_S^{(1)}/V_P^{(2)}) \approx 21.3°`
+#   – transmitted P goes evanescent (blue dotted)
+# * :math:`\theta_c^{R(P)} = \arcsin(V_S^{(1)}/V_P^{(1)}) \approx 35.6°`
+#   – reflected P goes evanescent (red dashed)
+# * :math:`\theta_c^{T(SV)} = \arcsin(V_S^{(1)}/V_S^{(2)}) \approx 39.1°`
+#   – transmitted SV goes evanescent (green dash-dot);
+#   beyond this angle all energy is reflected as SV
+#   (:math:`|R_{SS}| = 1`).
+#
+# The reflected SV wave is always real (same medium, same velocity).
+#
+# **Brewster angles** (purple dotted lines) – the near-zeros of
+# :math:`|R_{SP}|` near 21° and 40°, and of :math:`|R_{SS}|` near
+# 20°, are mode-conversion nulls governed by the full elastic
+# contrast.
+
+p_vec_sv = np.linspace(0, 1.0 / mi_vs, n_p + 1)
+
+RT_sv = laytracer.psv_rt_coefficients(
+    p=p_vec_sv,
+    vp1=mi_vp, vs1=mi_vs, rho1=mi_rho,
+    vp2=mt_vp, vs2=mt_vs, rho2=mt_rho,
+)
 
 # Incidence angle (SV-wave): θ = arcsin(p · Vs)
-angle_SV = np.rad2deg(np.arcsin(np.clip(p_vec * mi_vs, -1, 1)))
-crit_SV = np.rad2deg(np.arcsin(mi_vs / mi_vp))
+angle_SV = np.rad2deg(np.arcsin(np.clip(p_vec_sv * mi_vs, -1, 1)))
+
+# Critical angles
+crit_tp = np.rad2deg(np.arcsin(mi_vs / mt_vp))   # transmitted P
+crit_rp = np.rad2deg(np.arcsin(mi_vs / mi_vp))   # reflected P
+crit_ts = np.rad2deg(np.arcsin(mi_vs / mt_vs))   # transmitted SV
+
+# Detect Brewster angles for all SV-incident coefficients
+brew_SV = laytracer.find_brewster_angles(
+    RT_sv, angle_SV, keys=["Rsp", "Rss", "Tsp", "Tss"],
+)
 
 fig, axes = plt.subplots(2, 2, figsize=(12, 9))
 fig.suptitle(
     "Incident SV-wave\n"
     f"Inc: Vp={mi_vp}, Vs={mi_vs}, ρ={mi_rho}  →  "
-    f"Trans: Vp={mt_vp}, Vs={mt_vs}, ρ={mt_rho}  "
-    f"(SV crit. {crit_SV:.1f}°)",
+    f"Trans: Vp={mt_vp}, Vs={mt_vs}, ρ={mt_rho}",
     fontsize=11,
 )
 
@@ -260,17 +326,30 @@ labels_sv = [
     (1, 1, "Tss", r"$|T_{SS}|$",  "Transmitted SV"),
 ]
 
+# Shared y-limit across all four SV-incident panels
+sv_keys = ["Rsp", "Rss", "Tsp", "Tss"]
+ymax_SV = max(np.nanmax(np.abs(RT_sv[k])) for k in sv_keys) * 1.1
+ymax_SV = max(ymax_SV, 0.5)
+
 for row, col, key, ylabel, title in labels_sv:
     ax = axes[row, col]
-    ax.plot(angle_SV, np.abs(RT[key]), "k-", lw=1.5)
-    ax.axvline(crit_SV, color="r", ls="--", lw=0.8,
-               label=f"SV crit. {crit_SV:.1f}°")
+    ax.plot(angle_SV, np.abs(RT_sv[key]), "k-", lw=1.5)
+    ax.axvline(crit_tp, color="tab:blue", ls=":", lw=0.8,
+               label=f"T(P) crit. {crit_tp:.1f}°")
+    ax.axvline(crit_rp, color="r", ls="--", lw=0.8,
+               label=f"R(P) crit. {crit_rp:.1f}°")
+    ax.axvline(crit_ts, color="tab:green", ls="-.", lw=0.8,
+               label=f"T(SV) crit. {crit_ts:.1f}°")
+    # Brewster lines for this coefficient
+    for ba in brew_SV.get(key, []):
+        ax.axvline(ba, color="tab:purple", ls=":", lw=0.8,
+                   label=f"Brewster {ba:.1f}°")
     ax.set_xlim(0, 90)
-    ax.set_ylim(-0.1, 2.0)
+    ax.set_ylim(-0.05, ymax_SV)
     ax.set_xlabel("Incidence angle (°)")
     ax.set_ylabel(ylabel)
     ax.set_title(title)
-    ax.legend(fontsize=8)
+    ax.legend(fontsize=7, loc="upper right")
     ax.grid(True, alpha=0.3)
 
 fig.tight_layout()

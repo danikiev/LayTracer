@@ -114,17 +114,82 @@ def psv_rt_coefficients(
 
     D = E * F + G * H * p * p
 
-    # --- Incident P ---
-    Rpp =  ((b * eta_a1 - c * eta_a2) * F - (a + d * eta_a1 * eta_b2) * H * p * p) / D
-    Rps = -(2.0 * eta_a1 * (a * b + d * c * eta_a2 * eta_b2) * p * (vp1 / vs1)) / D
-    Tpp =  (2.0 * rho1 * eta_a1 * F * (vp1 / vp2)) / D
-    Tps =  (2.0 * rho1 * eta_a1 * H * p * (vp1 / vs2)) / D
+    # At exactly critical or grazing angles D → 0, producing 0/0 (NaN).
+    # Suppress the resulting numpy warnings; the NaN values are correct
+    # (the coefficients are singular at those isolated ray parameters).
+    with np.errstate(invalid="ignore", divide="ignore"):
+        # --- Incident P ---
+        Rpp =  ((b * eta_a1 - c * eta_a2) * F - (a + d * eta_a1 * eta_b2) * H * p * p) / D
+        Rps = -(2.0 * eta_a1 * (a * b + d * c * eta_a2 * eta_b2) * p * (vp1 / vs1)) / D
+        Tpp =  (2.0 * rho1 * eta_a1 * F * (vp1 / vp2)) / D
+        Tps =  (2.0 * rho1 * eta_a1 * H * p * (vp1 / vs2)) / D
 
-    # --- Incident SV ---
-    Rss = -((b * eta_b1 - c * eta_b2) * E - (a + d * eta_a2 * eta_b1) * G * p * p) / D
-    Rsp = -(2.0 * eta_b1 * (a * b + d * c * eta_a2 * eta_b2) * p * (vs1 / vp1)) / D
-    Tss =  (2.0 * rho1 * eta_b1 * E * (vs1 / vs2)) / D
-    Tsp = -(2.0 * rho1 * eta_b1 * G * p * (vs1 / vp2)) / D
+        # --- Incident SV ---
+        Rss = -((b * eta_b1 - c * eta_b2) * E - (a + d * eta_a2 * eta_b1) * G * p * p) / D
+        Rsp = -(2.0 * eta_b1 * (a * b + d * c * eta_a2 * eta_b2) * p * (vs1 / vp1)) / D
+        Tss =  (2.0 * rho1 * eta_b1 * E * (vs1 / vs2)) / D
+        Tsp = -(2.0 * rho1 * eta_b1 * G * p * (vs1 / vp2)) / D
 
     return dict(Rpp=Rpp, Rps=Rps, Rss=Rss, Rsp=Rsp,
                 Tpp=Tpp, Tps=Tps, Tss=Tss, Tsp=Tsp)
+
+
+# ═══════════════════════════════════════════════════════════════════════
+#  Brewster-angle detection
+# ═══════════════════════════════════════════════════════════════════════
+
+def find_brewster_angles(
+    rt_coefficients: dict,
+    angles: np.ndarray,
+    keys: list[str] | None = None,
+    threshold: float = 0.05,
+    order: int = 20,
+) -> dict[str, list[float]]:
+    r"""Find Brewster-like angles (deep minima) in R/T coefficient curves.
+
+    A **Brewster angle** (by analogy with optics) is an incidence angle
+    at which a reflection or transmission coefficient passes through
+    zero or a deep minimum.  Unlike critical angles, which depend only
+    on velocity ratios, Brewster angles depend on *all six* elastic
+    parameters (Vp, Vs, ρ in both media) and arise from destructive
+    interference between displacement potentials at the interface.
+
+    Parameters
+    ----------
+    rt_coefficients : dict
+        Output of :func:`psv_rt_coefficients` — each value is a 1-D
+        array of complex coefficients.
+    angles : array_like
+        Incidence angles (degrees) corresponding to the ray-parameter
+        samples used in *rt_coefficients*. Must have the same length
+        as the coefficient arrays.
+    keys : list of str, optional
+        Which coefficient keys to search (e.g. ``['Rps', 'Rss']``).
+        By default all eight keys are searched.
+    threshold : float, optional
+        Only report minima whose absolute value is below this value.
+        Default 0.05.
+    order : int, optional
+        Half-window size passed to :func:`scipy.signal.argrelmin`
+        for local-minimum detection.  Default 20.
+
+    Returns
+    -------
+    dict[str, list[float]]
+        Mapping from coefficient key to a list of Brewster angles
+        (degrees).  Keys with no detected minima are omitted.
+    """
+    from scipy.signal import argrelmin as _argrelmin
+
+    angles = np.asarray(angles)
+    if keys is None:
+        keys = list(rt_coefficients.keys())
+
+    result: dict[str, list[float]] = {}
+    for key in keys:
+        vals = np.abs(rt_coefficients[key])
+        idx = _argrelmin(vals, order=order)[0]
+        brewster = [float(angles[i]) for i in idx if vals[i] < threshold]
+        if brewster:
+            result[key] = brewster
+    return result

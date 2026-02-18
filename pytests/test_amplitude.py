@@ -125,3 +125,91 @@ class TestSpreading:
         )
         assert res.spreading is not None
         assert res.spreading > 0
+
+
+# ═══════════════════════════════════════════════════════════════════════
+#  Brewster-angle detection
+# ═══════════════════════════════════════════════════════════════════════
+
+def _ammon_model_rt(n=1000):
+    """Compute RT coefficients for Ammon's crust/mantle test case.
+
+    Returns (RT_P, angle_P, RT_SV, angle_SV).
+    """
+    mi_vp, mi_vs, mi_rho = 4.98, 2.9, 2.667
+    mt_vp, mt_vs, mt_rho = 8.00, 4.6, 3.38
+
+    p_P = np.linspace(0, 1.0 / mi_vp, n + 1)
+    p_SV = np.linspace(0, 1.0 / mi_vs, n + 1)
+
+    RT_P = laytracer.psv_rt_coefficients(
+        p_P, mi_vp, mi_vs, mi_rho, mt_vp, mt_vs, mt_rho,
+    )
+    RT_SV = laytracer.psv_rt_coefficients(
+        p_SV, mi_vp, mi_vs, mi_rho, mt_vp, mt_vs, mt_rho,
+    )
+    angle_P = np.rad2deg(np.arcsin(np.clip(p_P * mi_vp, -1, 1)))
+    angle_SV = np.rad2deg(np.arcsin(np.clip(p_SV * mi_vs, -1, 1)))
+    return RT_P, angle_P, RT_SV, angle_SV
+
+
+class TestBrewsterAngles:
+    """Tests for :func:`laytracer.find_brewster_angles`."""
+
+    def test_no_brewster_for_identical_media(self):
+        """Identical half-spaces produce no Brewster angles."""
+        n = 500
+        p = np.linspace(0, 1.0 / 5000.0, n + 1)
+        RT = laytracer.psv_rt_coefficients(
+            p, 5000.0, 2887.0, 2700.0, 5000.0, 2887.0, 2700.0,
+        )
+        angles = np.rad2deg(np.arcsin(np.clip(p * 5000.0, -1, 1)))
+        result = laytracer.find_brewster_angles(RT, angles)
+        assert result == {}
+
+    def test_p_incident_rps_brewster(self):
+        """For Ammon model, |Rps| has a Brewster angle near 37.9°."""
+        RT_P, angle_P, _, _ = _ammon_model_rt()
+        result = laytracer.find_brewster_angles(RT_P, angle_P, keys=["Rps"])
+        assert "Rps" in result
+        assert len(result["Rps"]) == 1
+        assert result["Rps"][0] == pytest.approx(37.9, abs=0.5)
+
+    def test_sv_incident_rss_brewster(self):
+        """For Ammon model, |Rss| has a Brewster angle near 19.8°."""
+        _, _, RT_SV, angle_SV = _ammon_model_rt()
+        result = laytracer.find_brewster_angles(RT_SV, angle_SV, keys=["Rss"])
+        assert "Rss" in result
+        assert len(result["Rss"]) == 1
+        assert result["Rss"][0] == pytest.approx(19.8, abs=0.5)
+
+    def test_sv_incident_rsp_two_brewsters(self):
+        """For Ammon model, |Rsp| has two Brewster angles near 21° and 40°."""
+        _, _, RT_SV, angle_SV = _ammon_model_rt()
+        result = laytracer.find_brewster_angles(RT_SV, angle_SV, keys=["Rsp"])
+        assert "Rsp" in result
+        assert len(result["Rsp"]) == 2
+        assert result["Rsp"][0] == pytest.approx(21.0, abs=1.0)
+        assert result["Rsp"][1] == pytest.approx(40.0, abs=1.0)
+
+    def test_keys_filter(self):
+        """Only requested keys appear in the output."""
+        RT_P, angle_P, _, _ = _ammon_model_rt()
+        result = laytracer.find_brewster_angles(RT_P, angle_P, keys=["Tpp"])
+        # Tpp has no Brewster minimum below 0.05, so it should be absent
+        assert "Tpp" not in result
+        assert "Rps" not in result  # not requested
+
+    def test_threshold_controls_sensitivity(self):
+        """Raising the threshold may detect more minima."""
+        RT_P, angle_P, _, _ = _ammon_model_rt()
+        strict = laytracer.find_brewster_angles(
+            RT_P, angle_P, keys=["Rps"], threshold=0.001,
+        )
+        loose = laytracer.find_brewster_angles(
+            RT_P, angle_P, keys=["Rps"], threshold=0.1,
+        )
+        # Loose threshold should find at least as many as strict
+        n_strict = len(strict.get("Rps", []))
+        n_loose = len(loose.get("Rps", []))
+        assert n_loose >= n_strict
