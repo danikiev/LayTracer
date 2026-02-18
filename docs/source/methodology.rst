@@ -1,15 +1,11 @@
-.. _theory:
+.. _methodology:
 
-======
-Theory
-======
+===========
+Methodology
+===========
 
 This chapter presents the theoretical foundations of the ray tracing
 algorithm implemented in LayTracer.
-
-.. contents:: Contents
-   :local:
-   :depth: 2
 
 ----
 

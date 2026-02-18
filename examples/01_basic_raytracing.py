@@ -1,18 +1,18 @@
 r"""
-Basic ray tracing in a layered model
-=====================================
+01. Basic ray tracing
+=====================
 
 This example demonstrates two-point ray tracing through a simple 3-layer
-velocity model using LayTracer.
+velocity model using LayTracer in 2D and 3D cases.
 """
 
 ###############################################################################
 # Setup
 # -----
 
+import laytracer
 import numpy as np
 import pandas as pd
-import laytracer
 import matplotlib.pyplot as plt
 
 # sphinx_gallery_thumbnail_number = 2

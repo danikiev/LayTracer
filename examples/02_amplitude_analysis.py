@@ -1,6 +1,6 @@
 r"""
-Amplitude analysis: t*, spreading, and transmission
-=====================================================
+02. Amplitude analysis
+======================
 
 This example demonstrates the computation of amplitude-related
 quantities alongside ray tracing: the attenuation operator :math:`t^*`,
@@ -11,10 +11,12 @@ geometrical spreading, and transmission coefficients.
 # Setup
 # -----
 
+import laytracer
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-import laytracer
+
+# sphinx_gallery_thumbnail_number = 2
 
 ###############################################################################
 # Define velocity model
