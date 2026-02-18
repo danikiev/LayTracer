@@ -179,9 +179,35 @@ plt.show()
 # * Incident medium:     Vp = 4.98 km/s,  Vs = 2.9 km/s,  ρ = 2.667 g/cm³
 # * Transmitted medium:  Vp = 8.00 km/s,  Vs = 4.6 km/s,  ρ = 3.380 g/cm³
 
-# Medium parameters (units: km/s and g/cm³ — only ratios matter)
+# Medium parameters (Km/s and g/cm^3)
 mi_vp, mi_vs, mi_rho = 4.98, 2.9, 2.667   # incident
 mt_vp, mt_vs, mt_rho = 8.00, 4.6, 3.38    # transmitted
+
+# Create a DataFrame for visualization (using SI units m/s, kg/m^3)
+model_psv = pd.DataFrame({
+    "Depth": [0.0, 2000.0],  # Arbitrary interface depth at 2km
+    "Vp":    [mi_vp * 1000, mt_vp * 1000],
+    "Vs":    [mi_vs * 1000, mt_vs * 1000],
+    "Rho":   [mi_rho * 1000, mt_rho * 1000],
+})
+
+# Plot the velocity model
+fig, axes = plt.subplots(1, 3, figsize=(10, 4), sharey=True)
+laytracer.plot.velocity_profile(model_psv, vel_type="Vp", ax=axes[0])
+laytracer.plot.velocity_profile(model_psv, vel_type="Vs", ax=axes[1], color="tab:orange")
+axes[1].set_title("Vs profile")
+
+# Density
+z_plot = [0, 2000, 2000, 3000]
+r_plot = [mi_rho * 1000, mi_rho * 1000, mt_rho * 1000, mt_rho * 1000]
+axes[2].plot(r_plot, z_plot, color="tab:green")
+axes[2].invert_yaxis()
+axes[2].set_xlabel(r"$\rho$ (kg/m³)")
+axes[2].set_title("Density profile")
+
+fig.suptitle("P-SV Test Model", fontsize=14)
+fig.tight_layout()
+plt.show()
 
 # Ray-parameter sweep: p from 0 to 1/Vp_incident
 n_p = 200
@@ -260,6 +286,197 @@ for row, col, key, ylabel, title in labels:
     ax.legend(fontsize=7, loc="upper right")
     ax.grid(True, alpha=0.3)
 
+fig.tight_layout()
+plt.show()
+
+# %%
+# Ray diagrams (P-incidence)
+# ^^^^^^^^^^^^^^^^^^^^^^^^^^
+#
+# We visualize the ray paths for typical situations using `laytracer.plot.rays_2d`.
+# The interface is at 2000 m.
+
+
+def make_ray_paths(inc_angle_deg, wave_type="P"):
+    """Generate ray paths using LayTracer's engine."""
+    # 1. Determine Ray Parameter p
+    #    p = sin(theta) / v_incident
+    v_inc = mi_vp * 1000 if wave_type == "P" else mi_vs * 1000
+    p = np.sin(np.deg2rad(inc_angle_deg)) / v_inc
+
+    # Define interface and bottom depths
+    z_int = 2000.0
+    z_max = 4000.0
+    
+    rays_list = []
+    labels = []
+    colors = []
+    styles = []
+    
+    # Helper to trace a leg
+    def trace_leg(p_val, z_start, z_end, v_type, label, color, style, x_start=0.0):
+        # Check evanescence: p * v < 1
+        # Get velocity of the relevant layer to check critical angle
+        # Note: model_psv has depths 0, 2000.
+        # Layer 0 (0-2000): incident medium. Layer 1 (2000+): transmitted.
+        
+        # We need to know which layer we are in to check velocity
+        # But for tracing, we can just use laytracer ecosystem
+        
+        # Build a temporary stack for this segment to calculate offset
+        # This implicitly handles the velocity check if we implement it right,
+        # or we check manually.
+        
+        stack = laytracer.build_layer_stack(model_psv, z_start, z_end)
+        v_layer = stack.v(v_type)
+        if np.any(p_val * v_layer >= 1.0 - 1e-9):
+            return None, None # Evanescent
+
+        # Calculate horizontal offset using laytracer's physics
+        # 1. q_from_p
+        vmax = np.max(v_layer)
+        q = laytracer.q_from_p(p_val, vmax)
+        
+        # 2. offset(q)
+        lmd = v_layer / vmax
+        dx = laytracer.offset(q, stack.h, lmd)
+        
+        # 3. Trace ray to exact receiver location
+        x_end = x_start + dx
+        
+        # Create source/receiver coords
+        src_pt = np.array([x_start, 0.0, z_start])
+        rcv_pt = np.array([x_end, 0.0, z_end])
+        
+        res = laytracer.trace_rays(
+            sources=src_pt,
+            receivers=rcv_pt,
+            velocity_df=model_psv,
+            vel_type=v_type,
+            compute_amplitude=False
+        )
+        
+        # Extract ray path
+        if res.rays and len(res.rays) > 0:
+            return res.rays[0], x_end
+        return None, None
+
+    # --- 1. Incident Ray (Surface to Interface) ---
+    # Downward in top layer
+    ray_inc, x_int = trace_leg(
+        p, 0.0, z_int, 
+        wave_type, 
+        "Incident", "k", "-", x_start=0.0
+    )
+    
+    if ray_inc is None:
+        return [], [], [], [] # Should not happen for incident
+        
+    rays_list.append(ray_inc)
+    labels.append("Incident")
+    colors.append("k")
+    styles.append("-")
+    
+    # --- 2. Reflected P (Interface to Surface) ---
+    # Upward in top layer
+    ray_rp, _ = trace_leg(
+        p, z_int, 0.0, 
+        "Vp", 
+        "Refl P", "r", "--", x_start=x_int
+    )
+    if ray_rp is not None:
+        rays_list.append(ray_rp)
+        labels.append("Refl P")
+        colors.append("r")
+        styles.append("--")
+
+    # --- 3. Reflected S (Interface to Surface) ---
+    # Upward in top layer
+    ray_rs, _ = trace_leg(
+        p, z_int, 0.0, 
+        "Vs", 
+        "Refl S", "tab:orange", ":", x_start=x_int
+    )
+    if ray_rs is not None:
+        rays_list.append(ray_rs)
+        labels.append("Refl S")
+        colors.append("tab:orange")
+        styles.append(":")
+
+    # --- 4. Transmitted P (Interface to Bottom) ---
+    # Downward in bottom layer
+    ray_tp, _ = trace_leg(
+        p, z_int, z_max, 
+        "Vp", 
+        "Trans P", "b", "-", x_start=x_int
+    )
+    if ray_tp is not None:
+        rays_list.append(ray_tp)
+        labels.append("Trans P")
+        colors.append("b")
+        styles.append("-")
+
+    # --- 5. Transmitted S (Interface to Bottom) ---
+    # Downward in bottom layer
+    ray_ts, _ = trace_leg(
+        p, z_int, z_max, 
+        "Vs", 
+        "Trans S", "tab:green", "-.", x_start=x_int
+    )
+    if ray_ts is not None:
+        rays_list.append(ray_ts)
+        labels.append("Trans S")
+        colors.append("tab:green")
+        styles.append("-.")
+        
+    return rays_list, labels, colors, styles
+
+
+
+def plot_ray_situation(angle, wave_type, title, ax):
+    rays, labels, colors, styles = make_ray_paths(angle, wave_type)
+    
+    # 1. Setup background (velocity model) and axes
+    # We pass a dummy ray to ensure the model plotting logic has a valid range if needed,
+    # though with explicit xlim it handles it.
+    laytracer.plot.rays_2d(
+        model_psv, rays=[], ax=ax, vel_type="Vp", 
+        xlim=(-100, 6000), ylim=(4000, 0),
+        plot_model=True
+    )
+    
+    # 2. Plot each ray leg using rays_2d (no background)
+    for ray, label, color, style in zip(rays, labels, colors, styles):
+        # We need to reshape ray to (M, 3) or (M, 2) list of rays
+        # make_ray_paths returns (M, 3) arrays (x, 0, z)
+        # rays_2d expects list of arrays.
+        laytracer.plot.rays_2d(
+            model_psv,
+            rays=[ray],
+            ax=ax,
+            ray_color=color, # This sets the color
+            plot_model=False,
+            linestyle=style,
+            label=label,
+            ray_alpha=1.0,
+            xlim=(-100, 6000), ylim=(4000, 0) # Maintain limits
+        )
+    
+    ax.legend(loc="lower left", fontsize="small")
+    ax.set_title(f"{title}\n(Angle {angle}°)")
+
+
+# P-incidence scenarios
+scenarios_p = [
+    (30, "Pre-critical"),
+    (45, "Post-critical (Trans P evanescent)"),
+]
+
+fig, axes = plt.subplots(1, 2, figsize=(10, 5), sharey=True)
+for i, (ang, name) in enumerate(scenarios_p):
+    plot_ray_situation(ang, "P", name, axes[i])
+
+fig.suptitle("Ray paths: Incident P-wave", fontsize=14)
 fig.tight_layout()
 plt.show()
 
@@ -352,6 +569,28 @@ for row, col, key, ylabel, title in labels_sv:
     ax.legend(fontsize=7, loc="upper right")
     ax.grid(True, alpha=0.3)
 
+fig.tight_layout()
+plt.show()
+
+# %%
+# Ray diagrams (SV-incidence)
+# ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+# SV-incidence scenarios
+scenarios_sv = [
+    (15, "Pre-critical"),
+    (25, "Trans P evanescent"),
+    (37, "Refl P evanescent"),
+    (45, "Trans SV evanescent (Total Reflection)"),
+]
+
+fig, axes = plt.subplots(2, 2, figsize=(10, 8), sharey=True, sharex=True)
+axes = axes.flatten()
+
+for i, (ang, name) in enumerate(scenarios_sv):
+    plot_ray_situation(ang, "S", name, axes[i])
+
+fig.suptitle("Ray paths: Incident SV-wave", fontsize=14)
 fig.tight_layout()
 plt.show()
 

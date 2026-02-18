@@ -56,7 +56,22 @@ def velocity_profile(
     z_plot, v_plot = [], []
     for i in range(n):
         z_top = depths[i]
-        z_bot = depths[i + 1] if i + 1 < n else z_top + (depths[-1] - depths[0]) * 0.3
+        
+        if i + 1 < n:
+            z_bot = depths[i + 1]
+        else:
+            # Last layer (half-space) extension
+            span = depths[-1] - depths[0]
+            if span == 0:
+                span = 1000.0  # Fallback for single-layer model
+            
+            z_def = z_top + span * 0.3
+            if ylim:
+                # Extend to at least the plot limit if provided
+                z_bot = max(z_def, float(max(ylim)))
+            else:
+                z_bot = z_def
+
         z_plot.extend([z_top, z_bot])
         v_plot.extend([vels[i], vels[i]])
 
@@ -83,6 +98,7 @@ def rays_2d(
     ray_alpha: float = 0.6,
     xlim: tuple | None = None,
     ylim: tuple | None = None,
+    plot_model: bool = True,
     **kwargs,
 ):
     r"""Plot ray paths over a 2-D layered velocity cross-section.
@@ -102,6 +118,10 @@ def rays_2d(
     ray_color : str
     ray_alpha : float
     xlim, ylim : tuple, optional
+    plot_model : bool
+        If *True* (default), plot the velocity model background and
+        set axis labels/titles.  If *False*, only plot the rays and
+        markers.
 
     Returns
     -------
@@ -119,28 +139,48 @@ def rays_2d(
     vels = vel_df[vel_type].values
     n = len(depths)
 
-    # Determine x-range from rays
-    all_x = np.concatenate([r[:, 0] for r in rays])
-    x_lo, x_hi = all_x.min(), all_x.max()
-    pad = (x_hi - x_lo) * 0.05
-    x_lo -= pad
-    x_hi += pad
+    # Determine x-range from rays (only if we need to plot model or set limits)
+    if plot_model:
+        if rays:
+            all_x = np.concatenate([r[:, 0] for r in rays])
+            x_lo, x_hi = all_x.min(), all_x.max()
+        else:
+            x_lo, x_hi = 0, 1000 # Default fallback
+            if xlim:
+                 x_lo, x_hi = xlim
 
-    # Layer rectangles
-    vmin, vmax = vels.min(), vels.max()
-    cmap = cm.get_cmap("viridis")
-    patches = []
-    colors_list = []
-    for i in range(n):
-        z_top = depths[i]
-        z_bot = depths[i + 1] if i + 1 < n else z_top + (depths[-1] - depths[0]) * 0.3
-        rect = Rectangle((x_lo, z_top), x_hi - x_lo, z_bot - z_top)
-        patches.append(rect)
-        norm_v = (vels[i] - vmin) / (vmax - vmin + 1e-10)
-        colors_list.append(cmap(norm_v))
+        pad = (x_hi - x_lo) * 0.05
+        x_lo -= pad
+        x_hi += pad
 
-    pc = PatchCollection(patches, facecolor=colors_list, alpha=0.3, edgecolor="grey", linewidth=0.5)
-    ax.add_collection(pc)
+        # Layer rectangles
+        vmin, vmax = vels.min(), vels.max()
+        cmap = cm.get_cmap("viridis")
+        patches = []
+        colors_list = []
+        for i in range(n):
+            z_top = depths[i]
+            
+            if i + 1 < n:
+                z_bot = depths[i + 1]
+            else:
+                # Last layer (half-space) extension
+                span = depths[-1] - depths[0]
+                if span == 0: span = 1000.0
+                
+                z_def = z_top + span * 0.3
+                if ylim:
+                    z_bot = max(z_def, float(max(ylim)))
+                else:
+                    z_bot = z_def
+            
+            rect = Rectangle((x_lo, z_top), x_hi - x_lo, z_bot - z_top)
+            patches.append(rect)
+            norm_v = (vels[i] - vmin) / (vmax - vmin + 1e-10)
+            colors_list.append(cmap(norm_v))
+
+        pc = PatchCollection(patches, facecolor=colors_list, alpha=0.3, edgecolor="grey", linewidth=0.5)
+        ax.add_collection(pc)
 
     # Rays
     for ray in rays:
@@ -156,15 +196,20 @@ def rays_2d(
         rcv = np.atleast_2d(receivers)
         ax.scatter(rcv[:, 0], rcv[:, -1], marker="v", s=60, c="blue", zorder=5, label="Receiver")
 
-    ax.invert_yaxis()
-    ax.set_xlabel("Horizontal distance (m)")
-    ax.set_ylabel("Depth (m)")
-    ax.set_title("Ray paths")
+    if plot_model:
+        ax.invert_yaxis()
+        ax.set_xlabel("Horizontal distance (m)")
+        ax.set_ylabel("Depth (m)")
+        ax.set_title("Ray paths")
+    
     if xlim:
         ax.set_xlim(xlim)
     if ylim:
         ax.set_ylim(ylim)
-    ax.legend(loc="upper right")
+        
+    # Only label legend if we haven't done it manually or if requested
+    # But usually the user calls legend() outside.
+    # We'll leave the return as is.
     return ax
 
 
