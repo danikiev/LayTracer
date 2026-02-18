@@ -167,7 +167,7 @@ plt.show()
 # -----------------------------------
 #
 # Reproduction of the classic P-SV reflection & transmission test case from
-# Charles J. Ammon's MATLAB Exercise L3 (Lay & Wallace, 1995, Figure 3.28).
+# `Charles J. Ammon's MATLAB Exercise L3 (PDF) <http://eqseis.geosc.psu.edu/cammon/HTML/UsingMATLAB/PDF/ML3%20ReflTransmission.pdf>`_ (:cite:t:`LayWallace1995`, Figure 3.28).
 #
 # For an incident P-wave the system unknowns are
 # :math:`[R_{PP},\; R_{PS},\; T_{PP},\; T_{PS}]`.
@@ -275,3 +275,15 @@ for row, col, key, ylabel, title in labels_sv:
 
 fig.tight_layout()
 plt.show()
+
+###############################################################################
+# References
+# ----------
+#
+# .. bibliography::
+#     :style: unsrt
+#     :filter: docname in docnames
+#
+# .. raw:: html
+#
+#    <br><br>
