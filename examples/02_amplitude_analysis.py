@@ -193,12 +193,12 @@ model_psv = pd.DataFrame({
 
 # Plot the velocity model
 fig, axes = plt.subplots(1, 3, figsize=(10, 4), sharey=True)
-laytracer.plot.velocity_profile(model_psv, vel_type="Vp", ax=axes[0])
+laytracer.plot.velocity_profile(model_psv, vel_type="Vp", ax=axes[0], ylim=(4000, 0))
 laytracer.plot.velocity_profile(model_psv, vel_type="Vs", ax=axes[1], color="tab:orange")
 axes[1].set_title("Vs profile")
 
 # Density
-z_plot = [0, 2000, 2000, 3000]
+z_plot = [0, 2000, 2000, 4000]
 r_plot = [mi_rho * 1000, mi_rho * 1000, mt_rho * 1000, mt_rho * 1000]
 axes[2].plot(r_plot, z_plot, color="tab:green")
 axes[2].invert_yaxis()
@@ -442,7 +442,10 @@ def plot_ray_situation(angle, wave_type, title, ax):
     laytracer.plot.rays_2d(
         model_psv, rays=[], ax=ax, vel_type="Vp", 
         xlim=(-100, 6000), ylim=(4000, 0),
-        plot_model=True
+        plot_model=True,
+        add_colorbar=True,
+        model_alpha=0.5,
+        discrete_colorbar=True,
     )
     
     # 2. Plot each ray leg using rays_2d (no background)

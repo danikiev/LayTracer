@@ -71,6 +71,9 @@ ax = laytracer.plot.rays_2d(
     sources=np.array([[0.0, 0.0, 3000.0]]),
     receivers=np.array([[5000.0, 0.0, 0.0]]),
     vel_type="Vp",
+    add_colorbar=True,
+    model_alpha=0.5,
+    discrete_colorbar=True,
 )
 
 #%%

@@ -99,6 +99,9 @@ def rays_2d(
     xlim: tuple | None = None,
     ylim: tuple | None = None,
     plot_model: bool = True,
+    add_colorbar: bool = False,
+    model_alpha: float = 1.0,
+    discrete_colorbar: bool = False,
     **kwargs,
 ):
     r"""Plot ray paths over a 2-D layered velocity cross-section.
@@ -122,6 +125,14 @@ def rays_2d(
         If *True* (default), plot the velocity model background and
         set axis labels/titles.  If *False*, only plot the rays and
         markers.
+    add_colorbar : bool
+        If *True* (default *False*), add a colorbar for the velocity
+        model. Only applies if *plot_model* is True.
+    model_alpha : float
+        Opacity of the velocity model layers (0.0 to 1.0). Default 1.0.
+    discrete_colorbar : bool
+        If *True* (default *False*), quantize the colormap to the
+        unique velocity values in the model.
 
     Returns
     -------
@@ -131,6 +142,7 @@ def rays_2d(
     from matplotlib.patches import Rectangle
     from matplotlib.collections import PatchCollection
     import matplotlib.cm as cm
+    from matplotlib.colors import Normalize, BoundaryNorm
 
     if ax is None:
         _, ax = plt.subplots(figsize=(10, 6))
@@ -154,8 +166,24 @@ def rays_2d(
         x_hi += pad
 
         # Layer rectangles
-        vmin, vmax = vels.min(), vels.max()
-        cmap = cm.get_cmap("viridis")
+        unique_vels = np.sort(np.unique(vels))
+        vmin, vmax = unique_vels[0], unique_vels[-1]
+        
+        if discrete_colorbar and len(unique_vels) > 1:
+            # Create discrete boundaries
+            # Midpoints between values
+            mids = (unique_vels[:-1] + unique_vels[1:]) / 2.0
+            # Extend to cover first and last
+            # We can pick abitrary padding, e.g. estimated step
+            step = (vmax - vmin) / (len(unique_vels) - 1) if len(unique_vels) > 1 else 1.0
+            bounds = np.concatenate(([vmin - step/2], mids, [vmax + step/2]))
+            
+            cmap = cm.get_cmap("viridis", len(unique_vels))
+            norm = BoundaryNorm(bounds, cmap.N)
+        else:
+            cmap = cm.get_cmap("viridis")
+            norm = Normalize(vmin=vmin, vmax=vmax)
+
         patches = []
         colors_list = []
         for i in range(n):
@@ -176,11 +204,23 @@ def rays_2d(
             
             rect = Rectangle((x_lo, z_top), x_hi - x_lo, z_bot - z_top)
             patches.append(rect)
-            norm_v = (vels[i] - vmin) / (vmax - vmin + 1e-10)
-            colors_list.append(cmap(norm_v))
+            # Use the norm to map velocity to color
+            colors_list.append(cmap(norm(vels[i])))
 
-        pc = PatchCollection(patches, facecolor=colors_list, alpha=0.3, edgecolor="grey", linewidth=0.5)
+        pc = PatchCollection(patches, facecolor=colors_list, alpha=model_alpha, edgecolor="grey", linewidth=0.5)
         ax.add_collection(pc)
+        
+        if add_colorbar:
+            sm = cm.ScalarMappable(cmap=cmap, norm=norm)
+            sm.set_array([])
+            
+            # Format ticks for discrete case
+            if discrete_colorbar and len(unique_vels) > 1:
+                # Place ticks at the unique values
+                ticks = unique_vels
+                plt.colorbar(sm, ax=ax, label=f"{vel_type} (m/s)", alpha=model_alpha, ticks=ticks)
+            else:
+                plt.colorbar(sm, ax=ax, label=f"{vel_type} (m/s)", alpha=model_alpha)
 
     # Rays
     for ray in rays:
