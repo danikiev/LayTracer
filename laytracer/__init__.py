@@ -26,7 +26,7 @@ Amplitude
 ~~~~~~~~~
 .. autosummary::
    transmission_normal
-   transmission_psv
+   psv_rt_coefficients
 
 Visualisation
 ~~~~~~~~~~~~~
@@ -46,7 +46,7 @@ from .solver import (
     initial_q,
     newton_step,
 )
-from .amplitude import transmission_normal, transmission_psv
+from .amplitude import transmission_normal, psv_rt_coefficients
 from .api import TraceResult, trace_rays
 from . import plot
 
@@ -71,7 +71,7 @@ __all__ = [
     "newton_step",
     # amplitude
     "transmission_normal",
-    "transmission_psv",
+    "psv_rt_coefficients",
     # api
     "TraceResult",
     "trace_rays",

@@ -46,16 +46,16 @@ class TestTransmission:
         """
         vp1, vs1, rho1 = 4000.0, 2000.0, 2500.0
         vp2, vs2, rho2 = 5000.0, 2800.0, 2700.0
-        T_angle = laytracer.transmission_psv(1e-10, vp1, vs1, rho1, vp2, vs2, rho2)
+        RT = laytracer.psv_rt_coefficients(1e-10, vp1, vs1, rho1, vp2, vs2, rho2)
         T_normal = laytracer.transmission_normal(vp1, rho1, vp2, rho2)
-        assert abs(T_angle) == pytest.approx(T_normal, rel=0.15)
+        assert abs(RT["Tpp"]) == pytest.approx(T_normal, rel=0.15)
 
     def test_transmission_positive(self):
         """Transmission coefficient magnitude is positive."""
-        T = laytracer.transmission_psv(
+        RT = laytracer.psv_rt_coefficients(
             0.0001, 3000.0, 1500.0, 2200.0, 5000.0, 2800.0, 2700.0
         )
-        assert abs(T) > 0
+        assert abs(RT["Tpp"]) > 0
 
 
 # ═══════════════════════════════════════════════════════════════════════

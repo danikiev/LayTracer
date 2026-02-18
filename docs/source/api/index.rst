@@ -50,7 +50,7 @@ Amplitude
 
 .. autofunction:: laytracer.transmission_normal
 
-.. autofunction:: laytracer.transmission_psv
+.. autofunction:: laytracer.psv_rt_coefficients
 
 Visualisation
 -------------

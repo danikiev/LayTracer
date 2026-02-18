@@ -157,3 +157,119 @@ ax.legend()
 ax.grid(True, alpha=0.3)
 fig.tight_layout()
 plt.show()
+
+#%%
+
+###############################################################################
+# Validation: Ammon MATLAB Exercise L3 — Figure 2
+# -------------------------------------------------
+#
+# Reproduction of the classic P-SV reflection & transmission test case from
+# Charles J. Ammon's MATLAB Exercise L3 (Lay & Wallace, 1995, Figure 3.28).
+#
+# For an incident P-wave the system unknowns are
+# :math:`[R_{PP},\; R_{PS},\; T_{PP},\; T_{PS}]`.
+# For an incident SV-wave the unknowns are
+# :math:`[R_{SP},\; R_{SS},\; T_{SP},\; T_{SS}]`.
+#
+# Model
+# ^^^^^
+# * Incident medium:     Vp = 4.98 km/s,  Vs = 2.9 km/s,  ρ = 2.667 g/cm³
+# * Transmitted medium:  Vp = 8.00 km/s,  Vs = 4.6 km/s,  ρ = 3.380 g/cm³
+
+# Medium parameters (units: km/s and g/cm³ — only ratios matter)
+mi_vp, mi_vs, mi_rho = 4.98, 2.9, 2.667   # incident
+mt_vp, mt_vs, mt_rho = 8.00, 4.6, 3.38    # transmitted
+
+# Ray-parameter sweep: p from 0 to 1/Vp_incident
+n_p = 200
+p_vec = np.linspace(0, 1.0 / mi_vp, n_p + 1)
+
+# Compute all 8 R/T coefficients
+RT = laytracer.psv_rt_coefficients(
+    p=p_vec,
+    vp1=mi_vp, vs1=mi_vs, rho1=mi_rho,
+    vp2=mt_vp, vs2=mt_vs, rho2=mt_rho,
+)
+
+###############################################################################
+# Incident P-wave coefficients
+# ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+# Incidence angle (P-wave): θ = arcsin(p · Vp)
+angle_P = np.rad2deg(np.arcsin(np.clip(p_vec * mi_vp, -1, 1)))
+crit_P = np.rad2deg(np.arcsin(mi_vp / mt_vp))
+
+fig, axes = plt.subplots(2, 2, figsize=(12, 9))
+fig.suptitle(
+    "Ammon L3 — Incident P-wave\n"
+    f"Inc: Vp={mi_vp}, Vs={mi_vs}, ρ={mi_rho}  →  "
+    f"Trans: Vp={mt_vp}, Vs={mt_vs}, ρ={mt_rho}  "
+    f"(P crit. {crit_P:.1f}°)",
+    fontsize=11,
+)
+
+labels = [
+    (0, 0, "Rpp", r"$|R_{PP}|$",  "Reflected P"),
+    (0, 1, "Rps", r"$|R_{PS}|$",  "Reflected SV"),
+    (1, 0, "Tpp", r"$|T_{PP}|$",  "Transmitted P"),
+    (1, 1, "Tps", r"$|T_{PS}|$",  "Transmitted SV"),
+]
+
+for row, col, key, ylabel, title in labels:
+    ax = axes[row, col]
+    ax.plot(angle_P, np.abs(RT[key]), "k-", lw=1.5)
+    ax.axvline(crit_P, color="r", ls="--", lw=0.8,
+               label=f"P crit. {crit_P:.1f}°")
+    ax.set_xlim(0, 90)
+    ax.set_ylim(-0.1, 2.0)
+    ax.set_xlabel("Incidence angle (°)")
+    ax.set_ylabel(ylabel)
+    ax.set_title(title)
+    ax.legend(fontsize=8)
+    ax.grid(True, alpha=0.3)
+
+fig.tight_layout()
+plt.show()
+
+#%%
+
+###############################################################################
+# Incident SV-wave coefficients
+# ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+# Incidence angle (SV-wave): θ = arcsin(p · Vs)
+angle_SV = np.rad2deg(np.arcsin(np.clip(p_vec * mi_vs, -1, 1)))
+crit_SV = np.rad2deg(np.arcsin(mi_vs / mi_vp))
+
+fig, axes = plt.subplots(2, 2, figsize=(12, 9))
+fig.suptitle(
+    "Ammon L3 — Incident SV-wave\n"
+    f"Inc: Vp={mi_vp}, Vs={mi_vs}, ρ={mi_rho}  →  "
+    f"Trans: Vp={mt_vp}, Vs={mt_vs}, ρ={mt_rho}  "
+    f"(SV crit. {crit_SV:.1f}°)",
+    fontsize=11,
+)
+
+labels_sv = [
+    (0, 0, "Rsp", r"$|R_{SP}|$",  "Reflected P"),
+    (0, 1, "Rss", r"$|R_{SS}|$",  "Reflected SV"),
+    (1, 0, "Tsp", r"$|T_{SP}|$",  "Transmitted P"),
+    (1, 1, "Tss", r"$|T_{SS}|$",  "Transmitted SV"),
+]
+
+for row, col, key, ylabel, title in labels_sv:
+    ax = axes[row, col]
+    ax.plot(angle_SV, np.abs(RT[key]), "k-", lw=1.5)
+    ax.axvline(crit_SV, color="r", ls="--", lw=0.8,
+               label=f"SV crit. {crit_SV:.1f}°")
+    ax.set_xlim(0, 90)
+    ax.set_ylim(-0.1, 2.0)
+    ax.set_xlabel("Incidence angle (°)")
+    ax.set_ylabel(ylabel)
+    ax.set_title(title)
+    ax.legend(fontsize=8)
+    ax.grid(True, alpha=0.3)
+
+fig.tight_layout()
+plt.show()

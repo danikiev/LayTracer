@@ -54,20 +54,23 @@ def transmission_normal(
     return 2.0 * Z1 / denom
 
 
-def transmission_psv(
-    p: float,
+# ═══════════════════════════════════════════════════════════════════════
+#  Full P-SV reflection / transmission matrix
+# ═══════════════════════════════════════════════════════════════════════
+
+def psv_rt_coefficients(
+    p,
     vp1: float,
     vs1: float,
     rho1: float,
     vp2: float,
     vs2: float,
     rho2: float,
-    vel_type: str = "Vp",
-) -> complex:
-    r"""Angle-dependent P-SV transmission coefficient (Zoeppritz).
+) -> dict:
+    r"""Compute all eight P-SV reflection/transmission coefficients.
 
-    Solves the full 4×4 Zoeppritz system following
-    :footcite:t:`AkiRichards2002` (Ch. 5, eqs. 5.40–5.42).
+    Direct port of the Ammon MATLAB ``PSVRTmatrix`` function
+    (Lay & Wallace / Aki & Richards formulation).
 
     For an incident P-wave the system unknowns are
     :math:`[R_{PP},\; R_{PS},\; T_{PP},\; T_{PS}]`.
@@ -76,78 +79,52 @@ def transmission_psv(
 
     Parameters
     ----------
-    p : float
-        Horizontal slowness (s/m).
+    p : float or array_like
+        Ray parameter (horizontal slowness, s/m).  Scalar or 1-D array.
     vp1, vs1, rho1 : float
-        P-velocity, S-velocity, density of the incident medium.
+        P-velocity, S-velocity, density of the *incident* medium.
     vp2, vs2, rho2 : float
-        Same for the transmitted medium.
-    vel_type : str
-        ``'Vp'`` for P-to-P transmission, ``'Vs'`` for SV-to-SV
-        transmission.
+        Same for the *transmitted* medium.
 
     Returns
     -------
-    complex
-        Displacement amplitude transmission coefficient.
+    dict
+        Keys ``'Rpp'``, ``'Rps'``, ``'Rss'``, ``'Rsp'``,
+        ``'Tpp'``, ``'Tps'``, ``'Tss'``, ``'Tsp'``.
+        Each value has the same shape as *p* (complex).
     """
-    # Vertical slownesses η = cos(θ)/v  (complex if post-critical)
-    def _eta(v):
-        arg = 1.0 / (v * v) - p * p
-        if arg >= 0:
-            return np.sqrt(arg)
-        return 1j * np.sqrt(-arg)
+    p = np.asarray(p, dtype=complex)
+    csqrt = np.lib.scimath.sqrt
 
-    eta_p1 = _eta(vp1)
-    eta_s1 = _eta(vs1)
-    eta_p2 = _eta(vp2)
-    eta_s2 = _eta(vs2)
+    # Vertical slownesses
+    eta_a1 = csqrt(1.0 / (vp1 * vp1) - p * p)
+    eta_a2 = csqrt(1.0 / (vp2 * vp2) - p * p)
+    eta_b1 = csqrt(1.0 / (vs1 * vs1) - p * p)
+    eta_b2 = csqrt(1.0 / (vs2 * vs2) - p * p)
 
-    p2 = p * p
+    a = rho2 * (1.0 - 2.0 * vs2 * vs2 * p * p) - rho1 * (1.0 - 2.0 * vs1 * vs1 * p * p)
+    b = rho2 * (1.0 - 2.0 * vs2 * vs2 * p * p) + 2.0 * rho1 * vs1 * vs1 * p * p
+    c = rho1 * (1.0 - 2.0 * vs1 * vs1 * p * p) + 2.0 * rho2 * vs2 * vs2 * p * p
+    d = 2.0 * (rho2 * vs2 * vs2 - rho1 * vs1 * vs1)
 
-    # 4×4 system matrix (displacement + stress continuity)
-    # Columns: [R_P, R_S, T_P, T_S]
-    M = np.array([
-        # Row 0: horizontal displacement (u_x)
-        [-p,     -eta_s1,  p,      eta_s2],
-        # Row 1: vertical displacement (u_z)
-        [eta_p1, -p,       eta_p2, p     ],
-        # Row 2: tangential stress (σ_xz)
-        [2 * rho1 * vs1**2 * p * eta_p1,
-         rho1 * vs1 * (1 - 2 * vs1**2 * p2) / vs1,
-         2 * rho2 * vs2**2 * p * eta_p2,
-         -rho2 * vs2 * (1 - 2 * vs2**2 * p2) / vs2],
-        # Row 3: normal stress (σ_zz)
-        [-rho1 * vp1 * (1 - 2 * vs1**2 * p2),
-         2 * rho1 * vs1**2 * p * eta_s1,
-         rho2 * vp2 * (1 - 2 * vs2**2 * p2),
-         2 * rho2 * vs2**2 * p * eta_s2],
-    ], dtype=complex)
+    E = b * eta_a1 + c * eta_a2
+    F = b * eta_b1 + c * eta_b2
+    G = a - d * eta_a1 * eta_b2
+    H = a - d * eta_a2 * eta_b1
 
-    if vel_type.lower() in ("vp", "p"):
-        # Incident P-wave RHS
-        rhs = np.array([
-            p,
-            eta_p1,
-            2 * rho1 * vs1**2 * p * eta_p1,
-            rho1 * vp1 * (1 - 2 * vs1**2 * p2),
-        ], dtype=complex)
-    else:
-        # Incident SV-wave RHS
-        rhs = np.array([
-            eta_s1,
-            p,
-            rho1 * vs1 * (1 - 2 * vs1**2 * p2) / vs1,
-            -2 * rho1 * vs1**2 * p * eta_s1,
-        ], dtype=complex)
+    D = E * F + G * H * p * p
 
-    try:
-        x = np.linalg.solve(M, rhs)
-    except np.linalg.LinAlgError:
-        return 1.0 + 0j
+    # --- Incident P ---
+    Rpp =  ((b * eta_a1 - c * eta_a2) * F - (a + d * eta_a1 * eta_b2) * H * p * p) / D
+    Rps = -(2.0 * eta_a1 * (a * b + d * c * eta_a2 * eta_b2) * p * (vp1 / vs1)) / D
+    Tpp =  (2.0 * rho1 * eta_a1 * F * (vp1 / vp2)) / D
+    Tps =  (2.0 * rho1 * eta_a1 * H * p * (vp1 / vs2)) / D
 
-    # x = [R_P, R_S, T_P, T_S]
-    if vel_type.lower() in ("vp", "p"):
-        return complex(x[2])  # T_PP
-    else:
-        return complex(x[3])  # T_SS
+    # --- Incident SV ---
+    Rss = -((b * eta_b1 - c * eta_b2) * E - (a + d * eta_a2 * eta_b1) * G * p * p) / D
+    Rsp = -(2.0 * eta_b1 * (a * b + d * c * eta_a2 * eta_b2) * p * (vs1 / vp1)) / D
+    Tss =  (2.0 * rho1 * eta_b1 * E * (vs1 / vs2)) / D
+    Tsp = -(2.0 * rho1 * eta_b1 * G * p * (vs1 / vp2)) / D
+
+    return dict(Rpp=Rpp, Rps=Rps, Rss=Rss, Rsp=Rsp,
+                Tpp=Tpp, Tps=Tps, Tss=Tss, Tsp=Tsp)

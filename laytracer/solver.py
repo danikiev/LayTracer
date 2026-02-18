@@ -462,7 +462,7 @@ def _interface_transmission(
     method: str,
 ) -> float:
     """Transmission coefficient at the interface between layers *k_above* and *k_below*."""
-    from .amplitude import transmission_normal, transmission_psv
+    from .amplitude import transmission_normal, psv_rt_coefficients
 
     v_above = stack.v(vel_type)[k_above]
     v_below = stack.v(vel_type)[k_below]
@@ -479,5 +479,6 @@ def _interface_transmission(
     # Angle-dependent (full Zoeppritz)
     vp_a, vs_a = stack.vp[k_above], stack.vs[k_above]
     vp_b, vs_b = stack.vp[k_below], stack.vs[k_below]
-    T = transmission_psv(p, vp_a, vs_a, rho_above, vp_b, vs_b, rho_below, vel_type)
-    return abs(T)
+    RT = psv_rt_coefficients(p, vp_a, vs_a, rho_above, vp_b, vs_b, rho_below)
+    key = "Tpp" if vel_type.lower() in ("vp", "p") else "Tss"
+    return float(abs(RT[key]))
