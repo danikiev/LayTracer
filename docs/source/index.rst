@@ -1,4 +1,4 @@
-.. LayTracer documentation master file
+.. _overview:
 
 ========
 Overview
@@ -6,19 +6,22 @@ Overview
 
 **LayTracer** is a Python implementation of fast two-point seismic ray
 tracing in 1-D layered media with constant layer velocity, based on
-the dimensionless ray parameter method of
-:cite:t:`FangChen2019`.
+the dimensionless ray parameter method of :footcite:t:`FangChen2019`.
+
+----
+
+.. _features:
 
 Features
 ========
 
-* Second-order Newton iteration for rapid convergence (2–3 iterations)
-* Inline computation of travel time, :math:`t^*`, geometrical spreading,
-  and transmission coefficients
-* Parallel computation via ``loky`` backend (joblib)
-* Standalone matplotlib/plotly visualisation
-* Comprehensive Sphinx documentation with full mathematical derivations
-
+* Fast two-point ray tracing via dimensionless ray parameter method
+* Second-order Newton iteration for rapid convergence
+* Refraction and reflection modes
+* Inline computation of travel time, attenuation operator :math:`t^*`, geometrical spreading, and reflection/transmission coefficients
+* Efficient parallel computations via `Joblib <https://joblib.readthedocs.io/>`_
+* Standalone `Matplotlib <https://matplotlib.org/>`_ / `Plotly <https://plotly.com/>`_ visualisation
+* Comprehensive `Sphinx <https://www.sphinx-doc.org/>`_ documentation with extensive theory
 
 ----
 
@@ -85,6 +88,7 @@ Features
 
 ----
 
-.. bibliography::
-    :style: unsrt
-    :filter: docname in docnames
+References
+==========
+
+.. footbibliography::

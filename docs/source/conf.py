@@ -63,7 +63,7 @@ sphinx_gallery_conf = {
     "filename_pattern": r"\.py", #include all examples
     #"filename_pattern": r"02_amplitude_analysis.py", #include specific example only
     # Ignore pattern to exclude specific files (useful to exclude demanding examples)
-    #"ignore_pattern": r"^example*\.py$", #exclude by mask
+    #"ignore_pattern": r"\03_*\.py$", #exclude by mask
     #"ignore_pattern": r"\.py$", # exclude all examples
     # Remove the "Download all examples" button from the top level gallery
     "download_all_examples": False,

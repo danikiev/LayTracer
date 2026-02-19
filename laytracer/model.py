@@ -181,3 +181,41 @@ def build_layer_stack(
         qp=qp_all[slc].copy() if has_qp else None,
         qs=qs_all[slc].copy() if has_qs else None,
     )
+
+
+def discretize_gradient_layer(
+    z_top: float, 
+    z_bot: float, 
+    v_func: Callable[[float], float], 
+    dz: float = 2.0,
+) -> pd.DataFrame:
+    """
+    Discretize a gradient layer into thin constant-velocity layers.
+
+    Parameters
+    ----------
+    z_top : float
+        Top depth of the gradient layer.
+    z_bot : float
+        Bottom depth of the gradient layer.
+    v_func : Callable[[float], float]
+        Function that returns the velocity at a given depth.
+    dz : float, optional
+        Thickness of each discretized layer, by default 2.0.
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame with columns ``Depth``, ``Vp``, ``Vs``, ``Rho``.
+    """
+    depths = np.arange(z_top, z_bot, dz)
+    z_mid = depths + dz / 2.0
+    v_vals = v_func(z_mid)
+    
+    df = pd.DataFrame({
+        "Depth": depths,
+        "Vp": v_vals,
+        "Vs": v_vals / 1.732,
+        "Rho": 2500.0
+    })
+    return df

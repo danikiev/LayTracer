@@ -11,7 +11,7 @@ geometrical spreading, and transmission coefficients.
 # Setup
 # -----
 
-import laytracer
+import laytracer as lt
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -42,8 +42,8 @@ print(vel_df)
 
 fig, axes = plt.subplots(1, 3, figsize=(10, 5), sharey=True)
 
-laytracer.plot.velocity_profile(vel_df, vel_type="Vp", ax=axes[0])
-laytracer.plot.velocity_profile(vel_df, vel_type="Vs", ax=axes[1], color="tab:orange")
+lt.plot.velocity_profile(vel_df, vel_type="Vp", ax=axes[0])
+lt.plot.velocity_profile(vel_df, vel_type="Vs", ax=axes[1], color="tab:orange")
 axes[1].set_title("Vs profile")
 
 # Density profile (reuse the step-profile pattern)
@@ -80,7 +80,7 @@ src = np.array([0.0, 0.0, 3000.0])
 offsets = np.arange(500, 15001, 500)
 rcvs = np.column_stack([offsets, np.zeros_like(offsets), np.zeros_like(offsets)])
 
-result = laytracer.trace_rays(
+result = lt.trace_rays(
     sources=src,
     receivers=rcvs,
     velocity_df=vel_df,
@@ -140,7 +140,7 @@ plt.show()
 # Compare normal-incidence vs angle-dependent transmission
 # --------------------------------------------------------
 
-result_normal = laytracer.trace_rays(
+result_normal = lt.trace_rays(
     sources=src,
     receivers=rcvs,
     velocity_df=vel_df,
@@ -193,8 +193,8 @@ model_psv = pd.DataFrame({
 
 # Plot the velocity model
 fig, axes = plt.subplots(1, 3, figsize=(10, 4), sharey=True)
-laytracer.plot.velocity_profile(model_psv, vel_type="Vp", ax=axes[0], ylim=(4000, 0))
-laytracer.plot.velocity_profile(model_psv, vel_type="Vs", ax=axes[1], color="tab:orange")
+lt.plot.velocity_profile(model_psv, vel_type="Vp", ax=axes[0], ylim=(4000, 0))
+lt.plot.velocity_profile(model_psv, vel_type="Vs", ax=axes[1], color="tab:orange")
 axes[1].set_title("Vs profile")
 
 # Density
@@ -214,7 +214,7 @@ n_p = 200
 p_vec = np.linspace(0, 1.0 / mi_vp, n_p + 1)
 
 # Compute all 8 R/T coefficients
-RT = laytracer.psv_rt_coefficients(
+RT = lt.psv_rt_coefficients(
     p=p_vec,
     vp1=mi_vp, vs1=mi_vs, rho1=mi_rho,
     vp2=mt_vp, vs2=mt_vs, rho2=mt_rho,
@@ -247,7 +247,7 @@ angle_P = np.rad2deg(np.arcsin(np.clip(p_vec * mi_vp, -1, 1)))
 crit_P = np.rad2deg(np.arcsin(mi_vp / mt_vp))   # transmitted P critical
 
 # Detect Brewster angles for all P-incident coefficients
-brew_P = laytracer.find_brewster_angles(RT, angle_P, keys=["Rpp", "Rps", "Tpp", "Tps"])
+brew_P = lt.find_brewster_angles(RT, angle_P, keys=["Rpp", "Rps", "Tpp", "Tps"])
 
 # Shared y-limit across all four P-incident panels
 p_keys = ["Rpp", "Rps", "Tpp", "Tps"]
@@ -293,14 +293,14 @@ plt.show()
 # Ray diagrams (P-incidence)
 # ^^^^^^^^^^^^^^^^^^^^^^^^^^
 #
-# We visualize the ray paths for typical situations using `laytracer.plot.rays_2d`.
+# We visualize the ray paths for typical situations using `lt.plot.rays_2d`.
 # The interface is at 2000 m.
 
 
 def plot_ray_situation(angle, wave_type, title, ax):
     # 1. Setup background (velocity model) and axes
     # We pass empty rays list first just to set up the plot environment
-    laytracer.plot.rays_2d(
+    lt.plot.rays_2d(
         model_psv, rays=[], ax=ax, vel_type="Vp", 
         xlim=(-100, 6000), ylim=(4000, 0),
         plot_model=True,
@@ -335,7 +335,7 @@ def plot_ray_situation(angle, wave_type, title, ax):
         # We assume simplified straight rays for this calc (constant layer blocks)
         
         # We need the path legs to calculate X(p_target).
-        # We can use laytracer.offset() if we build the stack manually, 
+        # We can use lt.offset() if we build the stack manually, 
         # OR just simple trig since model is constant layers.
         
         # Legs depend on reflection/refraction.
@@ -376,7 +376,7 @@ def plot_ray_situation(angle, wave_type, title, ax):
         
         # RUN THE SOLVER
         try:
-            res = laytracer.trace_rays(
+            res = lt.trace_rays(
                 sources=source,
                 receivers=receiver,
                 velocity_df=model_psv,
@@ -387,7 +387,7 @@ def plot_ray_situation(angle, wave_type, title, ax):
             )
             
             if res.rays and len(res.rays) > 0 and res.rays[0] is not None:
-                laytracer.plot.rays_2d(
+                lt.plot.rays_2d(
                     model_psv,
                     rays=res.rays,
                     ax=ax,
@@ -471,7 +471,7 @@ plt.show()
 
 p_vec_sv = np.linspace(0, 1.0 / mi_vs, n_p + 1)
 
-RT_sv = laytracer.psv_rt_coefficients(
+RT_sv = lt.psv_rt_coefficients(
     p=p_vec_sv,
     vp1=mi_vp, vs1=mi_vs, rho1=mi_rho,
     vp2=mt_vp, vs2=mt_vs, rho2=mt_rho,
@@ -486,7 +486,7 @@ crit_rp = np.rad2deg(np.arcsin(mi_vs / mi_vp))   # reflected P
 crit_ts = np.rad2deg(np.arcsin(mi_vs / mt_vs))   # transmitted SV
 
 # Detect Brewster angles for all SV-incident coefficients
-brew_SV = laytracer.find_brewster_angles(
+brew_SV = lt.find_brewster_angles(
     RT_sv, angle_SV, keys=["Rsp", "Rss", "Tsp", "Tss"],
 )
 

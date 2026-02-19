@@ -2,15 +2,14 @@ r"""
 01. Basic ray tracing
 =====================
 
-This example demonstrates two-point ray tracing through a simple 3-layer
-velocity model using LayTracer in 2D and 3D cases.
+This example demonstrates two-point ray tracing through a simple 3-layer velocity model using LayTracer in 2D and 3D cases.
 """
 
 ###############################################################################
 # Setup
 # -----
 
-import laytracer
+import laytracer as lt
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -38,7 +37,7 @@ print(vel_df)
 # Plot velocity profile
 # ---------------------
 
-ax = laytracer.plot.velocity_profile(vel_df, vel_type="Vp")
+ax = lt.plot.velocity_profile(vel_df, vel_type="Vp")
 
 #%%
 
@@ -48,10 +47,10 @@ ax = laytracer.plot.velocity_profile(vel_df, vel_type="Vp")
 #
 # Trace a P-wave from a source at depth 3000 m to a receiver at the surface.
 
-stack = laytracer.build_layer_stack(vel_df, z_src=3000.0, z_rcv=0.0)
+stack = lt.build_layer_stack(vel_df, z_src=3000.0, z_rcv=0.0)
 
 # Use trace_rays for 2D tracing as well
-res = laytracer.trace_rays(
+res = lt.trace_rays(
     sources=[0.0, 0.0, 3000.0],
     receivers=[5000.0, 0.0, 0.0],
     velocity_df=vel_df,
@@ -65,7 +64,7 @@ print(f"Ray parameter:  {res.ray_parameters[0]:.6e} s/m")
 # Plot the 2-D ray
 # ----------------
 
-ax = laytracer.plot.rays_2d(
+ax = lt.plot.rays_2d(
     vel_df,
     rays=res.rays,
     sources=np.array([[0.0, 0.0, 3000.0]]),
@@ -82,7 +81,7 @@ ax = laytracer.plot.rays_2d(
 # Trace multiple rays in 3-D
 # --------------------------
 #
-# Use :func:`laytracer.trace_rays` to trace from one source to multiple
+# Use :func:`lt.trace_rays` to trace from one source to multiple
 # receivers arranged in a circle.
 
 src = np.array([0.0, 0.0, 3000.0])
@@ -96,7 +95,7 @@ rcvs = np.column_stack([
     np.zeros(n_rcv),
 ])
 
-result = laytracer.trace_rays(
+result = lt.trace_rays(
     sources=src,
     receivers=rcvs,
     velocity_df=vel_df,
@@ -110,7 +109,7 @@ print(f"Travel times:   {result.travel_times}")
 # Plot 3-D rays
 # -------------
 
-fig = laytracer.plot.rays_3d(
+fig = lt.plot.rays_3d(
     vel_df,
     rays=result.rays,
     sources=src,

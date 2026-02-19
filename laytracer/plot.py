@@ -102,6 +102,8 @@ def rays_2d(
     add_colorbar: bool = False,
     model_alpha: float = 1.0,
     discrete_colorbar: bool = False,
+    equal_scale: bool = True,
+    colorbar_orientation: str = "vertical",
     **kwargs,
 ):
     r"""Plot ray paths over a 2-D layered velocity cross-section.
@@ -133,6 +135,11 @@ def rays_2d(
     discrete_colorbar : bool
         If *True* (default *False*), quantize the colormap to the
         unique velocity values in the model.
+    equal_scale : bool
+        If *True* (default *True*), force equal scaling for x and y axes
+        using ``ax.set_aspect('equal')``.
+    colorbar_orientation : str
+        ``'vertical'`` (default) or ``'horizontal'``.
 
     Returns
     -------
@@ -152,6 +159,7 @@ def rays_2d(
     n = len(depths)
 
     # Determine x-range from rays (only if we need to plot model or set limits)
+    # Determine x-range from rays (only if we need to plot model or set limits)
     if plot_model:
         if rays:
             all_x = np.concatenate([r[:, 0] for r in rays])
@@ -159,11 +167,16 @@ def rays_2d(
         else:
             x_lo, x_hi = 0, 1000 # Default fallback
             if xlim:
-                 x_lo, x_hi = xlim
+                 x_lo, x_hi = sorted(xlim)
 
         pad = (x_hi - x_lo) * 0.05
         x_lo -= pad
         x_hi += pad
+        
+        # Ensure model background covers the requested xlim if provided
+        if xlim:
+            x_lo = min(x_lo, min(xlim))
+            x_hi = max(x_hi, max(xlim))
 
         # Layer rectangles
         unique_vels = np.sort(np.unique(vels))
@@ -189,6 +202,7 @@ def rays_2d(
         for i in range(n):
             z_top = depths[i]
             
+            
             if i + 1 < n:
                 z_bot = depths[i + 1]
             else:
@@ -211,16 +225,24 @@ def rays_2d(
         ax.add_collection(pc)
         
         if add_colorbar:
+            from mpl_toolkits.axes_grid1 import make_axes_locatable
+            divider = make_axes_locatable(ax)
+            
             sm = cm.ScalarMappable(cmap=cmap, norm=norm)
             sm.set_array([])
             
+            if colorbar_orientation == "horizontal":
+                cax = divider.append_axes("bottom", size="5%", pad=0.5)
+            else:
+                cax = divider.append_axes("right", size="5%", pad=0.1)
+
             # Format ticks for discrete case
             if discrete_colorbar and len(unique_vels) > 1:
                 # Place ticks at the unique values
                 ticks = unique_vels
-                plt.colorbar(sm, ax=ax, label=f"{vel_type} (m/s)", alpha=model_alpha, ticks=ticks)
+                plt.colorbar(sm, cax=cax, orientation=colorbar_orientation, label=f"{vel_type} (m/s)", alpha=model_alpha, ticks=ticks)
             else:
-                plt.colorbar(sm, ax=ax, label=f"{vel_type} (m/s)", alpha=model_alpha)
+                plt.colorbar(sm, cax=cax, orientation=colorbar_orientation, label=f"{vel_type} (m/s)", alpha=model_alpha)
 
     # Rays
     for ray in rays:
@@ -244,9 +266,27 @@ def rays_2d(
     
     if xlim:
         ax.set_xlim(xlim)
+    elif plot_model:
+        ax.set_xlim(x_lo, x_hi)
+
     if ylim:
         ax.set_ylim(ylim)
+    elif plot_model:
+        # Default depth range from model (0 to bottom)
+        # Find max depth of model or rays
+        z_max_model = depths[-1]
+        if rays:
+             all_z = np.concatenate([r[:, -1] if r.shape[1] == 2 else r[:, 2] for r in rays])
+             z_max_rays = all_z.max()
+             z_max_model = max(z_max_model, z_max_rays)
         
+        # Add slight padding at bottom
+        z_max_model *= 1.1
+        ax.set_ylim(z_max_model, 0)
+        
+    if equal_scale:
+        ax.set_aspect("equal")
+
     # Only label legend if we haven't done it manually or if requested
     # But usually the user calls legend() outside.
     # We'll leave the return as is.
