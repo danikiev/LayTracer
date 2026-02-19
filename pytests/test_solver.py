@@ -33,6 +33,9 @@ def _homo_model(v=5000.0, depth=5000.0):
     })
 
 
+
+
+
 # ═══════════════════════════════════════════════════════════════════════
 #  Offset equation
 # ═══════════════════════════════════════════════════════════════════════
@@ -137,13 +140,24 @@ class TestNewton:
 #  solve()
 # ═══════════════════════════════════════════════════════════════════════
 
+
 class TestSolve:
     def test_homogeneous(self):
         """Homogeneous medium: tt = distance / velocity."""
         df = _homo_model(v=5000.0)
         stack = laytracer.build_layer_stack(df, z_src=0.0, z_rcv=3000.0)
         epic = 4000.0
-        res = laytracer.solve(stack, epic, z_src=0.0, z_rcv=3000.0)
+        
+        # Manually construct args for solve
+        h = stack.h
+        v = stack.vp
+        segments = [{
+            "h": h, "v": v, "vp": stack.vp, "vs": stack.vs, "rho": stack.rho,
+            "qp": stack.qp, "qs": stack.qs, "phase": "P", 
+            "start_z": 0.0, "end_z": 3000.0
+        }]
+        
+        res = laytracer.solve(h, v, segments, [], epic, z_src=0.0, z_rcv=3000.0)
         dist = np.sqrt(epic**2 + 3000.0**2)
         assert res.travel_time == pytest.approx(dist / 5000.0, rel=1e-4)
 
@@ -151,18 +165,35 @@ class TestSolve:
         """Vertical ray: tt = Σ h_k / v_k."""
         df = _simple_model()
         stack = laytracer.build_layer_stack(df, z_src=0.0, z_rcv=2500.0)
-        res = laytracer.solve(stack, epicentral_dist=0.0, z_src=0.0, z_rcv=2500.0)
+        
         h = stack.h
         v = stack.vp
+        segments = [{
+            "h": h, "v": v, "vp": stack.vp, "vs": stack.vs, "rho": stack.rho,
+            "qp": stack.qp, "qs": stack.qs, "phase": "P", 
+            "start_z": 0.0, "end_z": 2500.0
+        }]
+        
+        res = laytracer.solve(h, v, segments, [], 0.0, z_src=0.0, z_rcv=2500.0)
         expected_tt = np.sum(h / v)
         assert res.travel_time == pytest.approx(expected_tt, rel=1e-6)
 
     def test_ray_endpoints(self):
         """Ray starts at source and ends at receiver coordinates."""
         df = _simple_model()
-        stack = laytracer.build_layer_stack(df, z_src=500.0, z_rcv=2500.0)
+        z_src, z_rcv = 500.0, 2500.0
+        stack = laytracer.build_layer_stack(df, z_src=z_src, z_rcv=z_rcv)
         epic = 5000.0
-        res = laytracer.solve(stack, epic, z_src=500.0, z_rcv=2500.0)
+        
+        h = stack.h
+        v = stack.vp
+        segments = [{
+            "h": h, "v": v, "vp": stack.vp, "vs": stack.vs, "rho": stack.rho,
+            "qp": stack.qp, "qs": stack.qs, "phase": "P", 
+            "start_z": z_src, "end_z": z_rcv
+        }]
+        
+        res = laytracer.solve(h, v, segments, [], epic, z_src=z_src, z_rcv=z_rcv)
         # Start
         assert res.ray_path[0, 0] == pytest.approx(0.0, abs=1e-6)
         assert res.ray_path[0, 1] == pytest.approx(500.0, abs=1e-6)
@@ -173,23 +204,53 @@ class TestSolve:
     def test_travel_time_positive(self):
         """Travel time is always positive."""
         df = _simple_model()
-        stack = laytracer.build_layer_stack(df, z_src=200.0, z_rcv=2800.0)
+        z_src, z_rcv = 200.0, 2800.0
+        stack = laytracer.build_layer_stack(df, z_src=z_src, z_rcv=z_rcv)
+        
+        h = stack.h
+        v = stack.vp
+        segments = [{
+            "h": h, "v": v, "vp": stack.vp, "vs": stack.vs, "rho": stack.rho,
+            "qp": stack.qp, "qs": stack.qs, "phase": "P", 
+            "start_z": z_src, "end_z": z_rcv
+        }]
+        
         for epic in [100.0, 1000.0, 10000.0, 50000.0]:
-            res = laytracer.solve(stack, epic, z_src=200.0, z_rcv=2800.0)
+            res = laytracer.solve(h, v, segments, [], epic, z_src=z_src, z_rcv=z_rcv)
             assert res.travel_time > 0
 
     def test_ray_parameter_positive(self):
         """Ray parameter p is non-negative."""
         df = _simple_model()
-        stack = laytracer.build_layer_stack(df, z_src=500.0, z_rcv=1500.0)
-        res = laytracer.solve(stack, epicentral_dist=3000.0, z_src=500.0, z_rcv=1500.0)
+        z_src, z_rcv = 500.0, 1500.0
+        stack = laytracer.build_layer_stack(df, z_src=z_src, z_rcv=z_rcv)
+        
+        h = stack.h
+        v = stack.vp
+        segments = [{
+            "h": h, "v": v, "vp": stack.vp, "vs": stack.vs, "rho": stack.rho,
+            "qp": stack.qp, "qs": stack.qs, "phase": "P", 
+            "start_z": z_src, "end_z": z_rcv
+        }]
+        
+        res = laytracer.solve(h, v, segments, [], 3000.0, z_src=z_src, z_rcv=z_rcv)
         assert res.ray_parameter >= 0
 
     def test_snell_law_upward_ray(self):
         """Snell's law: sin(theta_k)/v_k = p is constant across layers for upward ray."""
         df = _simple_model()
-        stack = laytracer.build_layer_stack(df, z_src=2500.0, z_rcv=0.0)
-        res = laytracer.solve(stack, epicentral_dist=5000.0, z_src=2500.0, z_rcv=0.0)
+        z_src, z_rcv = 2500.0, 0.0
+        stack = laytracer.build_layer_stack(df, z_src=z_src, z_rcv=z_rcv)
+        
+        h = stack.h
+        v = stack.vp
+        segments = [{
+            "h": h, "v": v, "vp": stack.vp, "vs": stack.vs, "rho": stack.rho,
+            "qp": stack.qp, "qs": stack.qs, "phase": "P", 
+            "start_z": z_src, "end_z": z_rcv
+        }]
+        
+        res = laytracer.solve(h, v, segments, [], 5000.0, z_src=z_src, z_rcv=z_rcv)
         p = res.ray_parameter
 
         # Verify from ray geometry: sin(theta_k)/v_k should equal p
@@ -212,9 +273,19 @@ class TestSolve:
     def test_ray_angle_steeper_in_slow_layer(self):
         """Ray is steeper (smaller angle from vertical) in slower layers."""
         df = _simple_model()
+        z_src, z_rcv = 2500.0, 0.0
         # Upward ray: source deep, receiver shallow
-        stack = laytracer.build_layer_stack(df, z_src=2500.0, z_rcv=0.0)
-        res = laytracer.solve(stack, epicentral_dist=5000.0, z_src=2500.0, z_rcv=0.0)
+        stack = laytracer.build_layer_stack(df, z_src=z_src, z_rcv=z_rcv)
+        
+        h = stack.h
+        v = stack.vp
+        segments = [{
+            "h": h, "v": v, "vp": stack.vp, "vs": stack.vs, "rho": stack.rho,
+            "qp": stack.qp, "qs": stack.qs, "phase": "P", 
+            "start_z": z_src, "end_z": z_rcv
+        }]
+        
+        res = laytracer.solve(h, v, segments, [], 5000.0, z_src=z_src, z_rcv=z_rcv)
 
         # Compute dx/dz for each segment from ray path
         # The ray goes upward, so layer order in path is: deepest first

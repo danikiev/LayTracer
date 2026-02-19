@@ -264,72 +264,114 @@ class RayResult:
 # ═══════════════════════════════════════════════════════════════════════
 
 def solve(
-    stack: LayerStack,
+    h: np.ndarray,
+    v: np.ndarray,
+    segments: list[dict],
+    interactions: list[dict],
     epicentral_dist: float,
     z_src: float,
     z_rcv: float,
-    vel_type: str = "Vp",
     compute_amplitude: bool = False,
     transcoef_method: str = "angle",
     tol: float = 1e-4,
     max_iter: int = 10,
 ) -> RayResult:
-    r"""Solve the two-point ray tracing problem for a single S–R pair.
-
-    Algorithm
-    ---------
-    1.  Build dimensionless parameters :math:`\lambda_k = v_k/v_{\max}`.
-    2.  Compute initial :math:`q_0` via :func:`initial_q`.
-    3.  Iterate :func:`newton_step` until
-        :math:`|X(q)-X_R|<\mathtt{tol}`.
-    4.  Convert :math:`q \to p`, propagate ray layer-by-layer.
-    5.  Optionally compute :math:`t^*`, spreading and transmission
-        inline.
+    r"""Solve the two-point ray tracing problem for an arbitrary path.
 
     Parameters
     ----------
-    stack : LayerStack
-        Layers between source and receiver (from :func:`build_layer_stack`).
-    epicentral_dist : float
-        Horizontal distance (m) between source and receiver.
-    z_src, z_rcv : float
-        Source and receiver depths (m, positive downward).
-    vel_type : str
-        ``'Vp'`` or ``'Vs'``.
-    compute_amplitude : bool
-        If *True*, compute :math:`t^*`, geometrical spreading, and
-        transmission coefficients alongside the travel time.
-    transcoef_method : str
-        ``'normal'`` or ``'angle'``.
-    tol : float
-        Convergence tolerance on the offset residual (m).
-    max_iter : int
-        Maximum Newton iterations.
-
-    Returns
-    -------
-    RayResult
+    h : numpy.ndarray
+        Concatenated layer thicknesses for the entire path (m).
+    v : numpy.ndarray
+        Concatenated phase velocities (Vp or Vs) for the entire path (m/s).
+    segments : list of dict
+        Metadata for each logical monotonic segment (used for reconstruction).
+        Dict keys: 'h', 'v', 'phase', 'start_z', 'end_z'.
+    interactions : list of dict
+        Metadata for interactions (reflections/refractions) impacting amplitude.
+        Dict keys: 'type', 'depth', 'in_phase', 'out_phase', 'seg_idx'.
+    interactions are assumed to occur at the END of the defined segment.
     """
-    v = stack.v(vel_type)
-    h = stack.h
-    N = stack.n_layers
-    going_down = z_src <= z_rcv
+    N = len(h)    
 
     # ── Vertical / zero-offset ray ──
     if epicentral_dist < 1e-10:
         tt = float(np.sum(h / v))
         # Build vertical ray path
-        pts = np.zeros((N + 1, 2))
-        z = z_src
-        for k in range(N):
-            dz = h[k] if going_down else -h[k]
-            z += dz
-            pts[k + 1, 1] = z
+        # Reconstruct path based on segments
+        # This is a bit complex for vertical rays with bounces, but solvable.
+        pts_list = []
+        curr_x = 0.0
+        # Start point
+        pts_list.append([0.0, z_src])
+        
+        for seg in segments:
+            seg_h = seg["h"]
+            n_seg = len(seg_h)
+            z_start = seg["start_z"]
+            z_end = seg["end_z"]
+            going_down = z_end >= z_start
+            
+            # For geometric path reconstruction
+            # We just need to know the sequence of depths
+            # Vertical ray: x is constant 0
+            
+            # Simple Z reconstruction:
+            # We assume segments are continuous.
+            if n_seg > 0:
+                # Add end point of this segment
+                pts_list.append([0.0, z_end])
+        
+        pts = np.array(pts_list)
 
         tstar = None
+        trans_prod_val = None
+        
         if compute_amplitude:
-            Q = stack.q_factor(vel_type)
-            tstar = float(np.sum(h / v / Q)) if Q is not None else None
+            # sum dt / Q over all layers
+            tstar_val = 0.0
+            trans_prod_val = 1.0
+            
+            # Since p=0 for vertical ray
+            p_vert = 0.0
+                                   
+            for seg_i, seg in enumerate(segments):
+                ph = seg["phase"]
+                q_key = "qp" if ph == "P" else "qs"
+                # Handle missing Q
+                if seg[q_key] is not None:
+                     tstar_val += np.sum(seg["h"] / seg["v"] / seg[q_key])
+                     
+                # Transmission within segment
+                n_lay = len(seg["h"])
+                # Direction doesn't change physics of transmission coeff formula for p=0 much
+                # but we need correct k_curr, k_next.
+                z_start = seg["start_z"]
+                z_end = seg["end_z"]
+                going_down = z_end >= z_start
+                
+                # Intra-segment transmission
+                range_k = range(n_lay) if going_down else range(n_lay - 1, -1, -1)
+                
+                for k in range_k:
+                    # Check for next layer
+                    has_next_layer = (k < n_lay - 1) if going_down else (k > 0)
+                    if has_next_layer:
+                        k_next = (k + 1) if going_down else (k - 1)
+                        if seg["rho"] is not None:
+                            trans_prod_val *= _calc_intra_transmission(
+                                p_vert, k, k_next, seg, transcoef_method
+                            )
+                            
+                # Explicit interaction at end of segment
+                for inter in interactions:
+                    if inter["seg_idx"] == seg_i:
+                        coeff = _calc_interaction_coeff(
+                            p_vert, inter, segments, seg_i, transcoef_method
+                        )
+                        trans_prod_val *= coeff
+
+            tstar = float(tstar_val)
 
         return RayResult(
             travel_time=tt,
@@ -337,12 +379,14 @@ def solve(
             ray_parameter=0.0,
             tstar=tstar,
             spreading=None,  # undefined for vertical ray (p=0)
-            trans_product=None,
+            trans_product=trans_prod_val,
         )
 
     # ── Same-layer (direct line) ──
     if N == 1:
-        dz = abs(z_rcv - z_src)
+        # Simple straight line in one uniform block
+        # dZ is total vertical distance traversed
+        dz = np.sum(h) 
         dist = np.sqrt(epicentral_dist ** 2 + dz ** 2)
         tt = dist / v[0]
         p = epicentral_dist / (v[0] * dist)
@@ -352,10 +396,13 @@ def solve(
         trans_prod = None
         spreading = None
         if compute_amplitude:
-            Q = stack.q_factor(vel_type)
-            tstar = tt / Q[0] if Q is not None else None
-            spreading = dist  # homogeneous spreading = distance
-            trans_prod = 1.0  # no interfaces
+             # Need Q from the single segment
+             seg = segments[0]
+             q_key = "qp" if seg["phase"] == "P" else "qs"
+             if seg[q_key] is not None:
+                 tstar = tt / seg[q_key][0]
+             spreading = dist
+             trans_prod = 1.0
 
         return RayResult(tt, pts, p, tstar, spreading, trans_prod)
 
@@ -389,36 +436,103 @@ def solve(
     tt = 0.0
     tstar_val = 0.0
     trans_prod_val = 1.0
-    Q_arr = stack.q_factor(vel_type) if compute_amplitude else None
-
-    pts = np.zeros((N + 1, 2))
-    pts[0] = [0.0, z_src]
+    
+    # Path reconstruction
+    pts_list = [[0.0, z_src]]
     x_cum = 0.0
     z_cum = z_src
+    
+    # We iterate over SEGMENTS to reconstruct the path logic
+    # The solver treated 'h' and 'v' as one giant array.
+    # We need to map back to the segments structure for Q and coordinates.
+    
+    global_k = 0 # index into the flattened velocity/thickness arrays
+    
+    for seg_i, seg in enumerate(segments):
+        n_lay = len(seg["h"])
+        seg_h = seg["h"]
+        seg_v = seg["v"]
+        
+        # Amplitude stuff for this segment
+        seg_q = seg["qp"] if seg["phase"] == "P" else seg["qs"]
+        # Determine direction for Z update
+        start_z = seg["start_z"]
+        end_z = seg["end_z"]
+        going_down = end_z >= start_z
+        
+        # NOTE: segments["h"] is ordered top-to-bottom physically.
+        # If we are going UP (end_z < start_z), we traverse slices in reverse order?
+        # api.py logic: "build_layer_stack returns layers shallow->deep."
+        # If going down: we traverse index 0 -> N
+        # If going up: we traverse index N -> 0?
+        # Let's check how api.py populated 'seg_v'.
+        # api.py: "v_leg = leg_stack.v(...) ... h_total.append(leg_stack.h)"
+        # This implies seg["v"] is also ordered shallow-to-deep.
+        # So YES, if going UP, we must iterate 'k' backwards relative to the array.
+        
+        range_k = range(n_lay) if going_down else range(n_lay - 1, -1, -1)
+        
+        for k in range_k:
+                        
+            val_v = seg_v[k]
+            val_h = seg_h[k]
+            
+            eta_k = np.sqrt(1.0 / (val_v ** 2) - p ** 2)
+            dx_k = val_h * p / eta_k
+            dt_k = val_h / (val_v ** 2 * eta_k)
+            
+            tt += dt_k
+            x_cum += dx_k
+            
+            # Update Z
+            # If going down, z increases by h
+            # If going up, z decreases by h
+            dz = val_h if going_down else -val_h
+            z_cum += dz
+            
+            pts_list.append([x_cum, z_cum])
+            
+            if compute_amplitude and seg_q is not None:
+                tstar_val += dt_k / seg_q[k]
+                
+            # Transmission logic within the segment
+            # This handles standard transmission across interfaces INSIDE the monotonic stack.
+            # If we are traversing indices k -> k+1 (Down) or k -> k-1 (Up):
+            # Interface is between them.
+            if compute_amplitude:
+                # Identification of the interface
+                has_next_layer = (k < n_lay - 1) if going_down else (k > 0)
+                
+                if has_next_layer:
+                    # Index of the next layer
+                    k_next = (k + 1) if going_down else (k - 1)
+                    
+                    # We need density to compute transmission
+                    # If density is None, we assume T=1.0
+                    if seg["rho"] is not None:
+                        # Call helper
+                        coeff = _calc_intra_transmission(
+                            p, k, k_next, seg, transcoef_method
+                        )
+                        trans_prod_val *= coeff
 
-    for k in range(N):
-        # When going upward, the ray starts in the deepest layer
-        # but the stack is ordered shallow-to-deep, so reverse the index.
-        idx = (N - 1 - k) if not going_down else k
-        eta_k = np.sqrt(1.0 / (v[idx] ** 2) - p ** 2)
-        dx_k = h[idx] * p / eta_k
-        dt_k = h[idx] / (v[idx] ** 2 * eta_k)  # = h / (v² η)
+        # ── Explicit Interaction at End of Segment ──
+        # Check if there is an interaction defined for this segment index
+        if compute_amplitude:
+            # Find interaction where seg_idx == seg_i
+            # (There should be at most one per segment end)
+            for inter in interactions:
+                if inter["seg_idx"] == seg_i:
+                    _apply_interaction(
+                        p, inter, segments, seg_i, 
+                        trans_prod_val, transcoef_method
+                    ) # Wait, can't assign to scalar in inner func easily
+                    
+                    # Manual inlining or helper that returns value
+                    coeff = _calc_interaction_coeff(p, inter, segments, seg_i, transcoef_method)
+                    trans_prod_val *= coeff
 
-        tt += dt_k
-        x_cum += dx_k
-        z_cum += h[idx] if going_down else -h[idx]
-        pts[k + 1] = [x_cum, z_cum]
-
-        # inline t*
-        if compute_amplitude and Q_arr is not None:
-            tstar_val += dt_k / Q_arr[idx]
-
-        # transmission coefficient at top of this layer (interface k)
-        if compute_amplitude and k > 0:
-            idx_prev = (N - 1 - (k - 1)) if not going_down else (k - 1)
-            trans_prod_val *= _interface_transmission(
-                p, idx_prev, idx, stack, vel_type, transcoef_method
-            )
+    pts = np.array(pts_list)
 
     # ── Geometrical spreading ──
     spreading_val = None
@@ -430,10 +544,14 @@ def solve(
             dqdp = vmax / denom_dp ** 1.5
             dXdp = dXdq * dqdp
 
-            i_src = N - 1 if not going_down else 0
-            i_rcv = 0 if not going_down else N - 1
-            cos_is = np.sqrt(max(1.0 - (p * v[i_src]) ** 2, 0.0))
-            cos_ir = np.sqrt(max(1.0 - (p * v[i_rcv]) ** 2, 0.0))
+            # Geometric spreading depends on Source/Receiver velocities
+            # v[0] and v[-1] in the flattened array correspond to start/end of path
+            # IF we constructed it correctly.
+            v_sourceside = v[0] 
+            v_receiverside = v[-1]
+            
+            cos_is = np.sqrt(max(1.0 - (p * v_sourceside) ** 2, 0.0))
+            cos_ir = np.sqrt(max(1.0 - (p * v_receiverside) ** 2, 0.0))
 
             denom = cos_is * cos_ir
             if denom > 1e-15 and abs(dXdp) > 0:
@@ -445,10 +563,101 @@ def solve(
         travel_time=tt,
         ray_path=pts,
         ray_parameter=p,
-        tstar=tstar_val if compute_amplitude and Q_arr is not None else None,
+        tstar=tstar_val if compute_amplitude else None,
         spreading=spreading_val,
         trans_product=trans_prod_val if compute_amplitude else None,
     )
+
+def _calc_interaction_coeff(p, inter, segments, seg_idx, method):
+    from .amplitude import transmission_normal, psv_rt_coefficients
+    
+    # Current segment (incident side)
+    seg_in = segments[seg_idx]
+    
+    vp_in_arr = seg_in["vp"]
+    vs_in_arr = seg_in["vs"]
+    rho_in_arr = seg_in["rho"]
+    
+    # Determine direction of incident segment
+    going_down = seg_in["end_z"] >= seg_in["start_z"]
+    
+    # Index of the layer touching the interface
+    idx_in = -1 if going_down else 0
+    
+    vp1 = float(vp_in_arr[idx_in])
+    vs1 = float(vs_in_arr[idx_in])
+    rho1 = float(rho_in_arr[idx_in]) if rho_in_arr is not None else 0.0
+    
+    # Material properties of Transmission/Target medium
+    vp2 = inter["vp_beyond"]
+    vs2 = inter["vs_beyond"]
+    rho2 = inter["rho_beyond"]
+    
+    if rho1 <= 0 or rho2 <= 0:
+        return 1.0 # Density missing, cannot compute dynamic amplitude
+    
+    in_phase = inter["in_phase"]
+    out_phase = inter["out_phase"]
+    itype = inter["type"]
+    
+    # Construct Key for psv_rt_coefficients
+    # "Rpp", "Rps", "Tpp", "Tps" etc.
+    
+    prefix = "R" if itype == "reflection" else "T"
+    key = f"{prefix}{in_phase.lower()}{out_phase.lower()}"
+    
+    if method == "normal":
+         # Normal incidence approx
+         v1 = vp1 if in_phase == "P" else vs1
+         v2 = vp2 if out_phase == "P" else vs2 
+         # We fallback to standard acoustic logic for P-P / S-S.
+         if in_phase != out_phase:
+             return 0.0
+         return abs(transmission_normal(v1, rho1, v2, rho2)) if itype == "transmission" else abs((v2*rho2 - v1*rho1)/(v2*rho2 + v1*rho1)) # approx
+        
+        
+    RT = psv_rt_coefficients(p, vp1, vs1, rho1, vp2, vs2, rho2)
+    
+    # The keys in psv_rt_coefficients are:
+    # Incident P: Rpp, Rps, Tpp, Tps
+    # Incident S: Rsp, Rss, Tsp, Tss
+    
+    return float(abs(RT.get(key, 0.0)))
+
+
+def _calc_intra_transmission(
+    p: float,
+    k_curr: int,
+    k_next: int,
+    seg: dict,
+    method: str,
+) -> float:
+    """Calculate transmission coefficient between two adjacent layers within a monotonic segment."""
+    from .amplitude import transmission_normal, psv_rt_coefficients
+    
+    # Material properties
+    # Both layers are in the same segment arrays
+    vp1 = float(seg["vp"][k_curr])
+    vs1 = float(seg["vs"][k_curr])
+    rho1 = float(seg["rho"][k_curr])
+    
+    vp2 = float(seg["vp"][k_next])
+    vs2 = float(seg["vs"][k_next])
+    rho2 = float(seg["rho"][k_next])
+    
+    # Phase
+    ph = seg["phase"]
+    key = "Tpp" if ph == "P" else "Tss"
+    
+    if method == "normal":
+        v1 = vp1 if ph == "P" else vs1
+        v2 = vp2 if ph == "P" else vs2
+        return abs(transmission_normal(v1, rho1, v2, rho2))
+        
+    # Angle dependent
+    RT = psv_rt_coefficients(p, vp1, vs1, rho1, vp2, vs2, rho2)
+    return float(abs(RT.get(key, 0.0)))
+
 
 
 # ── Transmission helper ──

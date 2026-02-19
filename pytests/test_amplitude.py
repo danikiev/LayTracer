@@ -13,9 +13,11 @@ def _simple_model():
         "Vp":    [3000.0, 4500.0, 6000.0],
         "Vs":    [1500.0, 2250.0, 3000.0],
         "Rho":   [2200.0, 2500.0, 2800.0],
-        "Qp":    [200.0,  400.0,  600.0],
         "Qs":    [100.0,  200.0,  300.0],
     })
+
+
+
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -62,6 +64,7 @@ class TestTransmission:
 #  t* computation
 # ═══════════════════════════════════════════════════════════════════════
 
+
 class TestTstar:
     def test_tstar_single_layer_vertical(self):
         """t* = h / (v * Q) for a vertical ray in a single layer."""
@@ -70,8 +73,16 @@ class TestTstar:
             "Rho": [2700.0], "Qp": [500.0], "Qs": [250.0],
         })
         stack = laytracer.build_layer_stack(df, z_src=0.0, z_rcv=3000.0)
+        h = stack.h
+        v = stack.vp
+        segments = [{
+            "h": h, "v": v, "vp": stack.vp, "vs": stack.vs, "rho": stack.rho,
+            "qp": stack.qp, "qs": stack.qs, "phase": "P", 
+            "start_z": 0.0, "end_z": 3000.0
+        }]
+        
         res = laytracer.solve(
-            stack, epicentral_dist=0.0, z_src=0.0, z_rcv=3000.0,
+            h, v, segments, [], epicentral_dist=0.0, z_src=0.0, z_rcv=3000.0,
             compute_amplitude=True,
         )
         expected = 3000.0 / 5000.0 / 500.0  # h / v / Q = tt / Q
@@ -89,8 +100,17 @@ class TestTstar:
             "Qs": [Q / 2, Q / 2, Q / 2],
         })
         stack = laytracer.build_layer_stack(df, z_src=100.0, z_rcv=2500.0)
+        
+        h = stack.h
+        v = stack.vp
+        segments = [{
+            "h": h, "v": v, "vp": stack.vp, "vs": stack.vs, "rho": stack.rho,
+            "qp": stack.qp, "qs": stack.qs, "phase": "P", 
+            "start_z": 100.0, "end_z": 2500.0
+        }]
+        
         res = laytracer.solve(
-            stack, epicentral_dist=5000.0, z_src=100.0, z_rcv=2500.0,
+            h, v, segments, [], epicentral_dist=5000.0, z_src=100.0, z_rcv=2500.0,
             compute_amplitude=True,
         )
         assert res.tstar == pytest.approx(res.travel_time / Q, rel=1e-4)
@@ -108,8 +128,17 @@ class TestSpreading:
             "Rho": [2700.0], "Qp": [500.0], "Qs": [250.0],
         })
         stack = laytracer.build_layer_stack(df, z_src=0.0, z_rcv=3000.0)
+        
+        h = stack.h
+        v = stack.vp
+        segments = [{
+            "h": h, "v": v, "vp": stack.vp, "vs": stack.vs, "rho": stack.rho,
+            "qp": stack.qp, "qs": stack.qs, "phase": "P", 
+            "start_z": 0.0, "end_z": 3000.0
+        }]
+        
         res = laytracer.solve(
-            stack, epicentral_dist=4000.0, z_src=0.0, z_rcv=3000.0,
+            h, v, segments, [], epicentral_dist=4000.0, z_src=0.0, z_rcv=3000.0,
             compute_amplitude=True,
         )
         assert res.spreading is not None
@@ -119,8 +148,17 @@ class TestSpreading:
         """Spreading is positive for a multi-layer model."""
         df = _simple_model()
         stack = laytracer.build_layer_stack(df, z_src=500.0, z_rcv=2500.0)
+        
+        h = stack.h
+        v = stack.vp
+        segments = [{
+            "h": h, "v": v, "vp": stack.vp, "vs": stack.vs, "rho": stack.rho,
+            "qp": stack.qp, "qs": stack.qs, "phase": "P", 
+            "start_z": 500.0, "end_z": 2500.0
+        }]
+        
         res = laytracer.solve(
-            stack, epicentral_dist=5000.0, z_src=500.0, z_rcv=2500.0,
+            h, v, segments, [], epicentral_dist=5000.0, z_src=500.0, z_rcv=2500.0,
             compute_amplitude=True,
         )
         assert res.spreading is not None

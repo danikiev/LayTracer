@@ -50,16 +50,16 @@ ax = laytracer.plot.velocity_profile(vel_df, vel_type="Vp")
 
 stack = laytracer.build_layer_stack(vel_df, z_src=3000.0, z_rcv=0.0)
 
-res = laytracer.solve(
-    stack,
-    epicentral_dist=5000.0,
-    z_src=3000.0,
-    z_rcv=0.0,
-    vel_type="Vp",
+# Use trace_rays for 2D tracing as well
+res = laytracer.trace_rays(
+    sources=[0.0, 0.0, 3000.0],
+    receivers=[5000.0, 0.0, 0.0],
+    velocity_df=vel_df,
+    source_phase="P",
 )
 
-print(f"Travel time:    {res.travel_time:.4f} s")
-print(f"Ray parameter:  {res.ray_parameter:.6e} s/m")
+print(f"Travel time:    {res.travel_times[0]:.4f} s")
+print(f"Ray parameter:  {res.ray_parameters[0]:.6e} s/m")
 
 ###############################################################################
 # Plot the 2-D ray
@@ -67,7 +67,7 @@ print(f"Ray parameter:  {res.ray_parameter:.6e} s/m")
 
 ax = laytracer.plot.rays_2d(
     vel_df,
-    rays=[res.ray_path],
+    rays=res.rays,
     sources=np.array([[0.0, 0.0, 3000.0]]),
     receivers=np.array([[5000.0, 0.0, 0.0]]),
     vel_type="Vp",
@@ -100,7 +100,7 @@ result = laytracer.trace_rays(
     sources=src,
     receivers=rcvs,
     velocity_df=vel_df,
-    vel_type="Vp",
+    source_phase="P",
 )
 
 print(f"Number of rays: {len(result.rays)}")
