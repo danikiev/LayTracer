@@ -4,5 +4,4 @@
 Examples
 ========
 
-Gallery of LayTracer examples demonstrating ray tracing, amplitude
-computation, and visualisation in layered media.
+Gallery of examples demonstrating the LayTracer package capabilities, including ray tracing, reflection & transmission coefficients, geometric spreading, attenuation dependencies, and visualisation of rays in layered media.

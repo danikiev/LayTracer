@@ -1,5 +1,5 @@
 """
-03. Paper examples
+02. Paper examples
 ==================
 
 Reproducing three characteristic figures from paper:
