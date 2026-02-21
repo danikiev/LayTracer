@@ -187,3 +187,87 @@ ax.legend()
 ax.grid(True, alpha=0.3)
 fig.tight_layout()
 plt.show()
+
+# %%
+# Focusing effect (Reflected waves)
+# ---------------------------------
+# 
+# A caustic (strong focusing leading to theoretically infinite amplitude and
+# zero geometric spreading) can also form simply from reflections off the bottom 
+# of a low-velocity channel or a gradient layer. Because rays entering the slow
+# layer are bent downward, they are "funneled" before reflecting. At a certain
+# critical offset range, the ray paths cross each other, creating a triplication 
+# and a hard zero-dip in the spreading factor.
+
+focusing_df = pd.DataFrame({
+    "Depth": [0.0, 1500.0, 3000.0],
+    "Vp":    [5000.0, 2500.0, 6000.0],  # Deep low-velocity channel
+    "Vs":    [2880.0, 1440.0, 3460.0],
+    "Rho":   [2700.0, 2200.0, 2800.0],
+    "Qp":    [300.0,  300.0,  300.0, ],
+    "Qs":    [150.0,  150.0,  150.0, ],
+})
+
+src_focus = np.array([0.0, 0.0, 0.0])
+offsets = np.arange(1000, 15001, 100) # Dense scanning to pinpoint the caustic
+rcvs_focus = np.column_stack([offsets, np.zeros_like(offsets), np.zeros_like(offsets)])
+
+# We simulate a wave reflecting exactly at the bottom interface of the channel (Depth=3000)
+# With LayTracer, we can specify interactions to force a reflection.
+res_focus = lt.trace_rays(
+    sources=src_focus,
+    receivers=rcvs_focus,
+    velocity_df=focusing_df,
+    source_phase="P",
+    reflection=[(3000.0, "P")],
+    compute_amplitude=True,
+    transcoef_method="normal"
+)
+
+# First, plot the velocity profile separately
+fig_prof, ax_prof = plt.subplots(figsize=(4, 6))
+lt.plot.velocity_profile(focusing_df, param="Vp", ax=ax_prof)
+ax_prof.set_title("Vp model with Low-Velocity Channel")
+ax_prof.set_ylim(4000, 0) # Depth in meters
+fig_prof.tight_layout()
+plt.show()
+
+# Now plot the rays and spreading vertically stacked
+fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 8), sharex=True)
+
+lt.plot.rays_2d(
+    focusing_df,
+    rays=res_focus.rays[::3],  # Plot a subset of rays to reduce clutter
+    sources=src_focus,
+    receivers=rcvs_focus,
+    ax=ax1,
+    vel_type="Vp",
+    plot_model=True,
+    add_colorbar=True,
+    discrete_colorbar=True,
+    unit="km",
+)
+ax1.set_title("Rays reflecting off low-velocity channel")
+ax1.set_ylim(4.0, 0)
+
+# Plot spreading
+valid_f = res_focus.spreading > 0
+ax2.plot(
+    offsets[valid_f] / 1000, res_focus.spreading[valid_f],
+    "-", markersize=3, color="tab:green",
+)
+ax2.set_xlabel("Offset (km)")
+ax2.set_ylabel("Spreading factor")
+ax2.set_title("Geometrical spreading of reflected wave")
+ax2.grid(True, alpha=0.3)
+
+# Find the caustic
+if np.any(valid_f):
+    valid_spreadings = res_focus.spreading[valid_f]
+    valid_off = offsets[valid_f]
+    caustic_idx = np.argmin(valid_spreadings)
+    ax2.plot(valid_off[caustic_idx]/1000, valid_spreadings[caustic_idx], 'ro', markersize=6, label="Caustic focal minimum")
+    ax2.legend()
+
+plt.tight_layout()
+plt.show()

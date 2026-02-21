@@ -31,7 +31,8 @@ Dimensionless ray parameter
 :footcite:t:`FangChen2019` introduce a dimensionless parameter
 
 .. math::
-   q = \frac{p\,v_{\max}}{\sqrt{1 - p^2\,v_{\max}^2}}
+   q = \sqrt{\frac{p^2}{1/v_{\max}^2 - p^2}}
+     = \frac{p\,v_{\max}}{\sqrt{1 - p^2\,v_{\max}^2}}
 
 where :math:`v_{\max} = \max_k v_k`.  The inverse relation is
 
@@ -82,7 +83,7 @@ Asymptotic initial estimate
 ============================
 
 Two linear asymptotes of :math:`X(q)` provide an efficient initial guess
-(Section 2.2 of :footcite:t:`FangChen2019`):
+(see "Initial estimate of q" in :footcite:t:`FangChen2019`):
 
 **Near-field** (:math:`q \to 0`):
 
@@ -111,7 +112,7 @@ Quadratic Newton iteration
 ===========================
 
 The two-point problem :math:`X(q) = X_R` is solved by second-order
-Newton iteration (Section 2.3 of :footcite:t:`FangChen2019`).  At each
+Newton iteration (see :footcite:t:`FangChen2019`).  At each
 step, :math:`X(q)` is expanded to second order about the current iterate
 :math:`q_i`:
 
@@ -143,7 +144,9 @@ Attenuation operator :math:`t^*`
 =================================
 
 The attenuation operator (:footcite:t:`AkiRichards2002`, Ch. 5) measures
-the integrated effect of intrinsic absorption along the ray path:
+the cumulative dissipative loss of wave amplitude along the ray path. Since the
+spatial path length in layer :math:`k` is :math:`\Delta s_k = v_k \Delta t_k`,
+the spatial integral representing intrinsic absorption corresponds exactly to:
 
 .. math::
    t^* = \sum_{k=1}^{N} \frac{\Delta t_k}{Q_k}
@@ -161,16 +164,23 @@ Geometrical spreading
 =====================
 
 In a 1-D layered medium with cylindrical symmetry (3-D point source),
-the geometrical spreading factor :math:`L` depends on the **ray tube
-Jacobian** :math:`\partial X / \partial p`
-(:footcite:t:`Cerveny2001`; :footcite:t:`AkiRichards2002`, Ch. 4):
+the classical geometrical spreading factor :math:`L` relates the solid angle
+of the ray tube at the source to its cross-sectional area at the receiver
+(:footcite:t:`Cerveny2001`, Eq. 4.10.15; :footcite:t:`AkiRichards2002`, Ch. 4):
 
 .. math::
-   L = \sqrt{\frac{X \cdot |\partial X / \partial p|}
-                  {\cos\theta_s \cdot \cos\theta_r}}
+   :label: eq:spreading
+   L = \frac{1}{v_s} \sqrt{\frac{X \cdot \cos\theta_s \cdot \cos\theta_r}{p}
+                           \left| \frac{\partial X}{\partial p} \right|}
 
 where :math:`\theta_s, \theta_r` are the ray angles at source and
-receiver.  The derivative :math:`\partial X / \partial p` is computed
+receiver, and :math:`v_s` is the source-point velocity. 
+This standard point-source form arises because the solid angle increment is 
+:math:`\mathrm{d}\Omega \propto \sin\theta_s\,\mathrm{d}\theta_s`, whilst the 
+receiver area spans :math:`X\,|\partial X/\partial p|\,\mathrm{d}p\,\cos\theta_r`.
+Substituting :math:`p = \sin\theta_s / v_s` yields the exact relation :eq:`eq:spreading`.
+
+The derivative :math:`\partial X / \partial p` is computed
 analytically via the chain rule:
 
 .. math::
@@ -179,6 +189,8 @@ analytically via the chain rule:
    \qquad
    \frac{\mathrm{d}q}{\mathrm{d}p}
    = \frac{v_{\max}}{(1 - p^2\,v_{\max}^2)^{3/2}}
+
+
 
 ----
 
@@ -401,11 +413,9 @@ computed from the 2-D ray remains valid in 3-D:
   :math:`\Delta t_k`, unchanged by azimuth.
 - **Attenuation operator** :math:`t^*` — depends only on
   :math:`\Delta t_k` and :math:`Q_k`.
-- **Geometrical spreading** — the formula
-  :math:`L = \sqrt{X\,|\partial X/\partial p|\,/\,
-  (\cos\theta_s\cos\theta_r)}` already accounts for 3-D cylindrical
-  divergence because it includes the factor :math:`X` (epicentral
-  distance) that captures the out-of-plane ray-tube expansion
+- **Geometrical spreading** — the formula incorporates the
+  epicentral distance :math:`X` to capture the 3-D cylindrical
+  divergence of the ray-tube out of the incidence plane
   (:footcite:t:`Cerveny2001`, §4.10).
 - **Transmission coefficients** — depend on ray parameter and layer
   impedances, not on azimuth.

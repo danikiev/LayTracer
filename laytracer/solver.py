@@ -523,12 +523,6 @@ def solve(
             # (There should be at most one per segment end)
             for inter in interactions:
                 if inter["seg_idx"] == seg_i:
-                    _apply_interaction(
-                        p, inter, segments, seg_i, 
-                        trans_prod_val, transcoef_method
-                    ) # Wait, can't assign to scalar in inner func easily
-                    
-                    # Manual inlining or helper that returns value
                     coeff = _calc_interaction_coeff(p, inter, segments, seg_i, transcoef_method)
                     trans_prod_val *= coeff
 
@@ -553,10 +547,9 @@ def solve(
             cos_is = np.sqrt(max(1.0 - (p * v_sourceside) ** 2, 0.0))
             cos_ir = np.sqrt(max(1.0 - (p * v_receiverside) ** 2, 0.0))
 
-            denom = cos_is * cos_ir
-            if denom > 1e-15 and abs(dXdp) > 0:
+            if p > 1e-15 and abs(dXdp) > 0:
                 spreading_val = float(
-                    np.sqrt(epicentral_dist * abs(dXdp) / denom)
+                    (1.0 / v_sourceside) * np.sqrt(epicentral_dist * abs(dXdp) * cos_is * cos_ir / p)
                 )
 
     return RayResult(
