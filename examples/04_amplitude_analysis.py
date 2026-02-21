@@ -189,85 +189,123 @@ fig.tight_layout()
 plt.show()
 
 # %%
-# Focusing effect (Reflected waves)
-# ---------------------------------
+# Advanced Spreading Analysis
+# ---------------------------
 # 
-# A caustic (strong focusing leading to theoretically infinite amplitude and
-# zero geometric spreading) can also form simply from reflections off the bottom 
-# of a low-velocity channel or a gradient layer. Because rays entering the slow
-# layer are bent downward, they are "funneled" before reflecting. At a certain
-# critical offset range, the ray paths cross each other, creating a triplication 
-# and a hard zero-dip in the spreading factor.
+# This section compares how different velocity structures (discrete channel 
+# vs. continuous gradient) distort the wavefront and influence geometrical 
+# spreading. 
+#
+# 1. **Low-Velocity Channel**: Discrete layers funnelling rays.
+# 2. **Continuous Gradient**: Smoothly varying velocity (discretized).
+#
+# In flat 1D media, even with strong refraction, 
+# geometrical spreading for reflections remains growing and caustic-free.
+#
+# Comparative Analysis of the Results:
+# 
+# 1. **Initial Magnitude**: The Gradient model (Blue) starts with a 
+#    higher spreading factor than the Channel model (Green). This is 
+#    because the average velocity in the gradient (:math:`5000 \to 3500` m/s) 
+#    is higher than in the channel (:math:`5000 \to 2500` m/s). Higher average 
+#    velocity leads to faster initial ray-tube expansion.
+#
+# 2. **Curvature & Rate of Change**:
+#
+#    - The **Discrete Channel (Green)** follows a predictable parabolic 
+#      growth. The refraction is "lumped" at a single interface, after 
+#      which the rays travel straight.
+#    - The **Continuous Gradient (Blue)** stays "flatter" for mid-offsets 
+#      but then undergoes an aggressive "upturn" at large offsets (>12 km). 
+#      This happens because the continuous refraction makes the horizontal 
+#      offset :math:`x(p)` extremely sensitive to changes in take-off angle 
+#      as rays become grazing.
+#
+# 3. **Monotonicity**: Importantly, neither curve shows a "dip" or 
+#    singularity. In 1D flat media, :math:`dx/dp` remains positive for 
+#    reflections, meaning we see no caustics, only varying rates of 
+#    wavefield divergence.
 
-focusing_df = pd.DataFrame({
+from laytracer.model import discretize_gradient_layer
+
+# --- 1. Define Models & Trace Rays ---
+
+# Discrete Channel Model
+refr_df = pd.DataFrame({
     "Depth": [0.0, 1500.0, 3000.0],
-    "Vp":    [5000.0, 2500.0, 6000.0],  # Deep low-velocity channel
+    "Vp":    [5000.0, 2500.0, 6000.0],
     "Vs":    [2880.0, 1440.0, 3460.0],
     "Rho":   [2700.0, 2200.0, 2800.0],
     "Qp":    [300.0,  300.0,  300.0, ],
     "Qs":    [150.0,  150.0,  150.0, ],
 })
 
-src_focus = np.array([0.0, 0.0, 0.0])
-offsets = np.arange(1000, 15001, 100) # Dense scanning to pinpoint the caustic
-rcvs_focus = np.column_stack([offsets, np.zeros_like(offsets), np.zeros_like(offsets)])
+# Continuous Gradient Model (approximated by 50m layers)
+def v_func(z):
+    return 5000.0 - 0.5 * z
+grad_df = discretize_gradient_layer(0.0, 3000.0, v_func, dz=50.0)
 
-# We simulate a wave reflecting exactly at the bottom interface of the channel (Depth=3000)
-# With LayTracer, we can specify interactions to force a reflection.
-res_focus = lt.trace_rays(
-    sources=src_focus,
-    receivers=rcvs_focus,
-    velocity_df=focusing_df,
-    source_phase="P",
-    reflection=[(3000.0, "P")],
-    compute_amplitude=True,
-    transcoef_method="normal"
+src_p = np.array([0.0, 0.0, 0.0])
+offsets = np.arange(500, 15001, 100)
+rcvs_p = np.column_stack([offsets, np.zeros_like(offsets), np.zeros_like(offsets)])
+
+# Trace Category 1: Channel
+res_refr = lt.trace_rays(
+    sources=src_p, receivers=rcvs_p, velocity_df=refr_df,
+    source_phase="P", reflection=[(3000.0, "P")], 
+    compute_amplitude=True, transcoef_method="normal"
 )
 
-# First, plot the velocity profile separately
-fig_prof, ax_prof = plt.subplots(figsize=(4, 6))
-lt.plot.velocity_profile(focusing_df, param="Vp", ax=ax_prof)
-ax_prof.set_title("Vp model with Low-Velocity Channel")
-ax_prof.set_ylim(4000, 0) # Depth in meters
-fig_prof.tight_layout()
-plt.show()
+# Trace Category 2: Gradient (reflect off last interface ~3km)
+z_reflect = grad_df["Depth"].iloc[-1]
+res_grad = lt.trace_rays(
+    sources=src_p, receivers=rcvs_p, velocity_df=grad_df,
+    source_phase="P", reflection=[(z_reflect, "P")],
+    compute_amplitude=True, transcoef_method="normal"
+)
 
-# Now plot the rays and spreading vertically stacked
-fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 8), sharex=True)
+# --- 2. Advanced Visualisation ---
 
+fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(10, 14), sharex=True)
+
+# Panel 1: Channel Rays
 lt.plot.rays_2d(
-    focusing_df,
-    rays=res_focus.rays[::3],  # Plot a subset of rays to reduce clutter
-    sources=src_focus,
-    receivers=rcvs_focus,
-    ax=ax1,
-    vel_type="Vp",
-    plot_model=True,
-    add_colorbar=True,
-    discrete_colorbar=True,
-    unit="km",
+    refr_df, rays=res_refr.rays[::4], 
+    sources=src_p, receivers=rcvs_p, ax=ax1, 
+    vel_type="Vp", ray_color="white", ray_alpha=0.7,
+    plot_model=True, add_colorbar=True, discrete_colorbar=True, unit="km",
 )
-ax1.set_title("Rays reflecting off low-velocity channel")
-ax1.set_ylim(4.0, 0)
+ax1.set_title("Ray paths - Discrete Low-Velocity Channel")
+ax1.set_ylim(4.5, 0)
 
-# Plot spreading
-valid_f = res_focus.spreading > 0
-ax2.plot(
-    offsets[valid_f] / 1000, res_focus.spreading[valid_f],
-    "-", markersize=3, color="tab:green",
+# Panel 2: Gradient Rays
+lt.plot.rays_2d(
+    grad_df, rays=res_grad.rays[::4], 
+    sources=src_p, receivers=rcvs_p, ax=ax2, 
+    vel_type="Vp", ray_color="white", ray_alpha=0.7,
+    plot_model=True, add_colorbar=True, discrete_colorbar=False, unit="km",
 )
-ax2.set_xlabel("Offset (km)")
-ax2.set_ylabel("Spreading factor")
-ax2.set_title("Geometrical spreading of reflected wave")
-ax2.grid(True, alpha=0.3)
+ax2.set_title("Ray paths - Continuous Velocity Gradient")
+ax2.set_ylim(4.5, 0)
 
-# Find the caustic
-if np.any(valid_f):
-    valid_spreadings = res_focus.spreading[valid_f]
-    valid_off = offsets[valid_f]
-    caustic_idx = np.argmin(valid_spreadings)
-    ax2.plot(valid_off[caustic_idx]/1000, valid_spreadings[caustic_idx], 'ro', markersize=6, label="Caustic focal minimum")
-    ax2.legend()
+# Panel 3: Spreading Comparison
+valid_f = res_refr.spreading > 0
+valid_g = res_grad.spreading > 0
+
+ax3.plot(
+    offsets[valid_f] / 1000, res_refr.spreading[valid_f],
+    "-", color="tab:green", label="Discrete Channel Model", linewidth=2
+)
+ax3.plot(
+    offsets[valid_g] / 1000, res_grad.spreading[valid_g],
+    "--", color="tab:blue", label="Continuous Gradient Model", linewidth=2
+)
+
+ax3.set_xlabel("Offset (km)")
+ax3.set_ylabel("Spreading factor")
+ax3.set_title("Geometrical Spreading Comparison")
+ax3.legend()
+ax3.grid(True, alpha=0.3)
 
 plt.tight_layout()
 plt.show()
