@@ -37,7 +37,7 @@ print(vel_df)
 # Plot velocity profile
 # ---------------------
 
-ax = lt.plot.velocity_profile(vel_df, vel_type="Vp")
+ax = lt.plot.velocity_profile(vel_df, param="Vp")
 
 #%%
 

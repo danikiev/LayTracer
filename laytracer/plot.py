@@ -14,22 +14,23 @@ import pandas as pd
 
 def velocity_profile(
     vel_df: pd.DataFrame,
-    vel_type: str = "Vp",
+    param: str = "Vp",
     ax=None,
     color: str | None = None,
     label: str | None = None,
     xlim: tuple | None = None,
     ylim: tuple | None = None,
+    unit: str = "m",
     **kwargs,
 ):
-    r"""Plot a 1-D velocity–depth step profile.
+    r"""Plot a 1-D model parameter–depth step profile.
 
     Parameters
     ----------
     vel_df : pandas.DataFrame
-        Velocity model (columns ``Depth``, ``Vp``, ``Vs``).
-    vel_type : str
-        ``'Vp'`` or ``'Vs'``.
+        Velocity model.
+    param : str, optional
+        ``'Vp'`` (default), ``'Vs'``, ``'Rho'``, ``'Qp'``, or ``'Qs'``.
     ax : matplotlib.axes.Axes, optional
         Axes to plot on.  Created if *None*.
     color : str, optional
@@ -38,6 +39,8 @@ def velocity_profile(
         Legend label.
     xlim, ylim : tuple, optional
         Axis limits ``(min, max)``.
+    unit : str, optional
+        ``'m'`` (default) or ``'km'``. Scales the vertical depth axis.
 
     Returns
     -------
@@ -49,21 +52,23 @@ def velocity_profile(
         _, ax = plt.subplots(figsize=(4, 6))
 
     depths = vel_df["Depth"].values
-    vels = vel_df[vel_type].values
+    vals = vel_df[param].values
     n = len(depths)
+    
+    scale = 1000.0 if unit.lower() == "km" else 1.0
 
     # Step profile
     z_plot, v_plot = [], []
     for i in range(n):
-        z_top = depths[i]
+        z_top = depths[i] / scale
         
         if i + 1 < n:
-            z_bot = depths[i + 1]
+            z_bot = depths[i + 1] / scale
         else:
             # Last layer (half-space) extension
-            span = depths[-1] - depths[0]
+            span = (depths[-1] - depths[0]) / scale
             if span == 0:
-                span = 1000.0  # Fallback for single-layer model
+                span = 1000.0 / scale  # Fallback for single-layer model
             
             z_def = z_top + span * 0.3
             if ylim:
@@ -73,17 +78,37 @@ def velocity_profile(
                 z_bot = z_def
 
         z_plot.extend([z_top, z_bot])
-        v_plot.extend([vels[i], vels[i]])
+        v_plot.extend([vals[i], vals[i]])
 
     ax.plot(v_plot, z_plot, color=color, label=label, **kwargs)
-    ax.invert_yaxis()
-    ax.set_xlabel(f"{vel_type} (m/s)")
-    ax.set_ylabel("Depth (m)")
-    if xlim:
-        ax.set_xlim(xlim)
+    
+    if param in ("Vp", "Vs"):
+        xlabel_str = f"{param} (m/s)"
+    elif param == "Rho":
+        xlabel_str = r"$\rho$ (kg/m³)"
+    elif param in ("Qp", "Qs"):
+        xlabel_str = f"{param}"
+    else:
+        xlabel_str = param
+
+    ax.margins(y=0)
+    ax.set_xlabel(xlabel_str)
+    ax.set_ylabel(f"Depth ({unit})")
+    
+    # Handle y-axis limits and inversion
     if ylim:
         ax.set_ylim(ylim)
-    ax.set_title("Velocity profile")
+    
+    # Only invert if top is less than bottom (matplotlib default puts 0 at bottom)
+    bottom, top = ax.get_ylim()
+    if bottom < top:
+        ax.invert_yaxis()
+        
+    if xlim:
+        ax.set_xlim(xlim)
+        
+    title_str = "Velocity profile" if param in ("Vp", "Vs") else f"{param} profile"
+    ax.set_title(title_str)
     return ax
 
 
@@ -98,6 +123,7 @@ def rays_2d(
     ray_alpha: float = 0.6,
     xlim: tuple | None = None,
     ylim: tuple | None = None,
+    unit: str = "m",
     plot_model: bool = True,
     add_colorbar: bool = False,
     discrete_colorbar: bool = False,
@@ -127,6 +153,8 @@ def rays_2d(
         If *True* (default), plot the velocity model background and
         set axis labels/titles.  If *False*, only plot the rays and
         markers.
+    unit : str
+        ``'m'`` (default) or ``'km'``. Scales coordinates and labels.
     add_colorbar : bool
         If *True* (default *False*), add a colorbar for the velocity
         model. Only applies if *plot_model* is True.
@@ -157,15 +185,17 @@ def rays_2d(
     depths = vel_df["Depth"].values
     vels = vel_df[vel_type].values
     n = len(depths)
+    
+    scale = 1000.0 if unit.lower() == "km" else 1.0
 
     # Determine x-range from rays (only if we need to plot model or set limits)
     # Determine x-range from rays (only if we need to plot model or set limits)
     if plot_model:
         if rays:
-            all_x = np.concatenate([r[:, 0] for r in rays])
+            all_x = np.concatenate([r[:, 0] / scale for r in rays])
             x_lo, x_hi = all_x.min(), all_x.max()
         else:
-            x_lo, x_hi = 0, 1000 # Default fallback
+            x_lo, x_hi = 0, 1000 / scale # Default fallback
             if xlim:
                  x_lo, x_hi = sorted(xlim)
 
@@ -200,15 +230,15 @@ def rays_2d(
         patches = []
         colors_list = []
         for i in range(n):
-            z_top = depths[i]
+            z_top = depths[i] / scale
             
             
             if i + 1 < n:
-                z_bot = depths[i + 1]
+                z_bot = depths[i + 1] / scale
             else:
                 # Last layer (half-space) extension
-                span = depths[-1] - depths[0]
-                if span == 0: span = 1000.0
+                span = (depths[-1] - depths[0]) / scale
+                if span == 0: span = 1000.0 / scale
                 
                 z_def = z_top + span * 0.3
                 if ylim:
@@ -246,22 +276,24 @@ def rays_2d(
 
     # Rays
     for ray in rays:
-        x = ray[:, 0]
-        z = ray[:, -1] if ray.shape[1] == 2 else ray[:, 2]
+        x = ray[:, 0] / scale
+        z = (ray[:, -1] if ray.shape[1] == 2 else ray[:, 2]) / scale
         ax.plot(x, z, color=ray_color, alpha=ray_alpha, linewidth=0.8, **kwargs)
 
     # Markers
     if sources is not None:
         src = np.atleast_2d(sources)
-        ax.scatter(src[:, 0], src[:, -1], marker="*", s=120, c="red", zorder=5, label="Source")
+        ax.scatter(src[:, 0] / scale, src[:, -1] / scale, marker="*", s=120, c="red", zorder=5, label="Source")
     if receivers is not None:
         rcv = np.atleast_2d(receivers)
-        ax.scatter(rcv[:, 0], rcv[:, -1], marker="v", s=60, c="blue", zorder=5, label="Receiver")
+        ax.scatter(rcv[:, 0] / scale, rcv[:, -1] / scale, marker="v", s=60, c="blue", zorder=5, label="Receiver")
+
+    ax.margins(y=0)
 
     if plot_model:
         ax.invert_yaxis()
-        ax.set_xlabel("Horizontal distance (m)")
-        ax.set_ylabel("Depth (m)")
+        ax.set_xlabel(f"Horizontal distance ({unit})")
+        ax.set_ylabel(f"Depth ({unit})")
         ax.set_title("Ray paths")
     
     if xlim:
@@ -274,9 +306,9 @@ def rays_2d(
     elif plot_model:
         # Default depth range from model (0 to bottom)
         # Find max depth of model or rays
-        z_max_model = depths[-1]
+        z_max_model = depths[-1] / scale
         if rays:
-             all_z = np.concatenate([r[:, -1] if r.shape[1] == 2 else r[:, 2] for r in rays])
+             all_z = np.concatenate([(r[:, -1] if r.shape[1] == 2 else r[:, 2]) / scale for r in rays])
              z_max_rays = all_z.max()
              z_max_model = max(z_max_model, z_max_rays)
         

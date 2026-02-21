@@ -27,8 +27,8 @@ vel_df = pd.DataFrame({
     "Vp":    [3000.0, 4500.0, 5500.0, 6500.0],
     "Vs":    [1500.0, 2250.0, 2750.0, 3250.0],
     "Rho":   [2200.0, 2500.0, 2700.0, 2900.0],
-    "Qp":    [200.0,  400.0,  600.0,  800.0],
-    "Qs":    [100.0,  200.0,  300.0,  400.0],
+    "Qp":    [200.0,  50.0,   600.0,  800.0],
+    "Qs":    [100.0,  25.0,   300.0,  400.0],
 })
 
 print(vel_df)
@@ -37,32 +37,17 @@ print(vel_df)
 # Plot velocity model
 # -------------------
 #
-# Visualise the P-wave velocity, S-wave velocity, and density profiles
+# Visualise the parameters of the model (P-wave, S-wave, density, attenuation)
 # that will be used for the amplitude calculations.
 
-fig, axes = plt.subplots(1, 3, figsize=(10, 5), sharey=True)
+fig, axes = plt.subplots(1, 4, figsize=(12, 5), sharey=True)
 
-lt.plot.velocity_profile(vel_df, vel_type="Vp", ax=axes[0])
-lt.plot.velocity_profile(vel_df, vel_type="Vs", ax=axes[1], color="tab:orange")
-axes[1].set_title("Vs profile")
+lt.plot.velocity_profile(vel_df, param="Vp", ax=axes[0])
+lt.plot.velocity_profile(vel_df, param="Vs", ax=axes[1], color="tab:orange")
+lt.plot.velocity_profile(vel_df, param="Rho", ax=axes[2], color="tab:green")
+lt.plot.velocity_profile(vel_df, param="Qp", ax=axes[3], color="tab:purple")
 
-# Density profile (reuse the step-profile pattern)
-depths = vel_df["Depth"].values
-rho = vel_df["Rho"].values
-n = len(depths)
-z_plot, r_plot = [], []
-for i in range(n):
-    z_top = depths[i]
-    z_bot = depths[i + 1] if i + 1 < n else z_top + (depths[-1] - depths[0]) * 0.3
-    z_plot.extend([z_top, z_bot])
-    r_plot.extend([rho[i], rho[i]])
-
-axes[2].plot(r_plot, z_plot, color="tab:green")
-axes[2].invert_yaxis()
-axes[2].set_xlabel(r"$\rho$ (kg/m³)")
-axes[2].set_title("Density profile")
-
-fig.suptitle("Velocity model", fontsize=14)
+fig.suptitle("Model profiles", fontsize=14)
 fig.tight_layout()
 plt.show()
 
@@ -90,11 +75,54 @@ result = lt.trace_rays(
 )
 
 ###############################################################################
+# Plot ray paths
+# --------------
+#
+# Before analysing the amplitudes, let's visualize the ray paths from the
+# source to the receivers. We overlay the rays on the P-wave velocity model
+# to observe their trajectories.
+
+fig, ax = plt.subplots(figsize=(10, 6))
+lt.plot.rays_2d(
+    vel_df,
+    rays=result.rays,
+    sources=src,
+    receivers=rcvs,
+    ax=ax,
+    vel_type="Vp",
+    plot_model=True,
+    add_colorbar=True,
+    model_alpha=0.6,
+    discrete_colorbar=True,
+    unit="km",
+)
+ax.set_title("Ray paths from deep source to surface receivers")
+fig.tight_layout()
+plt.show()
+
+#%%
+
+###############################################################################
 # Plot amplitude quantities vs offset
 # -----------------------------------
 #
-# We plot travel time, :math:`t^*`, geometrical spreading, and
-# transmission coefficient product side by side.
+# Here we analyze the variation of different amplitude-related quantities as a 
+# function of receiver offset:
+# 
+# * **Travel time**: Increases smoothly with offset. The curvature is governed 
+#   by the velocity structure (moveout equation).
+# * **Attenuation operator** :math:`t^*`: Calculated as the path integral 
+#   :math:`t^* = \int_{\mathrm{ray}} \frac{dt}{Q(s)}`. It represents cumulative 
+#   anelastic decay. Rays traveling further horizontally spend more time traversing 
+#   the highly attenuating layer (Q=50) between 1-2 km depth, accumulating higher 
+#   :math:`t^*`.
+# * **Geometrical spreading**: Measures the spatial divergence of the energetic 
+#   ray tube. It generally grows with propagation distance, but velocity contrasts 
+#   distort wavefronts, causing focusing or defocusing effects.
+# * **Transmission coefficient product**: The cumulative product of Zoeppritz
+#   transmission coefficients :math:`\prod |T_k|` across all crossed interfaces.
+#   Notice how the transmission efficiency drops sharply at larger offsets as the 
+#   rays become more grazing, converting more energy into reflected modes.
 
 fig, axes = plt.subplots(2, 2, figsize=(10, 8))
 
@@ -193,17 +221,9 @@ model_psv = pd.DataFrame({
 
 # Plot the velocity model
 fig, axes = plt.subplots(1, 3, figsize=(10, 4), sharey=True)
-lt.plot.velocity_profile(model_psv, vel_type="Vp", ax=axes[0], ylim=(4000, 0))
-lt.plot.velocity_profile(model_psv, vel_type="Vs", ax=axes[1], color="tab:orange")
-axes[1].set_title("Vs profile")
-
-# Density
-z_plot = [0, 2000, 2000, 4000]
-r_plot = [mi_rho * 1000, mi_rho * 1000, mt_rho * 1000, mt_rho * 1000]
-axes[2].plot(r_plot, z_plot, color="tab:green")
-axes[2].invert_yaxis()
-axes[2].set_xlabel(r"$\rho$ (kg/m³)")
-axes[2].set_title("Density profile")
+lt.plot.velocity_profile(model_psv, param="Vp", ax=axes[0], ylim=(4000, 0))
+lt.plot.velocity_profile(model_psv, param="Vs", ax=axes[1], color="tab:orange", ylim=(4000, 0))
+lt.plot.velocity_profile(model_psv, param="Rho", ax=axes[2], color="tab:green", ylim=(4000, 0))
 
 fig.suptitle("P-SV Test Model", fontsize=14)
 fig.tight_layout()

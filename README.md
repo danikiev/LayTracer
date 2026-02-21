@@ -125,7 +125,7 @@ print(result.trans_product)  # product of transmission coefficients
 laytracer.plot.rays_2d(vel_df, rays=[r.ray_path for r in ...])
 
 # 1-D velocity profile
-laytracer.plot.velocity_profile(vel_df, vel_type="Vp")
+laytracer.plot.velocity_profile(vel_df, param="Vp")
 
 # Interactive 3-D viewer
 fig = laytracer.plot.rays_3d(vel_df, rays=result.rays, sources=src, receivers=rcvs)

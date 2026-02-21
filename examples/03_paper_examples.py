@@ -256,17 +256,13 @@ except Exception as e:
     print(f"Error tracing rays in Fig 15c: {e}")
     raise e
 
-# Convert to km for plotting
-vel_df_km = vel_df.copy()
-vel_df_km["Depth"] /= 1000.0
-# Concatenate rays  from both results
+# Concatenate rays from both results
 res_rays = res_refl.rays + res_refr.rays
-rays_km = [r / 1000.0 for r in res_rays]
 
 fig, ax = plt.subplots(figsize=(10, 6))
 lt.plot.rays_2d(
-    vel_df=vel_df_km,
-    rays=rays_km,
+    vel_df=vel_df,
+    rays=res_rays,
     vel_type="Vp",
     ax=ax,
     xlim=(0, 350),
@@ -275,7 +271,8 @@ lt.plot.rays_2d(
     equal_scale=False,
     add_colorbar=True,
     discrete_colorbar=True,
-    model_alpha=0.5   
+    model_alpha=0.5,
+    unit="km"
 )
 for i, x in enumerate(offsets_km):
     ax.text(x, 0, f"{offsets_km[i]:.0f}", ha='center', va='bottom')
