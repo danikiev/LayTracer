@@ -272,21 +272,24 @@ fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(10, 14), sharex=True)
 lt.plot.rays_2d(
     refr_df, rays=res_refr.rays[::4], 
     sources=src_p, receivers=rcvs_p, ax=ax1, 
-    vel_type="Vp", ray_color="white", ray_alpha=0.7,
+    vel_type="Vp", model_alpha=0.6,
     plot_model=True, add_colorbar=True, discrete_colorbar=True, unit="km",
 )
 ax1.set_title("Ray paths - Discrete Low-Velocity Channel")
-ax1.set_ylim(4.5, 0)
+ax1.set_ylim(3.5, 0)
+ax1.tick_params(labelbottom=True) # Forces x-labels to show despite sharex=True
 
 # Panel 2: Gradient Rays
 lt.plot.rays_2d(
     grad_df, rays=res_grad.rays[::4], 
     sources=src_p, receivers=rcvs_p, ax=ax2, 
-    vel_type="Vp", ray_color="white", ray_alpha=0.7,
+    vel_type="Vp", model_alpha=0.6,
     plot_model=True, add_colorbar=True, discrete_colorbar=False, unit="km",
 )
 ax2.set_title("Ray paths - Continuous Velocity Gradient")
-ax2.set_ylim(4.5, 0)
+ax2.set_ylim(3.5, 0)
+ax2.tick_params(labelbottom=True)
+
 
 # Panel 3: Spreading Comparison
 valid_f = res_refr.spreading > 0
