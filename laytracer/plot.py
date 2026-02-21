@@ -100,8 +100,8 @@ def rays_2d(
     ylim: tuple | None = None,
     plot_model: bool = True,
     add_colorbar: bool = False,
-    model_alpha: float = 1.0,
     discrete_colorbar: bool = False,
+    model_alpha: float = 1.0,    
     equal_scale: bool = True,
     colorbar_orientation: str = "vertical",
     **kwargs,
@@ -130,11 +130,11 @@ def rays_2d(
     add_colorbar : bool
         If *True* (default *False*), add a colorbar for the velocity
         model. Only applies if *plot_model* is True.
-    model_alpha : float
-        Opacity of the velocity model layers (0.0 to 1.0). Default 1.0.
     discrete_colorbar : bool
         If *True* (default *False*), quantize the colormap to the
         unique velocity values in the model.
+    model_alpha : float
+        Opacity of the velocity model layers (0.0 to 1.0). Default 1.0.
     equal_scale : bool
         If *True* (default *True*), force equal scaling for x and y axes
         using ``ax.set_aspect('equal')``.

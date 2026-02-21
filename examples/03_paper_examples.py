@@ -274,6 +274,7 @@ lt.plot.rays_2d(
     plot_model=True,
     equal_scale=False,
     add_colorbar=True,
+    discrete_colorbar=True,
     model_alpha=0.5   
 )
 for i, x in enumerate(offsets_km):
