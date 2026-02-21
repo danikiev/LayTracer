@@ -5,6 +5,7 @@ import pandas as pd
 import pytest
 
 import laytracer
+from laytracer.solver import offset_dq
 
 
 def _simple_model():
@@ -18,6 +19,98 @@ def _simple_model():
 
 
 
+
+
+# ═══════════════════════════════════════════════════════════════════════
+#  Theory Verification
+# ═══════════════════════════════════════════════════════════════════════
+
+class TestTheoryVerification:
+    """Rigorous quantitative verification of mathematical theory for t* and spreading."""
+    
+    def test_tstar_theoretical_formula(self):
+        """t* must exactly match the mathematical sum of layer-by-layer attenuation dt / Q."""
+        h = np.array([500.0, 1000.0, 1500.0])
+        v = np.array([3000.0, 4500.0, 6000.0])
+        Q = np.array([100.0, 200.0, 300.0])
+        
+        # Pick an arbitrary valid ray parameter (must be < 1/6000)
+        p = 0.0001
+        
+        # 1. Theoretical calculation exactly per formula
+        eta = np.sqrt(1.0 / v**2 - p**2)
+        dt = h / (v**2 * eta)
+        tstar_theory = float(np.sum(dt / Q))
+        
+        # 2. Recreate condition for the solver
+        X_target = float(np.sum(h * p / eta))
+        
+        segments = [{
+            "h": h, "v": v, "vp": v, "vs": v/1.732, "rho": v*0.5+1000.0,
+            "qp": Q, "qs": Q/2.0, "phase": "P", 
+            "start_z": 0.0, "end_z": 3000.0
+        }]
+        
+        # Run solver exactly to the target X
+        res = laytracer.solve(
+            h, v, segments, [], epicentral_dist=X_target, z_src=0.0, z_rcv=3000.0,
+            compute_amplitude=True, tol=1e-10
+        )
+        
+        # Verify it matched the expected parameter and the theoretical tstar formula exactly
+        assert res.ray_parameter == pytest.approx(p, rel=1e-5)
+        assert res.tstar == pytest.approx(tstar_theory, rel=1e-6)
+
+    def test_spreading_analytical_derivative(self):
+        """Spreading relies on analytical dX/dp. Verify perfectly matches finite difference."""
+        h = np.array([500.0, 1000.0, 1500.0])
+        v = np.array([3000.0, 4500.0, 6000.0])
+        
+        # Arbitrary valid p
+        p = 0.0001
+        
+        # Definition of X(p)
+        def X_of_p(p_val):
+            eta = np.sqrt(1.0 / v**2 - p_val**2)
+            return np.sum(h * p_val / eta)
+            
+        X_target = X_of_p(p)
+        
+        # 1. Central finite difference for true dX/dp
+        eps = 1e-8
+        dXdp_fd = (X_of_p(p + eps) - X_of_p(p - eps)) / (2 * eps)
+        
+        # 2. Analytical dX/dp using internal q-derivatives
+        vmax = float(np.max(v))
+        lmd = v / vmax
+        q = p * vmax / np.sqrt(1.0 - (p * vmax)**2)
+        
+        dXdq = offset_dq(q, h, lmd)
+        dqdp = vmax / (1.0 - (p * vmax)**2)**1.5
+        dXdp_analytic = dXdq * dqdp
+        
+        # Prove the code's analytical derivatives precisely match numerical math
+        assert dXdp_analytic == pytest.approx(dXdp_fd, rel=1e-5)
+        
+        # 3. Verify the final spreading factor formula computes correctly
+        cos_is = np.sqrt(1.0 - (p * v[0])**2)
+        cos_ir = np.sqrt(1.0 - (p * v[-1])**2)
+        L_theory = np.sqrt(X_target * abs(dXdp_analytic) / (cos_is * cos_ir))
+        
+        segments = [{
+            "h": h, "v": v, "vp": v, "vs": v/1.732, "rho": v*0.5+1000.0,
+            "qp": v*0 + 500.0, "qs": v*0 + 250.0, "phase": "P", 
+            "start_z": 0.0, "end_z": 3000.0
+        }]
+        
+        # Run solver exactly to the target X
+        res = laytracer.solve(
+            h, v, segments, [], epicentral_dist=X_target, z_src=0.0, z_rcv=3000.0,
+            compute_amplitude=True, tol=1e-10
+        )
+        
+        assert res.ray_parameter == pytest.approx(p, rel=1e-5)
+        assert res.spreading == pytest.approx(L_theory, rel=1e-6)
 
 
 # ═══════════════════════════════════════════════════════════════════════
