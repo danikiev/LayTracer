@@ -54,24 +54,44 @@ def test_pp_reflection_offset():
     """Test offset P-P reflection.
     Source: (0,0,0), Receiver: (2000,0,0)
     Reflector at 1000m.
-    Path is symmetric triangle.
-    Half-path: horizontal=1000, vertical=1000.
+    
+    Note: The path is a symmetric triangle only because the entire down and up legs
+    stay within a single constant-velocity layer (Layer 0, Vp=2000). 
+    In a multi-layered medium above the reflector, the reflection point would still 
+    be at mid-offset due to symmetry, but the legs would be refracted (bent).
+    
+    Geometry:
+    Half-offset X/2 = 1000m
+    Depth H = 1000m
+    Angle theta = arctan(X/2 / H) = 45 degrees
     Leg length = sqrt(1000^2 + 1000^2) = 1414.21 m
     Total length = 2828.42 m
     Vp = 2000
     Time = 1.41421 s
+    Ray parameter p = sin(theta) / Vp = sin(45) / 2000 = 0.7071 / 2000 = 0.00035355 s/m
     """
+    X = 2000.0
+    H = 1000.0
+    Vp = 2000.0
+    
     res = trace_rays(
         sources=[0,0,0],
-        receivers=[2000,0,0],
+        receivers=[X,0,0],
         velocity_df=test_model,
         source_phase="P",
-        reflection=[(1000.0, "P")]
+        reflection=[(H, "P")]
     )
-    expect = 2 * np.sqrt(1000**2 + 1000**2) / 2000.0
-    print(f"DEBUG: Calculated T={res.travel_times[0]}, Expected={expect}")
-    print(f"DEBUG: Ray Param p={res.ray_parameters[0]}")
-    assert np.isclose(res.travel_times[0], expect, rtol=1e-4)
+    
+    expect_t = 2 * np.sqrt((X/2)**2 + H**2) / Vp
+    theta = np.arctan2(X/2, H)
+    expect_p = np.sin(theta) / Vp
+   
+    assert res.travel_times is not None
+    assert np.isclose(res.travel_times[0], expect_t, rtol=1e-5)
+    
+    # Check ray parameter
+    assert res.ray_parameters[0] > 0, "Ray parameter should be positive for offset ray"
+    assert np.isclose(res.ray_parameters[0], expect_p, rtol=1e-5)
 
 def test_multi_bounce():
     """Test P-P-P-P bounce: 0 -> 1000 -> 0 -> 1000 -> 0
