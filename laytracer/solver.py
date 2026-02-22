@@ -231,7 +231,7 @@ def newton_step(
 
 @dataclass
 class RayResult:
-    """Result of a single two-point ray trace.
+    r"""Result of a single two-point ray trace.
 
     Attributes
     ----------
