@@ -11,3 +11,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Files for initial release
 - This changelog
+- GitHub Actions CI for pytest

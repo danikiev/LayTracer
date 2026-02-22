@@ -2,7 +2,7 @@
 :: This script uses docs/Makefile to build the sphinx documentation in HMTL and PDF
 :: Run: `build-docs.bat` from cmd
 :: To build PDF as well use: `build-docs.bat -pdf` from cmd
-:: D. Anikiev, 2025-03-08
+:: D. Anikiev, 2026-02-22
 
 @echo off
 
