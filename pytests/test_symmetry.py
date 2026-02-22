@@ -42,13 +42,37 @@ class TestSymmetry:
         )
 
     def test_tstar_reciprocity(self):
-        """t* is the same from A→B and B→A."""
-        df = _simple_model()
-        src = np.array([0.0, 0.0, 500.0])
-        rcv = np.array([5000.0, 0.0, 2500.0])
+        """t*(S,R) = t*(R,S). Path integral must not depend on direction."""
+        df = pd.DataFrame({
+            "Depth": [0.0, 1000.0, 2000.0, 3500.0],
+            "Vp":    [3000.0, 4500.0, 5500.0, 6500.0],
+            "Vs":    [1500.0, 2250.0, 2750.0, 3250.0],
+            "Rho":   [2200.0, 2500.0, 2700.0, 2900.0],
+            "Qp":    [200.0,  50.0,   600.0,  800.0],
+            "Qs":    [100.0,  25.0,   300.0,  400.0],
+        })
+        src = np.array([0.0, 0.0, 3000.0])
+        rcv = np.array([8000.0, 0.0, 0.0])
         r_fwd = laytracer.trace_rays(src, rcv, df, compute_amplitude=True)
         r_rev = laytracer.trace_rays(rcv, src, df, compute_amplitude=True)
-        assert r_fwd.tstar[0] == pytest.approx(r_rev.tstar[0], rel=1e-4)
+        assert r_fwd.tstar[0] == pytest.approx(r_rev.tstar[0], rel=1e-6)
+
+    def test_spreading_reciprocity(self):
+        """L(S,R) = L(R,S) (Červený-style invariant)."""
+        # Spreading is invariant under source-receiver swap
+        df = pd.DataFrame({
+            "Depth": [0.0, 1000.0, 2000.0, 3500.0],
+            "Vp":    [3000.0, 4500.0, 5500.0, 6500.0],
+            "Vs":    [1500.0, 2250.0, 2750.0, 3250.0],
+            "Rho":   [2200.0, 2500.0, 2700.0, 2900.0],
+            "Qp":    [200.0,  50.0,   600.0,  800.0],
+            "Qs":    [100.0,  25.0,   300.0,  400.0],
+        })
+        src = np.array([0.0, 0.0, 3000.0])
+        rcv = np.array([8000.0, 0.0, 0.0])
+        r_fwd = laytracer.trace_rays(src, rcv, df, compute_amplitude=True)
+        r_rev = laytracer.trace_rays(rcv, src, df, compute_amplitude=True)
+        assert r_fwd.spreading[0] == pytest.approx(r_rev.spreading[0], rel=1e-5)
 
     def test_ray_path_reversal(self):
         """Forward ray ≈ flipped reverse ray (z-coordinates)."""

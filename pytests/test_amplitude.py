@@ -348,50 +348,6 @@ class TestSpreading:
         assert res.spreading > 0
 
 
-# ═══════════════════════════════════════════════════════════════════════
-#  Reciprocity
-# ═══════════════════════════════════════════════════════════════════════
-
-class TestReciprocity:
-    """Verify that spreading and t* are invariant under source-receiver swap."""
-
-    def test_spreading_reciprocity(self):
-        """L(S,R) = L(R,S) (Červený-style invariant)."""
-        df = pd.DataFrame({
-            "Depth": [0.0, 1000.0, 2000.0, 3500.0],
-            "Vp":    [3000.0, 4500.0, 5500.0, 6500.0],
-            "Vs":    [1500.0, 2250.0, 2750.0, 3250.0],
-            "Rho":   [2200.0, 2500.0, 2700.0, 2900.0],
-            "Qp":    [200.0,  50.0,   600.0,  800.0],
-            "Qs":    [100.0,  25.0,   300.0,  400.0],
-        })
-
-        src = np.array([0.0, 0.0, 3000.0])
-        rcv = np.array([8000.0, 0.0, 0.0])
-
-        fwd = laytracer.trace_rays(src, rcv, df, source_phase="P", compute_amplitude=True)
-        rev = laytracer.trace_rays(rcv, src, df, source_phase="P", compute_amplitude=True)
-
-        assert fwd.spreading[0] == pytest.approx(rev.spreading[0], rel=1e-5)
-
-    def test_tstar_reciprocity(self):
-        """t*(S,R) = t*(R,S). Path integral must not depend on direction."""
-        df = pd.DataFrame({
-            "Depth": [0.0, 1000.0, 2000.0, 3500.0],
-            "Vp":    [3000.0, 4500.0, 5500.0, 6500.0],
-            "Vs":    [1500.0, 2250.0, 2750.0, 3250.0],
-            "Rho":   [2200.0, 2500.0, 2700.0, 2900.0],
-            "Qp":    [200.0,  50.0,   600.0,  800.0],
-            "Qs":    [100.0,  25.0,   300.0,  400.0],
-        })
-
-        src = np.array([0.0, 0.0, 3000.0])
-        rcv = np.array([8000.0, 0.0, 0.0])
-
-        fwd = laytracer.trace_rays(src, rcv, df, source_phase="P", compute_amplitude=True)
-        rev = laytracer.trace_rays(rcv, src, df, source_phase="P", compute_amplitude=True)
-
-        assert fwd.tstar[0] == pytest.approx(rev.tstar[0], rel=1e-6)
 
 
 # ═══════════════════════════════════════════════════════════════════════
