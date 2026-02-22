@@ -60,3 +60,8 @@ Visualisation
 .. autofunction:: laytracer.plot.rays_2d
 
 .. autofunction:: laytracer.plot.rays_3d
+
+.. only:: latex
+
+   .. bibliography::
+      :style: unsrt

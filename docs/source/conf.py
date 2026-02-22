@@ -204,17 +204,14 @@ bibtex_reference_style = "author_year"
 latex_elements = {
     'preamble': r'''
 \usepackage{csquotes}
-\usepackage[style=authoryear,backend=biber]{biblatex}
-\addbibresource{references.bib}
 \usepackage[titles]{tocloft}
-\addto\captionsenglish{\renewcommand{\bibname}{References}}
-\AtBeginBibliography{\small}
     ''',
 }
 
 # Use more advanced LaTeX to deal with unicode characters
 #latex_engine = 'xelatex'
 latex_engine = 'lualatex'
+latex_use_xindy = False
 
 # Add fontawesome icons in PDF 
 #sd_fontawesome_latex = True # somehow not working (already loaded)
