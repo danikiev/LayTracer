@@ -38,9 +38,9 @@ Features
 
 .. only:: html
 
-.. grid:: 1 2 4 4
-   
-   .. grid-item-card::
+   .. grid:: 1 2 4 4
+      
+      .. grid-item-card::
       :link: getting_started
       :link-type: ref
       :link-alt: getting started
@@ -49,42 +49,42 @@ Features
       ^^^
       Install LayTracer, set up dependencies, and prepare input files.
 
-   .. grid-item-card:: 
-      :link: methodology
-      :link-type: ref
-      :link-alt: methodology
+      .. grid-item-card:: 
+         :link: methodology
+         :link-type: ref
+         :link-alt: methodology
 
-      :fas:`book;pst-color-primary` **Methodology**
-      ^^^
-      Understand core algorithms for seismic ray tracing.
+         :fas:`book;pst-color-primary` **Methodology**
+         ^^^
+         Understand core algorithms for seismic ray tracing.
 
-   .. grid-item-card:: 
-      :link: examples
-      :link-type: ref
-      :link-alt: examples
+      .. grid-item-card:: 
+         :link: examples
+         :link-type: ref
+         :link-alt: examples
 
-      :fas:`lightbulb;pst-color-primary` **Examples**
-      ^^^
-      Explore practical use cases of LayTracer in action.
+         :fas:`lightbulb;pst-color-primary` **Examples**
+         ^^^
+         Explore practical use cases of LayTracer in action.
 
-   .. grid-item-card:: 
-      :link: api
-      :link-type: ref
-      :link-alt: api
+      .. grid-item-card:: 
+         :link: api
+         :link-type: ref
+         :link-alt: api
 
-      :fas:`code;pst-color-primary` **API Reference**
+         :fas:`code;pst-color-primary` **API Reference**
       ^^^
       Access detailed API documentation for all modules.
 
-.. grid:: 1
+   .. grid:: 1
 
-   .. grid-item-card::
-      :link: _static/laytracer.pdf     
-      :link-alt: pdf
+      .. grid-item-card::
+         :link: _static/laytracer.pdf     
+         :link-alt: pdf
 
-      :fas:`file-pdf;pst-color-primary` **Download as PDF**
-      ^^^
-      Download this documentation as a standalone :fas:`file-pdf` PDF file.
+         :fas:`file-pdf;pst-color-primary` **Download as PDF**
+         ^^^
+         Download this documentation as a standalone :fas:`file-pdf` PDF file.
 
 ----
 
@@ -92,3 +92,4 @@ References
 ==========
 
 .. footbibliography::
+
