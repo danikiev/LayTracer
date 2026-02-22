@@ -267,9 +267,11 @@ def _ammon_model_rt(n=1000):
 
     Returns (RT_P, angle_P, RT_SV, angle_SV).
     """
-    mi_vp, mi_vs, mi_rho = 4.98, 2.9, 2.667
-    mt_vp, mt_vs, mt_rho = 8.00, 4.6, 3.38
+    # Parameters in m/s and kg/m^3
+    mi_vp, mi_vs, mi_rho = 4.98e3, 2.9e3, 2667.0
+    mt_vp, mt_vs, mt_rho = 8.00e3, 4.6e3, 3380.0
 
+    # Ray parameters in s/m
     p_P = np.linspace(0, 1.0 / mi_vp, n + 1)
     p_SV = np.linspace(0, 1.0 / mi_vs, n + 1)
 
