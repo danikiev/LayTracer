@@ -68,9 +68,10 @@ class TestSymmetry:
         # Same epicentral distance, different azimuths
         rcv1 = np.array([5000.0, 0.0, 2500.0])
         rcv2 = np.array([0.0, 5000.0, 2500.0])
-        rcv3 = np.array([3535.5, 3535.5, 2500.0])
+        a = 5000.0 / np.sqrt(2)
+        rcv3 = np.array([a, a, 2500.0])
         r1 = laytracer.trace_rays(src, rcv1, df)
         r2 = laytracer.trace_rays(src, rcv2, df)
         r3 = laytracer.trace_rays(src, rcv3, df)
         assert r1.travel_times[0] == pytest.approx(r2.travel_times[0], rel=1e-6)
-        assert r1.travel_times[0] == pytest.approx(r3.travel_times[0], rel=1e-5)
+        assert r1.travel_times[0] == pytest.approx(r3.travel_times[0], rel=1e-6)
