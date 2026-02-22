@@ -199,6 +199,7 @@ def setup(app):
 bibtex_bibfiles = ["references.bib"]
 #bibtex_default_style = "unsrt"
 bibtex_reference_style = "author_year"
+suppress_warnings = ["bibtex.duplicate_label", "bibtex.duplicate_citation", "design.fa-build"]
 
 # Latex Setup for conversion to PDF
 latex_elements = {
@@ -214,5 +215,4 @@ latex_engine = 'lualatex'
 latex_use_xindy = False
 
 # Add fontawesome icons in PDF 
-#sd_fontawesome_latex = True # somehow not working (already loaded)
-
+#sd_fontawesome_latex = True # Causes conflict with already loaded fontawesome package
