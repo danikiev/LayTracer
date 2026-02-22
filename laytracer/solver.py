@@ -401,7 +401,8 @@ def solve(
              q_key = "qp" if seg["phase"] == "P" else "qs"
              if seg[q_key] is not None:
                  tstar = tt / seg[q_key][0]
-             spreading = dist
+             # Relative geometrical spreading in homogeneous medium is distance * velocity (formally at receiver)
+             spreading = dist * v[-1]
              trans_prod = 1.0
 
         return RayResult(tt, pts, p, tstar, spreading, trans_prod)

@@ -5,7 +5,7 @@ import pandas as pd
 import pytest
 
 import laytracer
-from laytracer.solver import offset_dq
+from laytracer.solver import offset, offset_dq, offset_dq2, q_from_p
 
 
 def _simple_model():
@@ -94,6 +94,7 @@ class TestTheoryVerification:
         assert dXdp_analytic == pytest.approx(dXdp_fd, rel=1e-5)
         
         # 3. Verify the final spreading factor formula computes correctly
+        # The current implementation produces spreading = distance * velocity in homogeneous media.
         cos_is = np.sqrt(1.0 - (p * v[0])**2)
         cos_ir = np.sqrt(1.0 - (p * v[-1])**2)
         L_theory = np.sqrt(X_target * abs(dXdp_analytic) * cos_is * cos_ir / max(p, 1e-15))
@@ -112,6 +113,50 @@ class TestTheoryVerification:
         
         assert res.ray_parameter == pytest.approx(p, rel=1e-5)
         assert res.spreading == pytest.approx(L_theory, rel=1e-6)
+
+    def test_offset_residual_matches_target(self):
+        """After solving, verify the returned ray parameter reproduces the target offset."""
+        h = np.array([500.0, 1000.0, 1500.0])
+        v = np.array([3000.0, 4500.0, 6000.0])
+        X_target = 7000.0
+        
+        vmax = float(v.max())
+        lmd = v / vmax
+        
+        segments = [{
+            "h": h, "v": v, "vp": v, "vs": v/1.732, "rho": np.ones_like(v)*2500.,
+            "qp": np.ones_like(v)*300., "qs": np.ones_like(v)*150., "phase": "P",
+            "start_z": 0.0, "end_z": 3000.0
+        }]
+        
+        res = laytracer.solve(
+            h, v, segments, [], X_target, 0.0, 3000.0,
+            compute_amplitude=False, tol=1e-10
+        )
+        
+        # Recompute offset from returned p using internal q logic
+        q_back = q_from_p(res.ray_parameter, vmax)
+        X_back = offset(q_back, h, lmd)
+        assert X_back == pytest.approx(X_target, rel=1e-10, abs=1e-6)
+
+    def test_offset_derivatives_fd(self):
+        """Direct finite-difference test for X'(q) and X''(q)."""
+        rng = np.random.default_rng(0)
+        h = rng.uniform(100, 2000, size=5)
+        lmd = rng.uniform(0.4, 1.0, size=5)
+        q = 2.3
+        eps = 1e-4  # larger step for more stable second derivative FD
+        
+        Xp = offset(q + eps, h, lmd)
+        Xm = offset(q - eps, h, lmd)
+        X0 = offset(q, h, lmd)
+        
+        d1_fd = (Xp - Xm) / (2 * eps)
+        d2_fd = (Xp - 2*X0 + Xm) / (eps**2)
+        
+        assert offset_dq(q, h, lmd) == pytest.approx(d1_fd, rel=1e-5)
+        # Second derivative FD is less accurate; loosen tolerance slightly
+        assert offset_dq2(q, h, lmd) == pytest.approx(d2_fd, rel=1e-2)
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -160,6 +205,16 @@ class TestTransmission:
             0.0001, 3000.0, 1500.0, 2200.0, 5000.0, 2800.0, 2700.0
         )
         assert abs(RT["Tpp"]) > 0
+
+    def test_zoeppritz_converted_modes_vanish_at_normal_incidence(self):
+        """At p=0, Rps, Tps, Rsp, Tsp must be exactly zero."""
+        vp1, vs1, rho1 = 4000.0, 2000.0, 2500.0
+        vp2, vs2, rho2 = 5000.0, 2800.0, 2700.0
+        RTp = laytracer.psv_rt_coefficients(0.0, vp1, vs1, rho1, vp2, vs2, rho2)
+        assert abs(RTp["Rps"]) == pytest.approx(0.0, abs=1e-8)
+        assert abs(RTp["Tps"]) == pytest.approx(0.0, abs=1e-8)
+        assert abs(RTp["Rsp"]) == pytest.approx(0.0, abs=1e-8)
+        assert abs(RTp["Tsp"]) == pytest.approx(0.0, abs=1e-8)
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -224,7 +279,7 @@ class TestTstar:
 
 class TestSpreading:
     def test_spreading_homogeneous(self):
-        """In a homogeneous medium, spreading ≈ distance (the ray path length)."""
+        """In a homogeneous medium, relative geometrical spreading = distance (ray path length) * velocity."""
         df = pd.DataFrame({
             "Depth": [0.0], "Vp": [5000.0], "Vs": [2887.0],
             "Rho": [2700.0], "Qp": [500.0], "Qs": [250.0],
@@ -239,12 +294,38 @@ class TestSpreading:
             "start_z": 0.0, "end_z": 3000.0
         }]
         
+        X = 4000.0
+        z_src, z_rcv = 0.0, 3000.0
         res = laytracer.solve(
-            h, v, segments, [], epicentral_dist=4000.0, z_src=0.0, z_rcv=3000.0,
+            h, v, segments, [], epicentral_dist=X, z_src=z_src, z_rcv=z_rcv,
             compute_amplitude=True,
         )
-        assert res.spreading is not None
-        assert res.spreading > 0
+        dist = np.sqrt(X**2 + (z_rcv - z_src)**2)
+        # Definition: relative spreading = distance * velocity (formally at receiver)
+        assert res.spreading == pytest.approx(dist * v[-1], rel=1e-5)
+
+    def test_spreading_equals_distance_in_homogeneous_multilayer(self):
+        """Force the solver through multi-layer logic and verify relative geometrical spreading still reduces to distance * velocity."""
+        # Build 3 identical layers so it uses general logic (N > 1)
+        h = np.array([1000.0, 1000.0, 1000.0])
+        v = np.array([5000.0, 5000.0, 5000.0])
+        X = 4000.0
+        z_src, z_rcv = 0.0, 3000.0
+
+        segments = [{
+            "h": h, "v": v, "vp": v, "vs": v/1.732, "rho": np.ones_like(v)*2700.0,
+            "qp": np.ones_like(v)*500.0, "qs": np.ones_like(v)*250.0, "phase": "P",
+            "start_z": z_src, "end_z": z_rcv,
+        }]
+
+        res = laytracer.solve(
+            h, v, segments, [], X, z_src, z_rcv, 
+            compute_amplitude=True, tol=1e-10
+        )
+
+        dist = np.sqrt(X**2 + (z_rcv - z_src)**2)
+        # Formally use v[-1] at receiver, but all layers have same velocity
+        assert res.spreading == pytest.approx(dist * v[-1], rel=1e-5)
 
     def test_spreading_positive_multilayer(self):
         """Spreading is positive for a multi-layer model."""
@@ -265,6 +346,52 @@ class TestSpreading:
         )
         assert res.spreading is not None
         assert res.spreading > 0
+
+
+# ═══════════════════════════════════════════════════════════════════════
+#  Reciprocity
+# ═══════════════════════════════════════════════════════════════════════
+
+class TestReciprocity:
+    """Verify that spreading and t* are invariant under source-receiver swap."""
+
+    def test_spreading_reciprocity(self):
+        """L(S,R) = L(R,S) (Červený-style invariant)."""
+        df = pd.DataFrame({
+            "Depth": [0.0, 1000.0, 2000.0, 3500.0],
+            "Vp":    [3000.0, 4500.0, 5500.0, 6500.0],
+            "Vs":    [1500.0, 2250.0, 2750.0, 3250.0],
+            "Rho":   [2200.0, 2500.0, 2700.0, 2900.0],
+            "Qp":    [200.0,  50.0,   600.0,  800.0],
+            "Qs":    [100.0,  25.0,   300.0,  400.0],
+        })
+
+        src = np.array([0.0, 0.0, 3000.0])
+        rcv = np.array([8000.0, 0.0, 0.0])
+
+        fwd = laytracer.trace_rays(src, rcv, df, source_phase="P", compute_amplitude=True)
+        rev = laytracer.trace_rays(rcv, src, df, source_phase="P", compute_amplitude=True)
+
+        assert fwd.spreading[0] == pytest.approx(rev.spreading[0], rel=1e-5)
+
+    def test_tstar_reciprocity(self):
+        """t*(S,R) = t*(R,S). Path integral must not depend on direction."""
+        df = pd.DataFrame({
+            "Depth": [0.0, 1000.0, 2000.0, 3500.0],
+            "Vp":    [3000.0, 4500.0, 5500.0, 6500.0],
+            "Vs":    [1500.0, 2250.0, 2750.0, 3250.0],
+            "Rho":   [2200.0, 2500.0, 2700.0, 2900.0],
+            "Qp":    [200.0,  50.0,   600.0,  800.0],
+            "Qs":    [100.0,  25.0,   300.0,  400.0],
+        })
+
+        src = np.array([0.0, 0.0, 3000.0])
+        rcv = np.array([8000.0, 0.0, 0.0])
+
+        fwd = laytracer.trace_rays(src, rcv, df, source_phase="P", compute_amplitude=True)
+        rev = laytracer.trace_rays(rcv, src, df, source_phase="P", compute_amplitude=True)
+
+        assert fwd.tstar[0] == pytest.approx(rev.tstar[0], rel=1e-6)
 
 
 # ═══════════════════════════════════════════════════════════════════════
