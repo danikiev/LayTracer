@@ -40,12 +40,13 @@ print(vel_df)
 # Visualise the parameters of the model (P-wave, S-wave, density, attenuation)
 # that will be used for the amplitude calculations.
 
-fig, axes = plt.subplots(1, 4, figsize=(12, 5), sharey=True)
+fig, axes = plt.subplots(1, 5, figsize=(15, 5), sharey=True)
 
 lt.plot.velocity_profile(vel_df, param="Vp", ax=axes[0])
 lt.plot.velocity_profile(vel_df, param="Vs", ax=axes[1], color="tab:orange")
 lt.plot.velocity_profile(vel_df, param="Rho", ax=axes[2], color="tab:green")
 lt.plot.velocity_profile(vel_df, param="Qp", ax=axes[3], color="tab:purple")
+lt.plot.velocity_profile(vel_df, param="Qs", ax=axes[4], color="tab:brown")
 
 fig.suptitle("Model profiles", fontsize=14)
 fig.tight_layout()
