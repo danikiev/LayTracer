@@ -297,12 +297,16 @@ def _trace_one(
                      # If we are going up, beyond is Above (reflection from underside!).
                      props_beyond = _get_material_props(sub_z, going_down)
                      
+                     seg_idx = len(ray_segments) - 1
+                     if seg_idx < 0:
+                         raise ValueError(f"Cannot reflect at the starting depth {sub_z} immediately.")
+
                      inter_meta.append({
                          "type": "reflection",
                          "depth": sub_z,
                          "in_phase": curr_ph,
                          "out_phase": target_ph_after_turn,
-                         "seg_idx": len(ray_segments) - 1,
+                         "seg_idx": seg_idx,
                          "vp_beyond": props_beyond["vp"],
                          "vs_beyond": props_beyond["vs"],
                          "rho_beyond": props_beyond["rho"]
@@ -315,12 +319,16 @@ def _trace_one(
                 # We can fetch it now.
                 props_beyond = _get_material_props(sub_z, going_down)
                 
+                seg_idx = len(ray_segments) - 1
+                if seg_idx < 0:
+                     raise ValueError(f"Cannot refract at the starting depth {sub_z} immediately.")
+
                 inter_meta.append({
                      "type": "refraction",
                      "depth": sub_z,
                      "in_phase": curr_ph,
                      "out_phase": sub_out_phase,
-                     "seg_idx": len(ray_segments) - 1,
+                     "seg_idx": seg_idx,
                      "vp_beyond": props_beyond["vp"],
                      "vs_beyond": props_beyond["vs"],
                      "rho_beyond": props_beyond["rho"]
@@ -467,6 +475,11 @@ def trace_rays(
             if not np.any(np.abs(model_depths - z) < tol_depth):
                 raise ValueError(
                     f"Invalid {name} depth {z}. Must match a model interface: {model_depths}"
+                )
+            if name == "reflection" and z < tol_depth:
+                raise ValueError(
+                    f"Reflection at the surface (z=0.0) is not currently supported for "
+                    "physical amplitude calculations. Please use a shallow internal interface instead."
                 )
             if ph.upper() not in ("P", "S"):
                 raise ValueError(f"Invalid phase '{ph}' in {name}. Must be 'P' or 'S'.")

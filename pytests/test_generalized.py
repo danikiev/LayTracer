@@ -94,21 +94,27 @@ def test_pp_reflection_offset():
     assert np.isclose(res.ray_parameters[0], expect_p, rtol=1e-5)
 
 def test_multi_bounce():
-    """Test P-P-P-P bounce: 0 -> 1000 -> 0 -> 1000 -> 0
-    Total distance = 4000m
+    """Test multi-bounce: 0 -> 1000 -> 1 -> 1000 -> 0
+    Total distance = 1000 + 999 + 999 + 1000 = 3998m
     Velocity = 2000
-    Time = 2.0s
-    Vertical ray
+    Time = 1.999s
     """
+    df = pd.DataFrame({
+        "Depth": [0.0, 1.0, 1000.0],
+        "Vp": [2000.0, 2000.0, 4000.0],
+        "Vs": [1000.0, 1000.0, 2000.0],
+        "Rho": [2000.0, 2000.0, 2500.0],
+        "Qp": [500.0, 500.0, 1000.0],
+        "Qs": [250.0, 250.0, 500.0],
+    })
     res = trace_rays(
         sources=[0,0,0],
         receivers=[0,0,0],
-        velocity_df=test_model,
+        velocity_df=df,
         source_phase="P",
-        reflection=[(1000.0, "P"), (0.0, "P"), (1000.0, "P")]
+        reflection=[(1000.0, "P"), (1.0, "P"), (1000.0, "P")]
     )
-    # Note: Reflector at 0.0 is surface multiple
-    assert np.isclose(res.travel_times[0], 2.0, rtol=1e-5)
+    assert np.isclose(res.travel_times[0], 1.999, rtol=1e-5)
 
 def test_invalid_phase():
     with pytest.raises(ValueError, match="Invalid phase"):
@@ -126,6 +132,28 @@ def test_invalid_depth():
             receivers=[10,0,0],
             velocity_df=test_model,
             reflection=[(999.0, "P")]
+        )
+
+def test_surface_reflection_disallowed():
+    """Verify that reflection at z=0.0 is explicitly disallowed."""
+    with pytest.raises(ValueError, match="Reflection at the surface"):
+        trace_rays(
+            sources=[0,0,0],
+            receivers=[0,0,0],
+            velocity_df=test_model,
+            source_phase="P",
+            reflection=[(0.0, "P")]
+        )
+
+def test_reflection_at_source_depth_disallowed():
+    """Verify that reflection at the source depth is disallowed."""
+    with pytest.raises(ValueError, match="Cannot reflect at the starting depth"):
+        trace_rays(
+            sources=[0,0,1000],
+            receivers=[0,0,1000],
+            velocity_df=test_model,
+            source_phase="P",
+            reflection=[(1000.0, "P")]
         )
 
 def test_refraction_vertical():
