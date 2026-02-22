@@ -145,7 +145,7 @@ if result.spreading is not None:
         "o-", markersize=3, color="tab:green",
     )
 axes[1, 0].set_xlabel("Offset (km)")
-axes[1, 0].set_ylabel("Spreading factor")
+axes[1, 0].set_ylabel("Relative spreading factor")
 axes[1, 0].set_title("Geometrical spreading")
 axes[1, 0].grid(True, alpha=0.3)
 
@@ -305,7 +305,7 @@ ax3.plot(
 )
 
 ax3.set_xlabel("Offset (km)")
-ax3.set_ylabel("Spreading factor")
+ax3.set_ylabel("Relative spreading factor")
 ax3.set_title("Geometrical Spreading Comparison")
 ax3.legend()
 ax3.grid(True, alpha=0.3)

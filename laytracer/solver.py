@@ -245,7 +245,7 @@ class RayResult:
     tstar : float or None
         Attenuation operator :math:`t^*` (s), if requested.
     spreading : float or None
-        Geometrical spreading factor :math:`L`, if requested.
+        Relative geometrical spreading factor :math:`\mathcal{L}`, if requested.
     trans_product : float or None
         Product of transmission-coefficient magnitudes along the ray,
         if requested.
@@ -548,8 +548,9 @@ def solve(
             cos_ir = np.sqrt(max(1.0 - (p * v_receiverside) ** 2, 0.0))
 
             if p > 1e-15 and abs(dXdp) > 0:
+                # Relative geometrical spreading (Cerveny, 2001)
                 spreading_val = float(
-                    (1.0 / v_sourceside) * np.sqrt(epicentral_dist * abs(dXdp) * cos_is * cos_ir / p)
+                    np.sqrt(epicentral_dist * abs(dXdp) * cos_is * cos_ir / p)
                 )
 
     return RayResult(

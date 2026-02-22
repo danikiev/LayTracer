@@ -95,7 +95,7 @@ class TestTheoryVerification:
         # 3. Verify the final spreading factor formula computes correctly
         cos_is = np.sqrt(1.0 - (p * v[0])**2)
         cos_ir = np.sqrt(1.0 - (p * v[-1])**2)
-        L_theory = (1.0 / v[0]) * np.sqrt(X_target * abs(dXdp_analytic) * cos_is * cos_ir / max(p, 1e-15))
+        L_theory = np.sqrt(X_target * abs(dXdp_analytic) * cos_is * cos_ir / max(p, 1e-15))
         
         segments = [{
             "h": h, "v": v, "vp": v, "vs": v/1.732, "rho": v*0.5+1000.0,

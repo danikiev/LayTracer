@@ -166,19 +166,15 @@ Geometrical spreading
 In a 1-D layered medium with cylindrical symmetry (3-D point source),
 the classical geometrical spreading factor :math:`L` relates the solid angle
 of the ray tube at the source to its cross-sectional area at the receiver
-(:footcite:t:`Cerveny2001`, Eq. 4.10.15; :footcite:t:`AkiRichards2002`, Ch. 4):
+(:footcite:t:`Cerveny2001`, :footcite:t:`AkiRichards2002`):
 
 .. math::
-   :label: eq:spreading
-   L = \frac{1}{v_s} \sqrt{\frac{X \cdot \cos\theta_s \cdot \cos\theta_r}{p}
-                           \left| \frac{\partial X}{\partial p} \right|}
+    L = \sqrt{\frac{X \cdot \cos\theta_s \cdot \cos\theta_r}{p}
+                            \left| \frac{\partial X}{\partial p} \right|}
 
 where :math:`\theta_s, \theta_r` are the ray angles at source and
-receiver, and :math:`v_s` is the source-point velocity. 
-This standard point-source form arises because the solid angle increment is 
-:math:`\mathrm{d}\Omega \propto \sin\theta_s\,\mathrm{d}\theta_s`, whilst the 
-receiver area spans :math:`X\,|\partial X/\partial p|\,\mathrm{d}p\,\cos\theta_r`.
-Substituting :math:`p = \sin\theta_s / v_s` yields the exact relation :eq:`eq:spreading`.
+receiver. 
+Equation above defines the **relative geometrical spreading** (see :footcite:t:`Cerveny2001`, Eq. 4.10.22), which measures the ray-tube geometrical divergence strictly from the ray curvature, without the source-point velocity multiplier :math:`1/v_r`. 
 
 The derivative :math:`\partial X / \partial p` is computed
 analytically via the chain rule:
@@ -189,8 +185,6 @@ analytically via the chain rule:
    \qquad
    \frac{\mathrm{d}q}{\mathrm{d}p}
    = \frac{v_{\max}}{(1 - p^2\,v_{\max}^2)^{3/2}}
-
-
 
 ----
 

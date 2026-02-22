@@ -36,7 +36,7 @@ class TraceResult:
     tstar : numpy.ndarray or None
         Attenuation operator :math:`t^*` for each ray, shape ``(n_rays,)``.
     spreading : numpy.ndarray or None
-        Geometrical spreading factor for each ray, shape ``(n_rays,)``.
+        Relative geometrical spreading factor for each ray, shape ``(n_rays,)``.
     trans_product : numpy.ndarray or None
         Product of transmission coefficients along each ray.
     """
@@ -420,8 +420,9 @@ def trace_rays(
         If a depth is not listed here, transmission assumes
         preservation of the incident phase.
     compute_amplitude : bool
-        If *True*, compute :math:`t^*`, geometrical spreading and
-        transmission/reflection coefficients alongside travel times.
+        If *True*, computes the travel time alongside the ray path, the attenuation operator 
+        :math:`t^*`, relative geometrical spreading, and Zoeppritz transmission 
+        products.
     transcoef_method : str
         ``'normal'`` or ``'angle'`` (Zoeppritz).
     n_jobs : int
