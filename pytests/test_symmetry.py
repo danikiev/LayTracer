@@ -75,18 +75,56 @@ class TestSymmetry:
         assert r_fwd.spreading[0] == pytest.approx(r_rev.spreading[0], rel=1e-5)
 
     def test_ray_path_reversal(self):
-        """Forward ray ≈ flipped reverse ray (z-coordinates)."""
+        """Forward ray ≈ flipped reverse ray (range and depth)."""
         df = _simple_model()
         src = np.array([0.0, 0.0, 500.0])
         rcv = np.array([5000.0, 0.0, 2500.0])
         r_fwd = laytracer.trace_rays(src, rcv, df)
         r_rev = laytracer.trace_rays(rcv, src, df)
-        z_fwd = r_fwd.rays[0][:, 2]
-        z_rev = r_rev.rays[0][::-1, 2]
-        np.testing.assert_allclose(z_fwd, z_rev, atol=1.0)
+
+        path1 = r_fwd.rays[0]
+        path2 = r_rev.rays[0]
+
+        # Calculate horizontal range from source for each point
+        range1 = np.sqrt(np.sum((path1[:, :2] - src[:2])**2, axis=1))
+        # For reverse ray, distance from rcv at end point is same as distance from src for fwd
+        range2_rev = np.sqrt(np.sum((path2[::-1, :2] - src[:2])**2, axis=1))
+
+        # Check Z and Range
+        np.testing.assert_allclose(path1[:, 2], path2[::-1, 2], atol=1e-3)
+        np.testing.assert_allclose(range1, range2_rev, atol=1e-3)
+
+    def test_transmission_product_ratio(self):
+        """Displacement transmission products are reciprocal up to an impedance ratio."""
+        # For Aki & Richards displacement coefficients:
+        # T_fwd / T_rev = (rho_s * v_s * cos_s) / (rho_r * v_r * cos_r)
+        df = _simple_model()
+        src = np.array([0.0, 0.0, 500.0])
+        rcv = np.array([5000.0, 0.0, 2500.0])
+
+        fwd = laytracer.trace_rays(src, rcv, df, compute_amplitude=True)
+        rev = laytracer.trace_rays(rcv, src, df, compute_amplitude=True)
+
+        T_fwd = fwd.trans_product[0]
+        T_rev = rev.trans_product[0]
+
+        # Get velocities and densities at source and receiver
+        # src at 500m -> Layer 0
+        # rcv at 2500m -> Layer 2
+        v_s, rho_s = 3000.0, 2200.0
+        v_r, rho_r = 6000.0, 2800.0
+
+        p = fwd.ray_parameters[0]
+        cos_s = np.sqrt(1.0 - (p * v_s)**2)
+        cos_r = np.sqrt(1.0 - (p * v_r)**2)
+
+        expected_ratio = (rho_s * v_s * cos_s) / (rho_r * v_r * cos_r)
+        actual_ratio = T_fwd / T_rev
+
+        assert actual_ratio == pytest.approx(expected_ratio, rel=1e-4)
 
     def test_traveltime_independent_of_azimuth(self):
-        """Travel time doesn't depend on horizontal direction."""
+        """Travel time and ray parameter don't depend on horizontal direction."""
         df = _simple_model()
         src = np.array([0.0, 0.0, 500.0])
         # Same epicentral distance, different azimuths
@@ -97,5 +135,49 @@ class TestSymmetry:
         r1 = laytracer.trace_rays(src, rcv1, df)
         r2 = laytracer.trace_rays(src, rcv2, df)
         r3 = laytracer.trace_rays(src, rcv3, df)
+
+        # Travel times
         assert r1.travel_times[0] == pytest.approx(r2.travel_times[0], rel=1e-6)
         assert r1.travel_times[0] == pytest.approx(r3.travel_times[0], rel=1e-6)
+
+        # Ray parameters
+        assert r1.ray_parameters[0] == pytest.approx(r2.ray_parameters[0], rel=1e-6)
+        assert r1.ray_parameters[0] == pytest.approx(r3.ray_parameters[0], rel=1e-6)
+
+    def test_translation_invariance(self):
+        """In 1D models, absolute x/y doesn't matter—only relative offset."""
+        df = _simple_model()
+        src = np.array([0.0, 0.0, 500.0])
+        rcv = np.array([5000.0, 0.0, 2500.0])
+        shift = np.array([1234.0, -987.0, 0.0])
+
+        r0 = laytracer.trace_rays(src, rcv, df, compute_amplitude=True)
+        rS = laytracer.trace_rays(src + shift, rcv + shift, df, compute_amplitude=True)
+
+        assert r0.travel_times[0] == pytest.approx(rS.travel_times[0], rel=1e-6)
+        assert r0.ray_parameters[0] == pytest.approx(rS.ray_parameters[0], rel=1e-6)
+        assert r0.spreading[0] == pytest.approx(rS.spreading[0], rel=1e-6)
+        assert r0.tstar[0] == pytest.approx(rS.tstar[0], rel=1e-6)
+
+    def test_path_shape_azimuth_invariance(self):
+        """Ray paths at different azimuths have same (range, depth) shape."""
+        df = _simple_model()
+        src = np.array([0.0, 0.0, 500.0])
+        # Same distance, different directions
+        rcv1 = np.array([5000.0, 0.0, 2500.0])
+        a = 5000.0 / np.sqrt(2)
+        rcv2 = np.array([a, a, 2500.0])
+
+        r1 = laytracer.trace_rays(src, rcv1, df)
+        r2 = laytracer.trace_rays(src, rcv2, df)
+
+        path1 = r1.rays[0]
+        path2 = r2.rays[0]
+
+        # Calculate horizontal range from source for each point
+        range1 = np.sqrt(np.sum((path1[:, :2] - src[:2])**2, axis=1))
+        range2 = np.sqrt(np.sum((path2[:, :2] - src[:2])**2, axis=1))
+
+        # Range and depth should match perfectly
+        np.testing.assert_allclose(range1, range2, atol=1e-5)
+        np.testing.assert_allclose(path1[:, 2], path2[:, 2], atol=1e-5)
