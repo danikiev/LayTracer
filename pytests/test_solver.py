@@ -227,12 +227,18 @@ class TestSolve:
         }]
         
         res = laytracer.solve(h, v, segments, [], epic, z_src=z_src, z_rcv=z_rcv)
+        # Structure and shape
+        assert res.ray_path.shape[1] == 2
+        
         # Start
         assert res.ray_path[0, 0] == pytest.approx(0.0, abs=1e-6)
         assert res.ray_path[0, 1] == pytest.approx(500.0, abs=1e-6)
         # End
         assert res.ray_path[-1, 0] == pytest.approx(epic, rel=1e-3)
         assert res.ray_path[-1, 1] == pytest.approx(2500.0, abs=1e-3)
+
+        # Monotonicity in X
+        assert np.all(np.diff(res.ray_path[:, 0]) >= 0)
 
     def test_solve_fallback(self):
         """solve() succeeds even if Newton fails (fallback to minimize_scalar)."""
