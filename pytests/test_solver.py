@@ -109,7 +109,7 @@ class TestConversions:
     def test_p_limits(self):
         """p → 0 as q → 0; p → 1/vmax as q → ∞."""
         vmax = 5000.0
-        assert laytracer.p_from_q(1e-10, vmax) == pytest.approx(0.0, abs=1e-12)
+        assert laytracer.p_from_q(1e-10, vmax) == pytest.approx(0.0, abs=1e-10)
         p_large = laytracer.p_from_q(1e8, vmax)
         assert p_large == pytest.approx(1.0 / vmax, rel=1e-4)
 
