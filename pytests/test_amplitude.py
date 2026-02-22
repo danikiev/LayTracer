@@ -134,16 +134,24 @@ class TestTransmission:
         assert T == pytest.approx(expected, rel=1e-10)
 
     def test_angle_reduces_to_normal_at_p0(self):
-        """Angle-dependent T(p→0) is roughly consistent with normal-incidence T.
-
-        The full Zoeppritz accounts for P-SV coupling at the interface,
-        so it differs from the simple impedance formula by ~10%.
-        """
+        """Angle-dependent RT coefficients at normal incidence (p=0) match simple theory."""
         vp1, vs1, rho1 = 4000.0, 2000.0, 2500.0
         vp2, vs2, rho2 = 5000.0, 2800.0, 2700.0
-        RT = laytracer.psv_rt_coefficients(1e-10, vp1, vs1, rho1, vp2, vs2, rho2)
-        T_normal = laytracer.transmission_normal(vp1, rho1, vp2, rho2)
-        assert abs(RT["Tpp"]) == pytest.approx(T_normal, rel=0.15)
+        
+        # At exactly p=0, Zoeppritz reduces to simple impedance ratios
+        RT = laytracer.psv_rt_coefficients(0.0, vp1, vs1, rho1, vp2, vs2, rho2)
+        
+        # 1. Tpp must match the P-wave impedance-based formula
+        T_normal_p = laytracer.transmission_normal(vp1, rho1, vp2, rho2)
+        assert abs(RT["Tpp"]) == pytest.approx(T_normal_p, rel=1e-10)
+
+        # 2. Tss must match the S-wave impedance-based formula
+        T_normal_s = laytracer.transmission_normal(vs1, rho1, vs2, rho2)
+        assert abs(RT["Tss"]) == pytest.approx(T_normal_s, rel=1e-10)
+
+        # 3. Converted modes (P<->SV) must vanish exactly (at numerical precision)
+        for key in ["Rps", "Tps", "Rsp", "Tsp"]:
+            assert abs(RT[key]) == pytest.approx(0.0, abs=1e-15)
 
     def test_transmission_positive(self):
         """Transmission coefficient magnitude is positive."""
