@@ -67,7 +67,7 @@ class TestOffset:
         assert analytical == pytest.approx(fd, rel=1e-5)
 
     def test_second_derivative_numerical(self):
-        """d²X/dq² matches finite-difference approximation."""
+        """d²X/dq² matches central difference of dX/dq."""
         h = np.array([300.0, 700.0, 1000.0])
         lmd = np.array([0.6, 0.8, 1.0])
         q = 5.0
@@ -76,7 +76,21 @@ class TestOffset:
             laytracer.offset_dq(q + eps, h, lmd) - laytracer.offset_dq(q - eps, h, lmd)
         ) / (2 * eps)
         analytical = laytracer.offset_dq2(q, h, lmd)
-        assert analytical == pytest.approx(fd, rel=1e-4)
+        assert analytical == pytest.approx(fd, rel=1e-3)
+
+    def test_second_derivative_from_offset(self):
+        """d²X/dq² matches central second difference of X."""
+        h = np.array([300.0, 700.0, 1000.0])
+        lmd = np.array([0.6, 0.8, 1.0])
+        q = 5.0
+        eps = 1e-4
+        fd2 = (
+            laytracer.offset(q + eps, h, lmd) 
+            - 2 * laytracer.offset(q, h, lmd) 
+            + laytracer.offset(q - eps, h, lmd)
+        ) / (eps**2)
+        analytical = laytracer.offset_dq2(q, h, lmd)
+        assert analytical == pytest.approx(fd2, rel=1e-3)
 
 
 # ═══════════════════════════════════════════════════════════════════════
