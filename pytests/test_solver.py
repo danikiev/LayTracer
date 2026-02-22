@@ -311,20 +311,27 @@ class TestSolve:
         res = laytracer.solve(h, v, segments, [], 5000.0, z_src=z_src, z_rcv=z_rcv)
         p = res.ray_parameter
 
+        # Reconstruct the velocities used in the order of path points
+        v_used = []
+        for seg in segments:
+            n_lay = len(seg["h"])
+            going_down = seg["end_z"] >= seg["start_z"]
+            indices = range(n_lay) if going_down else range(n_lay - 1, -1, -1)
+            for k in indices:
+                v_used.append(seg["v"][k])
+
         # Verify from ray geometry: sin(theta_k)/v_k should equal p
-        for k in range(stack.n_layers):
+        for k in range(len(v_used)):
             x0, z0 = res.ray_path[k]
             x1, z1 = res.ray_path[k + 1]
             dx = abs(x1 - x0)
             dz = abs(z1 - z0)
             seg_len = np.sqrt(dx**2 + dz**2)
             sin_theta = dx / seg_len
-            # Which velocity does this segment use?
-            # Upward ray: segment 0 is deepest, so idx = N-1-k
-            idx = stack.n_layers - 1 - k
-            p_from_geom = sin_theta / stack.vp[idx]
+            
+            p_from_geom = sin_theta / v_used[k]
             assert p_from_geom == pytest.approx(p, rel=1e-3), (
-                f"Segment {k} (layer idx {idx}): p_geom={p_from_geom:.6e}, "
+                f"Segment {k}: p_geom={p_from_geom:.6e}, "
                 f"p_solver={p:.6e}"
             )
 
@@ -348,7 +355,8 @@ class TestSolve:
         # Compute dx/dz for each segment from ray path
         # The ray goes upward, so layer order in path is: deepest first
         ratios = []
-        for k in range(stack.n_layers):
+        n_segments = len(res.ray_path) - 1
+        for k in range(n_segments):
             x0, z0 = res.ray_path[k]
             x1, z1 = res.ray_path[k + 1]
             dx = abs(x1 - x0)
