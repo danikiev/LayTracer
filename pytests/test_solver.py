@@ -52,9 +52,9 @@ class TestOffset:
         h = np.array([500.0, 1000.0, 500.0])
         lmd = np.array([0.5, 0.75, 1.0])
         q_vals = np.linspace(0.01, 100, 200)
-        X_vals = [laytracer.offset(q, h, lmd) for q in q_vals]
-        for i in range(1, len(X_vals)):
-            assert X_vals[i] > X_vals[i - 1]
+        X_vals = np.array([laytracer.offset(q, h, lmd) for q in q_vals])
+        # Bulletproof monotonicity check: ensure consecutive values grow by at least 1e-12
+        assert np.all(np.diff(X_vals) >= 1e-12)
 
     def test_derivative_numerical(self):
         """dX/dq matches finite-difference approximation."""
