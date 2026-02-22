@@ -38,6 +38,7 @@ print(vel_df)
 # ---------------------
 
 ax = lt.plot.velocity_profile(vel_df, param="Vp")
+plt.show()
 
 #%%
 
@@ -74,6 +75,7 @@ ax = lt.plot.rays_2d(
     model_alpha=0.5,
     discrete_colorbar=True,
 )
+plt.show()
 
 #%%
 
@@ -116,8 +118,4 @@ fig = lt.plot.rays_3d(
     receivers=rcvs,
 )
 fig
-
-###############################################################################
-# Show all plots when running from the command line.
-
 plt.show()

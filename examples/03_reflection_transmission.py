@@ -24,7 +24,7 @@ import matplotlib.pyplot as plt
 
 ###############################################################################
 # Model
-# ^^^^^
+# -----
 # Medium parameters (Km/s and g/cm^3)
 mi_vp, mi_vs, mi_rho = 4.98, 2.9, 2.667   # incident
 mt_vp, mt_vs, mt_rho = 8.00, 4.6, 3.38    # transmitted
@@ -60,7 +60,7 @@ RT = lt.psv_rt_coefficients(
 
 ###############################################################################
 # Incident P-wave coefficients
-# ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+# ----------------------------
 #
 # For an incident P-wave the ray parameter sweeps from 0 to
 # :math:`1/V_P` (grazing P incidence), covering the full 0–90° range.
@@ -129,7 +129,7 @@ plt.show()
 
 # %%
 # Ray diagrams (P-incidence)
-# ^^^^^^^^^^^^^^^^^^^^^^^^^^
+# --------------------------
 #
 # We visualize the ray paths for typical situations using `lt.plot.rays_2d`.
 # The interface is at 2000 m.
@@ -284,7 +284,7 @@ plt.show()
 
 ###############################################################################
 # Incident SV-wave coefficients
-# ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+# -----------------------------
 #
 # For an incident SV-wave the ray parameter sweeps from 0 to
 # :math:`1/V_S` (grazing SV incidence), covering the full 0–90° range.
@@ -374,7 +374,7 @@ plt.show()
 
 # %%
 # Ray diagrams (SV-incidence)
-# ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+# ---------------------------
 
 # SV-incidence scenarios
 scenarios_sv = [
