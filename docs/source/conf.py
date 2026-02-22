@@ -197,6 +197,7 @@ def setup(app):
 
 # bibtex
 bibtex_bibfiles = ["references.bib"]
+#bibtex_default_style = "unsrt"
 bibtex_reference_style = "author_year"
 
 # Latex Setup for conversion to PDF

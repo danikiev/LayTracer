@@ -6,14 +6,11 @@ Overview
 
 **LayTracer** is a Python implementation of fast two-point seismic ray
 tracing in 1-D layered media with constant layer velocity, based on
-the dimensionless ray parameter method of :footcite:t:`FangChen2019`.
+the dimensionless ray parameter method of :cite:t:`FangChen2019`.
 
 ----
 
-.. _features:
-
-Features
-========
+Features:
 
 * Fast two-point ray tracing via dimensionless ray parameter method
 * Second-order Newton iteration for rapid convergence
@@ -41,13 +38,13 @@ Features
    .. grid:: 1 2 4 4
       
       .. grid-item-card::
-      :link: getting_started
-      :link-type: ref
-      :link-alt: getting started
-      
-      :fas:`play;pst-color-primary` **Getting Started**
-      ^^^
-      Install LayTracer, set up dependencies, and prepare input files.
+         :link: getting_started
+         :link-type: ref
+         :link-alt: getting started
+         
+         :fas:`play;pst-color-primary` **Getting Started**
+         ^^^
+         Install LayTracer, set up dependencies, and prepare input files.
 
       .. grid-item-card:: 
          :link: methodology
@@ -73,8 +70,8 @@ Features
          :link-alt: api
 
          :fas:`code;pst-color-primary` **API Reference**
-      ^^^
-      Access detailed API documentation for all modules.
+         ^^^
+         Access detailed API documentation for all modules.
 
    .. grid:: 1
 
@@ -85,11 +82,3 @@ Features
          :fas:`file-pdf;pst-color-primary` **Download as PDF**
          ^^^
          Download this documentation as a standalone :fas:`file-pdf` PDF file.
-
-----
-
-References
-==========
-
-.. footbibliography::
-

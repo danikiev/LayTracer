@@ -284,12 +284,14 @@ fig.tight_layout()
 plt.show()
 
 ###############################################################################
-# References
-# ----------
+# .. only:: html
 #
-# .. bibliography::
-#     :style: unsrt
-#     :filter: docname in docnames
+#    References
+#    ----------
+#
+#    .. bibliography::
+#       :style: unsrt
+#       :filter: docname in docnames
 #
 # .. raw:: html
 #

@@ -1,7 +1,7 @@
 r"""
 Core two-point ray tracing solver using the dimensionless *q*-parameter.
 
-Implements the method of :footcite:t:`FangChen2019`:
+Implements the method of :cite:t:`FangChen2019`:
 
 *   Dimensionless ray parameter :math:`q` for numerical stability
 *   Vectorised offset equation :math:`X(q)` and its derivatives
@@ -20,7 +20,7 @@ from .model import LayerStack
 
 
 # ═══════════════════════════════════════════════════════════════════════
-#  Offset equation and derivatives  (Fang & Chen 2019, §2.1)
+#  Offset equation and derivatives
 # ═══════════════════════════════════════════════════════════════════════
 
 def offset(q: float, h: np.ndarray, lmd: np.ndarray) -> float:
@@ -96,7 +96,7 @@ def p_from_q(q: float, vmax: float) -> float:
 
 
 # ═══════════════════════════════════════════════════════════════════════
-#  Initial estimate  (Fang & Chen 2019, §2.2)
+#  Initial estimate
 # ═══════════════════════════════════════════════════════════════════════
 
 def initial_q(
@@ -153,7 +153,7 @@ def initial_q(
 
 
 # ═══════════════════════════════════════════════════════════════════════
-#  Second-order Newton iteration  (Fang & Chen 2019, §2.3)
+#  Second-order Newton iteration
 # ═══════════════════════════════════════════════════════════════════════
 
 def newton_step(

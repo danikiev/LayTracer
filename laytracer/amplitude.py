@@ -2,16 +2,12 @@ r"""
 Amplitude-related quantities for ray-theory seismograms.
 
 *   Normal-incidence and angle-dependent (Zoeppritz) transmission
-    coefficients
-*   Geometrical spreading from the ray-tube Jacobian
-*   Attenuation operator :math:`t^*`
+    coefficients :cite:p:`LayWallace1995`
+*   Geometrical spreading from the ray-tube Jacobian :cite:p:`Cerveny2001`
+*   Attenuation operator (global absorbtion factor) :math:`t^*` :cite:p:`Cerveny2001`
 
 References
 ----------
-.. footbibliography::
-    AkiRichards2002
-    LayWallace1995
-    Cerveny2001
 """
 
 from __future__ import annotations

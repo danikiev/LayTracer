@@ -35,6 +35,9 @@ __pycache__/
 .codegpt
 .pytest_cache/
 
+# Logs
+*.log
+
 # Backup
 backup/
 

@@ -28,7 +28,7 @@ is the ray angle from vertical in layer :math:`k`.
 Dimensionless ray parameter
 ============================
 
-:footcite:t:`FangChen2019` introduce a dimensionless parameter
+:cite:t:`FangChen2019` introduce a dimensionless parameter
 
 .. math::
    q = \sqrt{\frac{p^2}{1/v_{\max}^2 - p^2}}
@@ -51,7 +51,7 @@ Offset equation
 ===============
 
 The total horizontal distance (offset) :math:`X` traversed by a ray through
-:math:`N` layers is (Eq. 3 of :footcite:t:`FangChen2019`):
+:math:`N` layers is (Eq. 3 of :cite:t:`FangChen2019`):
 
 .. math::
    X(q) = \sum_{k=1}^{N} \frac{q\,\lambda_k\,h_k}
@@ -83,7 +83,7 @@ Asymptotic initial estimate
 ============================
 
 Two linear asymptotes of :math:`X(q)` provide an efficient initial guess
-(see "Initial estimate of q" in :footcite:t:`FangChen2019`):
+(see "Initial estimate of q" in :cite:t:`FangChen2019`):
 
 **Near-field** (:math:`q \to 0`):
 
@@ -112,7 +112,7 @@ Quadratic Newton iteration
 ===========================
 
 The two-point problem :math:`X(q) = X_R` is solved by second-order
-Newton iteration (see :footcite:t:`FangChen2019`).  At each
+Newton iteration (see :cite:t:`FangChen2019`).  At each
 step, :math:`X(q)` is expanded to second order about the current iterate
 :math:`q_i`:
 
@@ -143,7 +143,7 @@ layer :math:`k`.  The total travel time is :math:`t = \sum_k \Delta t_k`.
 Attenuation operator :math:`t^*`
 =================================
 
-The attenuation operator (:footcite:t:`AkiRichards2002`, Ch. 5) measures
+The attenuation operator (:cite:t:`AkiRichards2002`, Ch. 5) measures
 the cumulative dissipative loss of wave amplitude along the ray path. Since the
 spatial path length in layer :math:`k` is :math:`\Delta s_k = v_k \Delta t_k`,
 the spatial integral representing intrinsic absorption corresponds exactly to:
@@ -166,7 +166,7 @@ Geometrical spreading
 In a 1-D layered medium with cylindrical symmetry (3-D point source),
 the classical geometrical spreading factor :math:`L` relates the solid angle
 of the ray tube at the source to its cross-sectional area at the receiver
-(:footcite:t:`Cerveny2001`, :footcite:t:`AkiRichards2002`):
+(:cite:t:`Cerveny2001`, :cite:t:`AkiRichards2002`):
 
 .. math::
     L = \sqrt{\frac{X \cdot \cos\theta_s \cdot \cos\theta_r}{p}
@@ -174,7 +174,7 @@ of the ray tube at the source to its cross-sectional area at the receiver
 
 where :math:`\theta_s, \theta_r` are the ray angles at source and
 receiver. 
-Equation above defines the **relative geometrical spreading** (see :footcite:t:`Cerveny2001`, Eq. 4.10.22), which measures the ray-tube geometrical divergence strictly from the ray curvature, without the source-point velocity multiplier :math:`1/v_r`. 
+Equation above defines the **relative geometrical spreading** (see :cite:t:`Cerveny2001`, Eq. 4.10.22), which measures the ray-tube geometrical divergence strictly from the ray curvature, without the source-point velocity multiplier :math:`1/v_r`. 
 
 The derivative :math:`\partial X / \partial p` is computed
 analytically via the chain rule:
@@ -248,7 +248,7 @@ and the system determinant
    D = EF + GH\,p^2.
 
 The complete :math:`4\times 4` scattering matrix
-(:footcite:t:`AkiRichards2002`, Eqs. 5.38–5.40) is computed by LayTracer.
+(:cite:t:`AkiRichards2002`, Eqs. 5.38–5.40) is computed by LayTracer.
 The eight independent P-SV coefficients are listed below.
 
 **Incident P-wave** — reflection and transmission:
@@ -284,8 +284,8 @@ The eight independent P-SV coefficients are listed below.
    T_{SS} = \frac{2\rho_1\,\eta_{\beta1}\,E\,(v_{S1}/v_{S2})}{D}.
 
 For references and details on the derivation of these formulas, see
-:footcite:t:`LayWallace1995` (Table 3.1, note the sign error in the second
-term of :math:`b`) and :footcite:t:`AkiRichards2002` (Equations 5.38–5.40).
+:cite:t:`LayWallace1995` (Table 3.1, note the sign error in the second
+term of :math:`b`) and :cite:t:`AkiRichards2002` (Equations 5.38–5.40).
 
 The angle-dependent formulation is used by default. It reduces to the
 normal-incidence expression for :math:`p=0`.
@@ -351,8 +351,8 @@ containing both the source and the receiver.  Because horizontally
 layered media possess *cylindrical symmetry* about the vertical axis
 through the source, any source–receiver pair in three-dimensional space
 can be **reduced to an equivalent 2-D problem** without loss of
-generality (:footcite:t:`Cerveny2001`, Ch. 3;
-:footcite:t:`AkiRichards2002`, Ch. 4).
+generality (:cite:t:`Cerveny2001`, Ch. 3;
+:cite:t:`AkiRichards2002`, Ch. 4).
 
 Coordinate projection
 ---------------------
@@ -410,7 +410,7 @@ computed from the 2-D ray remains valid in 3-D:
 - **Geometrical spreading** — the formula incorporates the
   epicentral distance :math:`X` to capture the 3-D cylindrical
   divergence of the ray-tube out of the incidence plane
-  (:footcite:t:`Cerveny2001`, §4.10).
+  (:cite:t:`Cerveny2001`, §4.10).
 - **Transmission coefficients** — depend on ray parameter and layer
   impedances, not on azimuth.
 
@@ -419,7 +419,11 @@ the full 3-D solution is recovered by geometry alone.
 
 ----
 
-References
-==========
+.. only:: html
 
-.. footbibliography::
+   References
+   ==========
+
+   .. bibliography::
+      :style: unsrt
+      :filter: docname in docnames
