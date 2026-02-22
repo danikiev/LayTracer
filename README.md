@@ -216,7 +216,7 @@ LayTracer implements the method of [Fang & Chen (2019)](https://doi.org/10.1111/
    - Travel time from vertical slowness summation
    - Attenuation *t\** from per-layer *Q*-factors
    - Geometrical spreading from analytic ∂*X*/∂*p*
-   - Full Zoeppritz P-SV R/T coefficients (Aki & Richards formulation)
+   - Full Zoeppritz P-SV R/T coefficients (Lay & Wallace (1995) formulation)
 
 ### Key references
 

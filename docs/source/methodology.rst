@@ -192,7 +192,7 @@ Reflection and transmission coefficients
 ========================================
 
 In layered media, wave amplitudes are modified at every crossed interface.
-LayTracer supports two methods for computing interface coefficients.
+LayTracer supports two methods for computing interface coefficients: normal-incidence (impedance-only) approximation and angle-dependent P-SV formulation (Zoeppritz). Normal-incidence is there only for comparison purposes, as it is not physically accurate. The default method is angle-dependent P-SV formulation.
 
 Normal-incidence (impedance-only) approximation
 ------------------------------------------------
