@@ -34,7 +34,6 @@ Below are some of the key dependencies:
 * `NumPy <https://www.numpy.org>`_ 1.20 to 1.26
 * `SciPy <https://www.scipy.org>`_
 * `Pandas <https://pandas.pydata.org/>`_
-* `Numba <https://numba.pydata.org/>`_
 * `Matplotlib <https://matplotlib.org/>`_
 * `Plotly <https://plotly.com/python/>`_
 * `Sphinx <https://www.sphinx-doc.org>`_ (used to create this documentation)

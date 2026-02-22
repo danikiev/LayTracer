@@ -9,7 +9,6 @@ dependencies:
   - numpy>=1.20, <2
   - scipy
   - pandas
-  - numba
   - matplotlib
   - plotly::plotly  
   - cmcrameri

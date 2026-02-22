@@ -28,11 +28,11 @@ dependencies = [
     "numpy",
     "scipy",
     "pandas",
-    "numba",
     "matplotlib",
     "plotly",
     "cmcrameri",
-    "psutil"
+    "psutil",
+    "joblib"
 ]
 dynamic = ["version"]
 
@@ -41,6 +41,3 @@ exclude = ["pytests", "tests"]
 
 [tool.setuptools_scm]
 version_file = "laytracer/version.py"
-
-[project.scripts]
-laytracer = 'gui.helloworld:main'

@@ -50,7 +50,7 @@ install.bat
 ### Dependencies
 
 - Python ≥ 3.8, < 3.13
-- NumPy, SciPy, Pandas, Numba
+- NumPy, SciPy, Pandas
 - Matplotlib, Plotly, cmcrameri
 - psutil, joblib
 
