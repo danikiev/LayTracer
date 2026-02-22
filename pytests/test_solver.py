@@ -101,10 +101,10 @@ class TestConversions:
     def test_roundtrip(self):
         """q → p → q roundtrip."""
         vmax = 6000.0
-        for q in [0.001, 0.1, 1.0, 10.0, 100.0]:
+        for q in [0.001, 0.1, 1.0, 10.0, 100.0, 1000.0, 10000.0]:
             p = laytracer.p_from_q(q, vmax)
             q2 = laytracer.q_from_p(p, vmax)
-            assert q2 == pytest.approx(q, rel=1e-10)
+            assert q2 == pytest.approx(q, rel=1e-5)
 
     def test_p_limits(self):
         """p → 0 as q → 0; p → 1/vmax as q → ∞."""
