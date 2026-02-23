@@ -59,7 +59,7 @@ plt.show()
 # -------------------------------------
 #
 # Trace P-waves from a deep source to receivers at varying offsets,
-# requesting :math:`t^*`, spreading, and transmission.
+# requesting :math:`t^*`, relative geometrical spreading, and transmission.
 
 src = np.array([0.0, 0.0, 3000.0])
 
