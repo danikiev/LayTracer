@@ -19,7 +19,7 @@ Documentation: [https://danikiev.github.io/LayTracer](https://danikiev.github.io
 | **Travel time** | Layer-by-layer travel time summation from the solved ray parameter |
 | **Attenuation** | Intrinsic absorption operator *t\** from quality factors *Q* |
 | **Spreading** | Relative geometrical spreading from the analytical ray-tube Jacobian ∂X/∂p |
-| **Transmission** | Normal-incidence (impedance) and full angle-dependent Zoeppritz P-SV coefficients (all 8 R/T modes) |
+| **Reflection/Transmission** | Normal-incidence (impedance) and full angle-dependent Zoeppritz P-SV coefficients (all 8 R/T modes) |
 | **Brewster angles** | Automatic detection of Brewster-like zeros in R/T coefficient curves |
 | **Parallel execution** | Multi-ray tracing with `joblib` / `loky` backend for large surveys |
 | **Visualisation** | 2-D ray path plots (matplotlib) and interactive 3-D viewer (Plotly) |
