@@ -10,6 +10,8 @@ the dimensionless ray parameter method of :cite:t:`FangChen2019`.
 
 **Version:** |release|
 
+**Documentation:** `danikiev.github.io/LayTracer <https://danikiev.github.io/LayTracer>`_
+
 ----
 
 **Features:**
@@ -20,7 +22,7 @@ the dimensionless ray parameter method of :cite:t:`FangChen2019`.
 * Inline computation of travel time, attenuation operator :math:`t^*`, geometrical spreading, and reflection/transmission coefficients
 * Efficient parallel computations via `Joblib <https://joblib.readthedocs.io/>`_
 * Standalone `Matplotlib <https://matplotlib.org/>`_ / `Plotly <https://plotly.com/>`_ visualisation
-* Comprehensive `Sphinx <https://www.sphinx-doc.org/>`_ documentation with extensive theory
+* Comprehensive `Sphinx <https://www.sphinx-doc.org/>`_ documentation with extensive theory available at `danikiev.github.io/LayTracer <https://danikiev.github.io/LayTracer>`_
 
 ----
 

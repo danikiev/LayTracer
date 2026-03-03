@@ -9,18 +9,20 @@ It includes :ref:`installation instructions<installation>` including :ref:`depen
 
 ----
 
+.. _requirements:
+
+Requirements
+============
+
+LayTracer can be installed either with `Conda <https://conda.io>`_ or with standard Python ``pip``.
+For a reproducible full environment, we recommend using the `miniforge <https://github.com/conda-forge/miniforge>`_ Conda implementation.
+
+----
+
 .. _installation:
 
 Installation
 ============
-
-.. _requirements:
-
-Requirements
-------------
-
-LayTracer can be installed either with `Conda <https://conda.io>`_ or with standard Python ``pip``.
-For a reproducible full environment, we recommend using the `miniforge <https://github.com/conda-forge/miniforge>`_ Conda implementation.
 
 .. _dependencies:
 
@@ -28,17 +30,17 @@ Dependencies
 ------------
 
 LayTracer leverages numerous Python packages. 
-Below are some of the key dependencies:
+Below are the key dependencies:
 
-* `Python <https://www.python.org>`_ 3.8 to 3.12
+* `Python <https://www.python.org>`_ (3.8 to 3.12)
 * `NumPy <https://www.numpy.org>`_ (<2)
 * `SciPy <https://www.scipy.org>`_
 * `Pandas <https://pandas.pydata.org/>`_
+* `psutil <https://pypi.org/project/psutil/>`_
+* `joblib <https://joblib.readthedocs.io/>`_
 * `Matplotlib <https://matplotlib.org/>`_
 * `Plotly <https://plotly.com/python/>`_
 * `cmcrameri <https://pypi.org/project/cmcrameri/>`_
-* `psutil <https://pypi.org/project/psutil/>`_
-* `joblib <https://joblib.readthedocs.io/>`_
 
 Optional dependencies used to build documentation include:
 
