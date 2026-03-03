@@ -79,7 +79,7 @@ pip install -e .
 ### Dependencies
 
 - Python ≥ 3.8, < 3.13
-- NumPy, SciPy, Pandas
+- NumPy (< 2), SciPy, Pandas
 - Matplotlib, Plotly, cmcrameri
 - psutil, joblib
 
@@ -168,14 +168,14 @@ fig.show()
 ### Model
 
 | Symbol | Description |
-|---|---|
+| --- | --- |
 | `LayerStack` | Data class holding layer thicknesses, velocities (Vp, Vs), densities, and Q-factors |
 | `build_layer_stack(vel_df, z_src, z_rcv)` | Extract the traversed layer stack between source and receiver depths |
 
 ### Solver
 
 | Symbol | Description |
-|---|---|
+| --- | --- |
 | `solve(stack, epicentral_dist, ...)` | Solve the two-point ray tracing problem for one source–receiver pair |
 | `RayResult` | Result container: travel time, ray path, ray parameter, *t\**, spreading, transmission product |
 | `offset(q, h, lmd)` | Total horizontal offset *X(q)* |
@@ -188,7 +188,7 @@ fig.show()
 ### Amplitude
 
 | Symbol | Description |
-|---|---|
+| --- | --- |
 | `transmission_normal(v1, rho1, v2, rho2)` | Normal-incidence displacement transmission coefficient |
 | `psv_rt_coefficients(p, vp1, vs1, rho1, vp2, vs2, rho2)` | All 8 P-SV reflection/transmission coefficients (Zoeppritz) |
 | `find_brewster_angles(rt_coefficients, angles, ...)` | Detect Brewster-like zeros in R/T curves |
@@ -196,14 +196,14 @@ fig.show()
 ### Multi-ray
 
 | Symbol | Description |
-|---|---|
+| --- | --- |
 | `trace_rays(sources, receivers, velocity_df, ...)` | Trace all source–receiver pairs with optional parallelism |
 | `TraceResult` | Container: travel times, ray paths, ray parameters, *t\**, spreading, transmission products |
 
 ### Visualisation (`laytracer.plot`)
 
 | Function | Description |
-|---|---|
+| --- | --- |
 | `velocity_profile(vel_df, ...)` | 1-D velocity–depth step profile (matplotlib) |
 | `rays_2d(vel_df, rays, ...)` | 2-D ray paths over layered velocity cross-section (matplotlib) |
 | `rays_3d(vel_df, rays, ...)` | Interactive 3-D ray visualisation (Plotly) |
@@ -312,6 +312,7 @@ pytest
 ```
 
 Test modules:
+
 - `test_solver.py` — Newton convergence, Snell's law, travel time accuracy
 - `test_amplitude.py` — Zoeppritz coefficients, normal-incidence limits, Brewster detection
 - `test_api.py` — multi-ray tracing interface
@@ -319,12 +320,11 @@ Test modules:
 - `test_homogeneous_equivalence.py` — homogeneous-medium equivalence checks
 - `test_symmetry.py` — reciprocity and physical consistency checks
 
-
 ---
 
 ## 📂 Project Structure
 
-```
+```text
 LayTracer/
 ├── laytracer/               # Main package
 │   ├── __init__.py          # Public API exports

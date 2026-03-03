@@ -31,12 +31,23 @@ LayTracer leverages numerous Python packages.
 Below are some of the key dependencies:
 
 * `Python <https://www.python.org>`_ 3.8 to 3.12
-* `NumPy <https://www.numpy.org>`_ 1.20 to 1.26
+* `NumPy <https://www.numpy.org>`_ (<2)
 * `SciPy <https://www.scipy.org>`_
 * `Pandas <https://pandas.pydata.org/>`_
 * `Matplotlib <https://matplotlib.org/>`_
 * `Plotly <https://plotly.com/python/>`_
-* `Sphinx <https://www.sphinx-doc.org>`_ (used to create this documentation)
+* `cmcrameri <https://pypi.org/project/cmcrameri/>`_
+* `psutil <https://pypi.org/project/psutil/>`_
+* `joblib <https://joblib.readthedocs.io/>`_
+
+Optional dependencies used to build documentation include:
+
+* `Sphinx <https://www.sphinx-doc.org>`_
+* `pydata-sphinx-theme <https://pydata-sphinx-theme.readthedocs.io/>`_
+* `sphinx-gallery <https://sphinx-gallery.github.io/stable/>`_
+* `sphinxcontrib-bibtex <https://sphinxcontrib-bibtex.readthedocs.io/>`_
+* `sphinx-design <https://sphinx-design.readthedocs.io/>`_
+* `numpydoc <https://numpydoc.readthedocs.io/>`_
 
 The authors are incredibly grateful to the developers of these packages.
 
