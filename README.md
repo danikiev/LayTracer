@@ -48,6 +48,15 @@ conda activate laytracer
 pip install -e .
 ```
 
+### Install from PyPI (stable releases only)
+
+```bash
+python -m pip install --upgrade pip
+pip install laytracer
+```
+
+Use this mode when you want a published stable release. For development or latest unreleased changes, install from the repository with `pip install -e .`.
+
 ### Quick install (Windows)
 
 ```batch

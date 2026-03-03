@@ -78,6 +78,20 @@ Finally, install the package:
 
     pip install -e .
 
+.. _install_from_pypi:
+
+Install from PyPI (stable releases only)
+----------------------------------------
+
+If you want the latest published stable release, install directly from PyPI:
+
+.. code-block:: bash
+
+    python -m pip install --upgrade pip
+    pip install laytracer
+
+Use this mode for stable releases. For development work or unreleased changes, install from the repository with ``pip install -e .``.
+
 .. _install_using_pip:
 
 Install using pip only
