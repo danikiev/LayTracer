@@ -218,6 +218,18 @@ latex_elements = {
     'preamble': r'''
 \usepackage{csquotes}
 \usepackage[titles]{tocloft}
+\usepackage{qrcode}
+\AtEndDocument{%
+\clearpage
+\thispagestyle{empty}
+\begin{center}
+{\Large Online documentation}\par
+\vspace{0.8cm}
+\qrcode[height=5cm]{https://danikiev.github.io/LayTracer/}\par
+\vspace{0.6cm}
+\href{https://danikiev.github.io/LayTracer/}{danikiev.github.io/LayTracer}
+\end{center}
+}
     ''',
     'maketitle': rf'''
 \begin{{titlepage}}
