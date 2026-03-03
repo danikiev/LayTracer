@@ -7,6 +7,8 @@
 
 LayTracer is a Python package for computing ray paths, travel times, and amplitude attributes in horizontally layered velocity models with constant layer velocities. It implements the dimensionless ray parameter method of [Fang & Chen (2019)](https://doi.org/10.1111/1365-2478.12799), achieving rapid convergence.
 
+Documentation: [https://danikiev.github.io/LayTracer](https://danikiev.github.io/LayTracer/)
+
 ---
 
 ## ✨ Features
@@ -21,7 +23,7 @@ LayTracer is a Python package for computing ray paths, travel times, and amplitu
 | **Brewster angles** | Automatic detection of Brewster-like zeros in R/T coefficient curves |
 | **Parallel execution** | Multi-ray tracing with `joblib` / `loky` backend for large surveys |
 | **Visualisation** | 2-D ray path plots (matplotlib) and interactive 3-D viewer (Plotly) |
-| **Documentation** | Comprehensive Sphinx docs with extensive theory, gallery examples, and API reference |
+| **Documentation** | Comprehensive [Sphinx docs](https://danikiev.github.io/LayTracer/) with extensive theory, gallery examples, and API reference |
 
 ---
 
@@ -271,9 +273,9 @@ One-time GitHub setup:
 2. Set **Source** to **GitHub Actions**.
 3. Push to `main`.
 
-Published docs URL pattern:
+Published docs URL:
 
-`https://<username>.github.io/<repository>/`
+[https://danikiev.github.io/LayTracer](https://danikiev.github.io/LayTracer/)
 
 ---
 
