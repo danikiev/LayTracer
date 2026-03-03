@@ -2,6 +2,8 @@
 import sys
 import os
 import datetime
+from importlib.metadata import version as pkg_version
+from importlib.metadata import PackageNotFoundError
 from sphinx_gallery.sorting import ExampleTitleSortKey
 import plotly.io as pio
 
@@ -93,14 +95,21 @@ source_encoding = "utf-8-sig"
 master_doc = "index"
 
 # Version
-version = 'X' # __version__
-if len(version.split("+")) > 1 or version == "unknown":
+try:
+    release = pkg_version("laytracer")
+except PackageNotFoundError:
+    release = "dev"
+
+version = release.split("+")[0]
+
+if version == "unknown":
     version = "dev"
 
 # General
 author = "Denis Anikiev"
 year = datetime.date.today().year
 project = "LayTracer"
+project_summary = "Fast two-point seismic ray tracing in 1-D layered media"
 copyright = f"{year}, {author}"
 
 
@@ -137,7 +146,7 @@ else:
 html_theme = "pydata_sphinx_theme"
 html_theme_options = {
 #     "logo_only": True,
-#     "display_version": True,
+    "display_version": True,
 #     "logo": {
 #         "image_light": "logo.png",
 #         "image_dark": "logo.png",
@@ -209,6 +218,22 @@ latex_elements = {
 \usepackage{csquotes}
 \usepackage[titles]{tocloft}
     ''',
+    'maketitle': rf'''
+\begin{{titlepage}}
+\centering
+\vspace{{4cm}}
+{{\Huge {project} \par}}
+\vspace{{1.2cm}}
+{{\Large {project_summary} \par}}
+\vfill
+{{\Large {author} \par}}
+\vspace{{0.3cm}}
+{{\large Version {release} \par}}
+\vspace{{0.8cm}}
+{{\large \today \par}}
+\end{{titlepage}}
+\clearpage
+''',
 }
 
 # Use more advanced LaTeX to deal with unicode characters

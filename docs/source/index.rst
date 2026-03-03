@@ -8,9 +8,11 @@ Overview
 tracing in 1-D layered media with constant layer velocity, based on
 the dimensionless ray parameter method of :cite:t:`FangChen2019`.
 
+**Version:** |release|
+
 ----
 
-Features:
+**Features:**
 
 * Fast two-point ray tracing via dimensionless ray parameter method
 * Second-order Newton iteration for rapid convergence
