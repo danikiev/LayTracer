@@ -139,6 +139,7 @@ Notes:
 
 - The workflow uses `fetch-depth: 0` so `setuptools_scm` can resolve the tag correctly.
 - If PyPI publish fails with "File already exists", bump to a new tag and rerun.
+- Publishing is guarded: only strict semver tags in the form `vMAJOR.MINOR.PATCH` are accepted (example: `v1.2.3`).
 
 ## 6) Release-event automation (`release-on-published.yml`)
 
@@ -153,3 +154,4 @@ When to use which workflow:
 
 - Use `release.yml` if you want publishing to start immediately on tag push (`git push origin vX.Y.Z`).
 - Use `release-on-published.yml` if you want publishing only after explicitly creating/publishing a GitHub Release in the UI.
+- Both workflows enforce strict semver tags (`vMAJOR.MINOR.PATCH`) before build/publish jobs run.
