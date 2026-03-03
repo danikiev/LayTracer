@@ -125,9 +125,11 @@ html_show_copyright = True
 
 # Check if on GitHub CI
 on_github_ci = os.environ.get("GITHUB_ACTIONS") == "true"
+github_repository = os.environ.get("GITHUB_REPOSITORY", "")
+github_repo_name = github_repository.split("/")[-1] if github_repository else ""
 
 if on_github_ci:
-    pdf_url = "/laytracer/_static/laytracer.pdf"
+    pdf_url = f"/{github_repo_name}/_static/laytracer.pdf" if github_repo_name else "/_static/laytracer.pdf"
 else:
     pdf_url = "/_static/laytracer.pdf"
 

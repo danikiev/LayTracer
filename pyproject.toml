@@ -38,6 +38,16 @@ dependencies = [
 ]
 dynamic = ["version"]
 
+[project.optional-dependencies]
+docs = [
+    "sphinx",
+    "pydata-sphinx-theme",
+    "sphinx-gallery",
+    "sphinxcontrib-bibtex",
+    "sphinx-design",
+    "numpydoc",
+]
+
 [tool.setuptools.packages.find]
 exclude = ["pytests", "tests"]
 

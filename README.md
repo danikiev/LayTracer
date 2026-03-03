@@ -1,5 +1,8 @@
 # LayTracer
 
+[![Pytest](https://github.com/danikiev/LayTracer/actions/workflows/pytest.yml/badge.svg)](https://github.com/danikiev/LayTracer/actions/workflows/pytest.yml)
+[![Docs](https://github.com/danikiev/LayTracer/actions/workflows/docs.yml/badge.svg)](https://github.com/danikiev/LayTracer/actions/workflows/docs.yml)
+
 **Fast two-point seismic ray tracing in 1-D layered media.**
 
 LayTracer is a Python package for computing ray paths, travel times, and amplitude attributes in horizontally layered velocity models with constant layer velocities. It implements the dimensionless ray parameter method of [Fang & Chen (2019)](https://doi.org/10.1111/1365-2478.12799), achieving rapid convergence.
@@ -232,6 +235,26 @@ make latexpdf
 cd build/html
 python -m http.server
 ```
+
+### Automatic docs deployment to GitHub Pages
+
+This repository includes a GitHub Actions workflow at `.github/workflows/docs.yml` that runs on every push to `main` and:
+
+- builds Sphinx HTML docs,
+- builds the PDF (`laytracer.pdf`),
+- copies the PDF into the published site (`_static/laytracer.pdf`),
+- deploys HTML docs to GitHub Pages,
+- uploads the PDF as a workflow artifact.
+
+One-time GitHub setup:
+
+1. Open **Settings → Pages** in your GitHub repository.
+2. Set **Source** to **GitHub Actions**.
+3. Push to `main`.
+
+Published docs URL pattern:
+
+`https://<username>.github.io/<repository>/`
 
 ---
 
