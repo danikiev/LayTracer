@@ -29,7 +29,8 @@ LayTracer is a Python package for computing ray paths, travel times, and amplitu
 
 ### Prerequisites
 
-- [Conda](https://conda.io) package manager (we recommend [miniforge](https://github.com/conda-forge/miniforge))
+- Python 3.8–3.12 and `pip`
+- [Conda](https://conda.io) package manager (recommended for full reproducible setup via [miniforge](https://github.com/conda-forge/miniforge))
 
 ### Install with conda
 
@@ -56,6 +57,24 @@ install.bat
 chmod +x install.sh
 ./install.sh
 ```
+
+### Install with pip only (no conda)
+
+```bash
+# Linux / macOS
+python -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+pip install -e .
+
+# Windows (PowerShell)
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+pip install -e .
+```
+
+`pip`-only installation is suitable for running LayTracer. For a full pre-configured environment (including docs tooling), prefer the conda workflow.
 
 ### Dependencies
 

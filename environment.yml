@@ -9,21 +9,17 @@ dependencies:
   - numpy>=1.20, <2
   - scipy
   - pandas
-  - matplotlib
-  - plotly::plotly  
-  - cmcrameri
   - psutil
   - joblib
-  - ipython  
-  - jupyter
-  - ipywidgets
+  - matplotlib
+  - plotly::plotly  
+  - cmcrameri    
   - pytest
   - sphinx
   - pydata-sphinx-theme
   - sphinx-gallery
   - sphinxcontrib-bibtex
   - sphinx-design
-  - numpydoc
-  - spyder
+  - numpydoc  
   - pip:
     - setuptools_scm
