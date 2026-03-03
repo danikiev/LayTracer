@@ -189,7 +189,6 @@ def rays_2d(
     scale = 1000.0 if unit.lower() == "km" else 1.0
 
     # Determine x-range from rays (only if we need to plot model or set limits)
-    # Determine x-range from rays (only if we need to plot model or set limits)
     if plot_model:
         if rays:
             all_x = np.concatenate([r[:, 0] / scale for r in rays])
@@ -342,10 +341,7 @@ def rays_2d(
         
     if equal_scale:
         ax.set_aspect("equal")
-
-    # Only label legend if we haven't done it manually or if requested
-    # But usually the user calls legend() outside.
-    # We'll leave the return as is.
+    
     return ax
 
 

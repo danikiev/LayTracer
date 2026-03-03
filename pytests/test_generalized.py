@@ -159,13 +159,7 @@ def test_reflection_at_source_depth_disallowed():
 def test_refraction_vertical():
     """Test P-to-S refraction at 1000m, receiver at 2000m (in 2nd layer).
     Layer 2 extends to infinity, need 3rd row in model to bound it?
-    build_layer_stack handles unbounded last layer.
-    
-    Path: 
-    0->1000 (Layer 0, P, V=2000): t = 0.5s
-    1000->2000 (Layer 1, S, V=2000): t = 0.5s
-    Total = 1.0s
-    Wait, Layer 1 Vs is 2000.
+    build_layer_stack handles unbounded last layer.    
     """
     # Add a dummy 3rd layer so we can put receiver at 2000 solidly in layer 1
     # or just trust extrapolation.

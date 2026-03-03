@@ -462,15 +462,7 @@ def solve(
         going_down = end_z >= start_z
         
         # NOTE: segments["h"] is ordered top-to-bottom physically.
-        # If we are going UP (end_z < start_z), we traverse slices in reverse order?
-        # api.py logic: "build_layer_stack returns layers shallow->deep."
-        # If going down: we traverse index 0 -> N
-        # If going up: we traverse index N -> 0?
-        # Let's check how api.py populated 'seg_v'.
-        # api.py: "v_leg = leg_stack.v(...) ... h_total.append(leg_stack.h)"
-        # This implies seg["v"] is also ordered shallow-to-deep.
-        # So YES, if going UP, we must iterate 'k' backwards relative to the array.
-        
+                
         range_k = range(n_lay) if going_down else range(n_lay - 1, -1, -1)
         
         for k in range_k:
@@ -540,8 +532,7 @@ def solve(
             dXdp = dXdq * dqdp
 
             # Geometric spreading depends on Source/Receiver velocities
-            # v[0] and v[-1] in the flattened array correspond to start/end of path
-            # IF we constructed it correctly.
+            # v[0] and v[-1] in the flattened array correspond to start/end of path            
             v_sourceside = v[0] 
             v_receiverside = v[-1]
             

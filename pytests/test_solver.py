@@ -362,12 +362,7 @@ class TestSolve:
             dx = abs(x1 - x0)
             dz = abs(z1 - z0)
             ratios.append(dx / dz)  # larger = flatter = faster layer
-
-        # Ratios should increase from first segment (deepest=fastest)
-        # to last segment (shallowest=slowest)... wait no:
-        # Deepest layer has highest velocity → flatter ray → larger ratio
-        # Shallowest layer has lowest velocity → steeper ray → smaller ratio
-        # Since upward ray: segment 0 is deepest (fastest), last is shallowest (slowest)
+        
         assert ratios[0] > ratios[-1], (
             f"Ray should be flatter in fast deep layer (dx/dz={ratios[0]:.3f}) "
             f"than in slow shallow layer (dx/dz={ratios[-1]:.3f})"

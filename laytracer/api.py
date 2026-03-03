@@ -74,18 +74,6 @@ def _trace_one(
     dx, dy = rx - sx, ry - sy
     epic = np.sqrt(dx * dx + dy * dy)
 
-    # 1. Sort reflections by proximity/logic?
-    # For now, we assume the user provides them in temporal order if there are multiple.
-    # But for a simple 1-reflection case, order doesn't matter much unless we zig-zag.
-    # We will trust the user's order in refl_list for the sequence of bounces.
-
-    # 2. Construct the sequence of "targets" (layer interfaces to hit)
-    # Start: (sz, source_phase) -> Refl1 -> Refl2 -> ... -> (rz, final_phase?)
-    #
-    # We need to build a "folded" stack.
-    # The Ray path is a sequence of Segments.
-    # Each Segment is a monotonic path from z_start to z_end with a constant phase (P or S).
-
     current_z = sz
     current_phase = source_phase
     
@@ -112,13 +100,7 @@ def _trace_one(
     for i, (z_target, interaction_type, next_phase) in enumerate(targets):
         # Build stack for this leg
         leg_stack = build_layer_stack(vel_df, current_z, z_target)
-        
-        # Get velocity for current phase
-        # Note: leg_stack.h is always top-to-bottom order for the layers covered.
-        # But if we go UP, we traverse them bottom-to-top.
-        # solver.offset() sums terms, so order of h/v in summation doesn't matter for X(q).
-        # It DOES matter for ray tracing coordinates later.
-        
+                        
         # We append simple arrays
         v_leg = leg_stack.v("Vp" if current_phase == "P" else "Vs")
         h_total.append(leg_stack.h)
@@ -135,25 +117,8 @@ def _trace_one(
                 "cum_idx": sum(len(x) for x in h_total) # Index boundary in flattened array
             })
             current_phase = next_phase
-        
-        # For refraction/transmission within the leg:
-        # We need to check if any interface in `refr_list` was crossed.
-        # This is tricky because `build_layer_stack` abstracts the layers.
-        # But `refr_list` implies a MODE CONVERSION at a specific depth during transmission.
-        # If the ray passes through z_refr, we split the leg there?
-        # NO, the user spec says: "refraction... determines further propagation".
-        # So we should have treated refractions as targets too!
-        
-        # Let's rethink targets.
-        # Both "reflection" and "refraction" arguments define control points where
-        # phase MIGHT change and direction MIGHT change (reflection).
-        # We should merge them into a sorted list of events?
-        # No, reflection dictates direction reversal. Refraction dictates phase change.
+      
         pass # Logic continues below...
-
-    # RE-IMPLEMENTATION of loop with Refractions included
-    # We must treat refractions as waypoints that split the path.
-    # Refractions don't change direction (monotonicity), but change phase.
     
     waypoints = [] # (depth, type, out_phase)
     
@@ -161,17 +126,9 @@ def _trace_one(
     for z, ph in refl_list:
         waypoints.append((z, "reflect", ph))
         
-    # 2. Refractions: strictly speaking, if we pass through a refraction depth,
-    # we must switch phase. But we don't know IF we pass it yet?
-    # Actually we do. We go from Current -> Refl1. If RefractZ is between them, we hit it.
-    # We need to inject refraction waypoints between start/reflections/end.
-    
-    # ... This is getting complex to sort. 
     # Let's start with the sequence of directional targets (Reflections + Receiver).
     directional_targets = [(z, ph) for z, ph in refl_list] 
-    
-    # We iterate legs. Inside each leg (Start -> Target), we check for refractions.
-    
+        
     ray_segments = [] # store (h, v, phase, direction_sign)
     
     curr_z = sz
@@ -218,24 +175,10 @@ def _trace_one(
             
             # Phase velocity
             vel = stack.v("Vp" if curr_ph == "P" else "Vs")
-            
-            # Store segment data
-            # If going UP, build_layer_stack returns layers shallow->deep.
-            # But the ray traverses them deep->shallow.
-            # consistent with solver logic (offset summation), we just flatten.
-            
+                        
             # Filter zero-thickness layers to avoid Vmax pollution
             valid_mask = stack.h > 1e-9
-            
-            # If all are zero (e.g. start==end), keep one but handle velocity carefully?
-            # Actually, if start==end, h=0, offset=0. It contributes nothing to Newton solver.
-            # Solver can handle empty arrays? No.
-            # But "Same-layer" check in solve() handles N=1. 
-            # If a segment is truly 0 length, we should just skip appending it?
-            # But we need it for continuity of metadata?
-            # The solver only assumes monotonic segments.
-            # If valid_mask is empty, we skip appending arrays but keep z book-keeping.
-            
+                       
             if np.any(valid_mask):
                 ray_segments.append({
                     "h": stack.h[valid_mask],
@@ -249,15 +192,7 @@ def _trace_one(
                     "start_z": curr_z,
                     "end_z": sub_z
                 })
-            else:
-                # Segment is effectively zero thickness (e.g. bounce on interface).
-                # We don't add physical layers to the solver.
-                # But we must update curr_z below.
-                # However, if we skip adding to ray_segments, 'seg_idx' for interactions
-                # might point to non-existent segment?
-                # Interaction logic assumes it happens at end of `ray_segments[-1]`.
-                # If we skip, the interaction will be attached to previous segment.
-                # This could be correct (reflection happens at end of previous leg).
+            else:                
                 pass
 
             # Check if this sub-target is a Refraction or the Major Turn
@@ -313,8 +248,7 @@ def _trace_one(
                      })
                      curr_ph = target_ph_after_turn
             else:
-                # Refraction/Transmission
-                # We ARE passing through.
+                # Refraction/Transmission                
                 # "Beyond" side is the layer we are ABOUT to enter (which will be first layer of next segment).
                 # We can fetch it now.
                 props_beyond = _get_material_props(sub_z, going_down)
