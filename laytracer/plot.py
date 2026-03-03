@@ -223,9 +223,31 @@ def rays_2d(
             
             cmap = cm.get_cmap("viridis", len(unique_vels))
             norm = BoundaryNorm(bounds, cmap.N)
+        elif discrete_colorbar and len(unique_vels) == 1:
+            # Single unique velocity — one discrete colour, tick at exact value
+            bounds = np.array([vmin - 0.5, vmax + 0.5])
+            cmap = cm.get_cmap("viridis", 1)
+            norm = BoundaryNorm(bounds, cmap.N)
         else:
             cmap = cm.get_cmap("viridis")
-            norm = Normalize(vmin=vmin, vmax=vmax)
+            # Guard against vmin == vmax (e.g. single-velocity model)
+            if vmin == vmax:
+                norm = Normalize(vmin=vmin - 1.0, vmax=vmax + 1.0)
+            else:
+                norm = Normalize(vmin=vmin, vmax=vmax)
+
+        # Determine the deepest point across all rays, sources, and receivers
+        # so the half-space layer rectangle always covers the visible area.
+        z_max_data = 0.0
+        if rays:
+            all_z = np.concatenate(
+                [(r[:, -1] if r.shape[1] == 2 else r[:, 2]) / scale for r in rays]
+            )
+            z_max_data = max(z_max_data, float(all_z.max()))
+        if sources is not None:
+            z_max_data = max(z_max_data, float(np.atleast_2d(sources)[:, -1].max() / scale))
+        if receivers is not None:
+            z_max_data = max(z_max_data, float(np.atleast_2d(receivers)[:, -1].max() / scale))
 
         patches = []
         colors_list = []
@@ -241,6 +263,8 @@ def rays_2d(
                 if span == 0: span = 1000.0 / scale
                 
                 z_def = z_top + span * 0.3
+                # Extend to cover the deepest data point (with 10 % padding)
+                z_def = max(z_def, z_max_data * 1.1)
                 if ylim:
                     z_bot = max(z_def, float(max(ylim)))
                 else:
@@ -267,7 +291,7 @@ def rays_2d(
                 cax = divider.append_axes("right", size="5%", pad=0.1)
 
             # Format ticks for discrete case
-            if discrete_colorbar and len(unique_vels) > 1:
+            if discrete_colorbar and len(unique_vels) >= 1:
                 # Place ticks at the unique values
                 ticks = unique_vels
                 plt.colorbar(sm, cax=cax, orientation=colorbar_orientation, label=f"{vel_type} (m/s)", alpha=model_alpha, ticks=ticks)
