@@ -9,7 +9,7 @@ LayTracer is a Python package for computing ray paths, travel times, and amplitu
 ## ✨ Features
 
 | Category | Capability |
-|---|---|
+|:---|:---|
 | **Ray tracing** | Second-order (quadratic) Newton solver using the dimensionless *q*-parameter for robust, singularity-free convergence |
 | **Travel time** | Layer-by-layer travel time summation from the solved ray parameter |
 | **Attenuation** | Intrinsic absorption operator *t\** from quality factors *Q* |
@@ -200,6 +200,16 @@ build-docs.bat
 cd docs && make html
 ```
 
+Build docs with PDF output:
+
+```bash
+conda activate laytracer
+# Windows
+build-docs.bat -pdf
+# Linux / macOS
+cd docs && make html && make latexpdf
+```
+
 ---
 
 ## 🔬 Theory
@@ -240,7 +250,10 @@ Test modules:
 - `test_solver.py` — Newton convergence, Snell's law, travel time accuracy
 - `test_amplitude.py` — Zoeppritz coefficients, normal-incidence limits, Brewster detection
 - `test_api.py` — multi-ray tracing interface
+- `test_generalized.py` — generalized layered-media validation cases
+- `test_homogeneous_equivalence.py` — homogeneous-medium equivalence checks
 - `test_symmetry.py` — reciprocity and physical consistency checks
+
 
 ---
 
@@ -257,11 +270,17 @@ LayTracer/
 │   └── plot.py              # Visualisation (2-D, 3-D, velocity profiles)
 ├── examples/                # Sphinx-Gallery example scripts
 │   ├── 01_basic_raytracing.py
-│   └── 02_amplitude_analysis.py
+│   ├── 02_paper_examples.py
+│   ├── 03_reflection_transmission.py
+│   ├── 04_amplitude_analysis.py
+│   ├── 05_homogeneous_equivalence.py
+│   └── README.txt
 ├── pytests/                 # Test suite
 │   ├── test_solver.py
 │   ├── test_amplitude.py
 │   ├── test_api.py
+│   ├── test_generalized.py
+│   ├── test_homogeneous_equivalence.py
 │   └── test_symmetry.py
 ├── docs/                    # Sphinx documentation
 │   └── source/
@@ -285,7 +304,7 @@ LayTracer is released under the [MIT License](LICENSE).
 
 ## 👤 Author
 
-**Denis Anikiev** — [danikiev@gmail.com](mailto:danikiev@gmail.com)
+[**Denis Anikiev**](@danikiev) — [danikiev@gmail.com](mailto:danikiev@gmail.com)
 
 ---
 
