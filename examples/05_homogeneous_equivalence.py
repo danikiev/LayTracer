@@ -5,11 +5,45 @@ r"""
 A two-layer model whose layers share **identical** elastic parameters must
 reproduce the closed-form homogeneous-medium solution exactly. This example
 computes travel time, :math:`t^*`, geometrical spreading, the transmission-
-coefficient product, and their combined amplitude factor for three cases:
+coefficient product, and their combined deterministic factor for three cases:
 
-* **(a)** Analytical formulas for a homogeneous medium.
-* **(b)** LayTracer with a single-layer (homogeneous) model.
-* **(c)** LayTracer with a two-layer model where both layers have the
+.. math::
+
+    C = \frac{T}{L}
+
+where :math:`T = \prod |T_k|` is the transmission-coefficient product and
+:math:`L` is the relative geometrical spreading.
+
+Interpretation of each factor:
+
+- :math:`t^*` captures attenuation effects (intrinsic and scattering) along the ray path.
+- :math:`T` captures interface effects (energy partition at each crossing). If an interface is physically invisible (identical elastic parameters above and below), its transmission magnitude is 1, so it should not alter amplitudes.
+- :math:`L` captures ray-tube divergence/convergence (pure geometry and kinematics) through the relative geometrical spreading factor.
+- :math:`C = T/L` is therefore the deterministic, frequency-independent part of amplitude scaling.
+
+Including attenuation, a common form is
+
+.. math::
+
+        A(f) \propto \frac{T}{L}\,\exp(-\pi f t^*)
+
+so this example checks separately that both attenuation (:math:`t^*`) and
+deterministic scaling (:math:`T/L`) remain unchanged when replacing a true
+homogeneous medium with an equivalent two-layer representation.
+
+The expected physics for this benchmark is strict equivalence:
+
+- identical travel times and ray parameters,
+- identical :math:`t^*`, spreading, :math:`T`, and :math:`T/L`,
+- overlapping ray geometries and offset-dependent curves,
+- only machine-precision numerical differences.
+
+It is therefore a powerful quality check for the internal consistency of the code, and a regression test to catch any future changes that might break this fundamental equivalence.
+The three approaches to compute the same physical quantities are:
+
+- (a) Analytical formulas for a homogeneous medium.
+- (b) LayTracer with a single-layer (homogeneous) model.
+- (c) LayTracer with a two-layer model where both layers have the
   same Vp, Vs, ρ, Qp, Qs.
 
 All three must agree, confirming internal consistency of the code.
@@ -24,7 +58,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
-# sphinx_gallery_thumbnail_number = 1
+# sphinx_gallery_thumbnail_number = 2
 
 ###############################################################################
 # Common parameters
@@ -320,15 +354,157 @@ else:
 #%%
 
 ###############################################################################
+# Offset-dependent equivalence
+# ----------------------------
+#
+# Repeat the comparison for a range of offsets, similarly to example 04,
+# and show that homogeneous and identical-layered models produce overlapping
+# curves for all amplitude-related quantities.
+
+offsets = np.arange(500.0, 15001.0, 500.0)
+src_off = np.array([src[0], src[1], rcv[2]])
+rcvs = np.column_stack([
+    offsets,
+    np.zeros_like(offsets),
+    np.full_like(offsets, src[2]),
+])
+
+res_h_off = lt.trace_rays(
+    sources=src_off,
+    receivers=rcvs,
+    velocity_df=homo_df,
+    source_phase="P",
+    compute_amplitude=True,
+    transcoef_method="angle",
+)
+
+res_l_off = lt.trace_rays(
+    sources=src_off,
+    receivers=rcvs,
+    velocity_df=layered_df,
+    source_phase="P",
+    compute_amplitude=True,
+    transcoef_method="angle",
+)
+
+###############################################################################
+# Offset-dependent ray paths
+# ^^^^^^^^^^^^^^^^^^^^^^^^^^
+#
+# Plot the full fan of rays for all offsets in both models.
+
+ax = lt.plot.rays_2d(
+    homo_df,
+    rays=res_h_off.rays,
+    sources=np.atleast_2d(src_off),
+    receivers=rcvs,
+    vel_type="Vp",
+    add_colorbar=True,
+    model_alpha=0.5,
+    discrete_colorbar=True,
+    unit="km",
+)
+ax.set_title("Offset fan — homogeneous model")
+ax.legend(loc="lower right")
+plt.show()
+
+ax = lt.plot.rays_2d(
+    layered_df,
+    rays=res_l_off.rays,
+    sources=np.atleast_2d(src_off),
+    receivers=rcvs,
+    vel_type="Vp",
+    add_colorbar=True,
+    model_alpha=0.5,
+    discrete_colorbar=True,
+    unit="km",
+)
+ax.set_title("Offset fan — two-layer identical model")
+ax.legend(loc="lower right")
+plt.show()
+
+combined_h_off = res_h_off.trans_product / res_h_off.spreading
+combined_l_off = res_l_off.trans_product / res_l_off.spreading
+
+curve_relerr = pd.DataFrame({
+    "Travel time": np.abs((res_l_off.travel_times - res_h_off.travel_times) / res_h_off.travel_times),
+    "t*": np.abs((res_l_off.tstar - res_h_off.tstar) / res_h_off.tstar),
+    "Relative Spreading": np.abs((res_l_off.spreading - res_h_off.spreading) / res_h_off.spreading),
+    "Trans. product": np.abs((res_l_off.trans_product - res_h_off.trans_product) / np.where(res_h_off.trans_product != 0, res_h_off.trans_product, 1.0)),
+    "Combined (T/L)": np.abs((combined_l_off - combined_h_off) / combined_h_off),
+}, index=offsets.astype(int))
+
+print("\nMax relative mismatch over offsets (Layered vs Homo):")
+print(curve_relerr.max().to_string(float_format="{:.2e}".format))
+
+fig, axes = plt.subplots(3, 2, figsize=(12, 10), sharex=True)
+axes = axes.ravel()
+
+km = offsets / 1000.0
+
+axes[0].plot(km, res_h_off.travel_times, "-", linewidth=2, label="Homo")
+axes[0].plot(km, res_l_off.travel_times, "--", linewidth=2, label="Layered (identical)")
+axes[0].set_ylabel("Travel time (s)")
+axes[0].set_title("Travel time")
+axes[0].grid(True, alpha=0.3)
+
+axes[1].plot(km, res_h_off.tstar, "-", linewidth=2, label="Homo")
+axes[1].plot(km, res_l_off.tstar, "--", linewidth=2, label="Layered (identical)")
+axes[1].set_ylabel(r"$t^*$ (s)")
+axes[1].set_title(r"Attenuation operator $t^*$")
+axes[1].grid(True, alpha=0.3)
+
+axes[2].plot(km, res_h_off.spreading, "-", linewidth=2, label="Homo")
+axes[2].plot(km, res_l_off.spreading, "--", linewidth=2, label="Layered (identical)")
+axes[2].set_ylabel("Spreading")
+axes[2].set_title("Geometrical spreading")
+axes[2].grid(True, alpha=0.3)
+
+axes[3].plot(km, res_h_off.trans_product, "-", linewidth=2, label="Homo")
+axes[3].plot(km, res_l_off.trans_product, "--", linewidth=2, label="Layered (identical)")
+axes[3].set_ylabel(r"$\prod |T_k|$")
+axes[3].set_title("Transmission product")
+axes[3].grid(True, alpha=0.3)
+
+axes[4].plot(km, combined_h_off, "-", linewidth=2, label="Homo")
+axes[4].plot(km, combined_l_off, "--", linewidth=2, label="Layered (identical)")
+axes[4].set_ylabel("Combined (T/L)")
+axes[4].set_title("Combined deterministic factor")
+axes[4].set_xlabel("Offset (km)")
+axes[4].grid(True, alpha=0.3)
+
+axes[5].plot(km, res_h_off.ray_parameters, "-", linewidth=2, label="Homo")
+axes[5].plot(km, res_l_off.ray_parameters, "--", linewidth=2, label="Layered (identical)")
+axes[5].set_ylabel("Ray parameter (s/m)")
+axes[5].set_title("Ray parameter")
+axes[5].set_xlabel("Offset (km)")
+axes[5].grid(True, alpha=0.3)
+
+for ax in axes:
+    ax.legend(loc="best")
+
+fig.suptitle("Offset-dependent equivalence: homogeneous vs identical-layered", fontsize=13)
+fig.tight_layout()
+plt.show()
+
+#%%
+
+###############################################################################
 # Conclusion
 # ----------
 #
-# All three approaches return identical values (to numerical precision),
-# confirming that:
+# This extended quality test now validates equivalence at two levels:
 #
-# 1. The solver correctly reduces to a straight-ray solution in a
-#    homogeneous medium.
-# 2. An artificial interface between layers with the **same** elastic
-#    parameters introduces no spurious travel-time error, no
-#    attenuation artefact, no spreading distortion, and a unit
-#    transmission coefficient — exactly as expected from physics.
+# 1. **Single source–receiver pair**:
+#    analytical homogeneous formulas, homogeneous code, and identical-layered
+#    code agree for travel time, ray parameter, :math:`t^*`, geometrical
+#    spreading, transmission product, and combined factor.
+#
+# 2. **Offset sweep**:
+#    homogeneous and identical-layered models produce overlapping ray fans and
+#    overlapping offset-dependent curves for all computed quantities, with
+#    relative mismatches at machine precision.
+#
+# Therefore, inserting an interface between layers with identical elastic
+# parameters introduces no spurious kinematic or amplitude effects in LayTracer,
+# as required by the underlying physics.
