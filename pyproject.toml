@@ -10,6 +10,8 @@ build-backend = "setuptools.build_meta"
 name = "laytracer"
 description = "LayTracer — a Python implementation of two-point seismic ray tracing in layered media"
 readme = "README.md"
+requires-python = ">=3.8,<3.13"
+license = { file = "LICENSE" }
 authors = [    
     {name = "Denis Anikiev", email = "danikiev@gmail.com"},
 ]
