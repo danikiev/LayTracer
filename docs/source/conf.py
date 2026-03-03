@@ -214,6 +214,7 @@ suppress_warnings = ["bibtex.duplicate_label", "bibtex.duplicate_citation", "des
 
 # Latex Setup for conversion to PDF
 latex_elements = {
+    'releasename': 'version',
     'preamble': r'''
 \usepackage{csquotes}
 \usepackage[titles]{tocloft}
@@ -221,7 +222,7 @@ latex_elements = {
     'maketitle': rf'''
 \begin{{titlepage}}
 \centering
-\vspace{{4cm}}
+\vspace*{{4cm}}
 {{\Huge {project} \par}}
 \vspace{{1.2cm}}
 {{\Large {project_summary} \par}}
