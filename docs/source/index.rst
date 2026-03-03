@@ -4,9 +4,7 @@
 Overview
 ========
 
-**LayTracer** is a Python implementation of fast two-point seismic ray
-tracing in 1-D layered media with constant layer velocity, based on
-the dimensionless ray parameter method of :cite:t:`FangChen2019`.
+**LayTracer** is an open-source Python package for computing ray paths, travel times, and amplitude attributes in horizontally layered (1D) velocity models with constant layer velocities. It is based on the dimensionless ray parameter method of :cite:t:`FangChen2019`, achieving rapid convergence.
 
 **Version:** |release|
 

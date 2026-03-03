@@ -1,11 +1,12 @@
 # LayTracer
 
+[![DOI](https://zenodo.org/badge/1160026484.svg)](https://zenodo.org/badge/latestdoi/1160026484)
 [![Pytest](https://github.com/danikiev/LayTracer/actions/workflows/pytest.yml/badge.svg)](https://github.com/danikiev/LayTracer/actions/workflows/pytest.yml)
 [![Docs](https://github.com/danikiev/LayTracer/actions/workflows/docs.yml/badge.svg)](https://github.com/danikiev/LayTracer/actions/workflows/docs.yml)
 
-**Fast two-point seismic ray tracing in 1-D layered media.**
+**Fast two-point seismic ray tracing in layered media.**
 
-LayTracer is a Python package for computing ray paths, travel times, and amplitude attributes in horizontally layered velocity models with constant layer velocities. It implements the dimensionless ray parameter method of [Fang & Chen (2019)](https://doi.org/10.1111/1365-2478.12799), achieving rapid convergence.
+LayTracer is an open-source Python package for computing ray paths, travel times, and amplitude attributes in horizontally layered (1D) velocity models with constant layer velocities. It is based on the dimensionless ray parameter method of [Fang & Chen (2019)](https://doi.org/10.1111/1365-2478.12799), achieving rapid convergence.
 
 Documentation: [https://danikiev.github.io/LayTracer](https://danikiev.github.io/LayTracer/)
 
@@ -380,10 +381,14 @@ LayTracer is released under the [MIT License](LICENSE).
 If you use LayTracer in your research, please cite:
 
 ```bibtex
-@software{LayTracer,
-  author  = {Anikiev, Denis},
-  title   = {LayTracer: Fast two-point seismic ray tracing in 1-D layered media},
-  url     = {https://github.com/danikiev/LayTracer},
-  license = {MIT}
+@software{Anikiev2026LayTracer,
+  author       = {Anikiev, Denis},
+  title        = {LayTracer: Fast two-point seismic ray tracing in layered media},
+  month        = mar,
+  year         = 2026,
+  publisher    = {Zenodo},
+  version      = {0.1.0},  
+  url          = {https://github.com/danikiev/LayTracer},
+  license      = {MIT}
 }
 ```

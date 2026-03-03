@@ -140,6 +140,7 @@ Notes:
 - The workflow uses `fetch-depth: 0` so `setuptools_scm` can resolve the tag correctly.
 - If PyPI publish fails with "File already exists", bump to a new tag and rerun.
 - Publishing is guarded: only strict semver tags in the form `vMAJOR.MINOR.PATCH` are accepted (example: `v1.2.3`).
+- Upload steps use `skip-existing: true`, so reruns with the same version do not fail if files are already present.
 
 ## 6) Release-event automation (`release-on-published.yml`)
 

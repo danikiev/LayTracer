@@ -1,0 +1,24 @@
+{
+    "title":"LayTracer: Fast two-point seismic ray tracing in layered media",
+    "version":"0.1.0",    
+    "license":"MIT",
+    "upload_type":"software",
+    "description":"LayTracer is an open-source Python package for computing ray paths, travel times, and amplitude attributes in horizontally layered (1D) velocity models.",
+    "keywords":[
+       "Geophysics",
+       "Seismology",
+       "Ray Tracing",
+       "Layered Media"       
+    ],
+    "access_right":"open",    
+    "language":"eng",
+    "creators":[       
+       {
+          "affiliation": "Center for Integrative Petroleum Research, King Fahd University of Petroleum and Minerals, Dhahran, Saudi Arabia",
+          "name":"Anikiev, Denis",
+          "orcid":"0000-0002-4729-2659",
+          "type":"contactperson"
+       }
+    ]
+ }
+ 
