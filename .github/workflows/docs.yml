@@ -36,7 +36,8 @@ jobs:
             texlive-luatex \
             texlive-latex-extra \
             texlive-fonts-recommended \
-            texlive-pictures
+            texlive-pictures \
+            fonts-freefont-otf
 
       - name: Install Python dependencies
         run: |
