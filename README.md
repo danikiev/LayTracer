@@ -9,7 +9,7 @@ LayTracer is a Python package for computing ray paths, travel times, and amplitu
 ## ✨ Features
 
 | Category | Capability |
-|:---|:---|
+| :------- | :--------- |
 | **Ray tracing** | Second-order (quadratic) Newton solver using the dimensionless *q*-parameter for robust, singularity-free convergence |
 | **Travel time** | Layer-by-layer travel time summation from the solved ray parameter |
 | **Attenuation** | Intrinsic absorption operator *t\** from quality factors *Q* |
@@ -45,6 +45,13 @@ pip install -e .
 
 ```batch
 install.bat
+```
+
+### Quick install (Linux / macOS)
+
+```bash
+chmod +x install.sh
+./install.sh
 ```
 
 ### Dependencies
@@ -197,7 +204,8 @@ conda activate laytracer
 # Windows
 build-docs.bat
 # Linux / macOS
-cd docs && make html
+chmod +x build-docs.sh
+./build-docs.sh
 ```
 
 Build docs with PDF output:
@@ -207,7 +215,22 @@ conda activate laytracer
 # Windows
 build-docs.bat -pdf
 # Linux / macOS
-cd docs && make html && make latexpdf
+chmod +x build-docs.sh
+./build-docs.sh -pdf
+```
+
+You can do also using `make` commands:
+
+```bash
+conda activate laytracer
+cd docs
+# Build HTML
+make html
+# Build PDF
+make latexpdf
+# Run a local server to view HTML
+cd build/html
+python -m http.server
 ```
 
 ---
