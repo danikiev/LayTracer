@@ -10,8 +10,22 @@ permissions:
   contents: read
 
 jobs:
+  validate-tag:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Validate strict semver tag
+        shell: bash
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Invalid tag '$TAG'. Expected strict semver format: vMAJOR.MINOR.PATCH"
+            exit 1
+          fi
+
   build:
     runs-on: ubuntu-latest
+    needs: validate-tag
 
     steps:
       - name: Checkout
