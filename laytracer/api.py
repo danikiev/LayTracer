@@ -272,6 +272,21 @@ def _trace_one(
             curr_z = sub_z
 
     # Flatten arrays for solver
+    if len(ray_segments) == 0:
+        # Degenerate case: source and receiver share the same depth,
+        # or the path lies entirely outside the model.  Return a
+        # minimal result (zero travel time, straight-line ray, NaN
+        # amplitude quantities) so the caller can proceed.
+        ray3d = np.array([[sx, sy, sz], [rx, ry, rz]])
+        return (
+            0.0 if epic < 1e-10 and abs(sz - rz) < 1e-10 else np.nan,
+            ray3d,
+            np.nan,
+            np.nan if compute_amplitude else None,
+            np.nan if compute_amplitude else None,
+            np.nan if compute_amplitude else None,
+        )
+
     all_h = np.concatenate([s["h"] for s in ray_segments])
     all_v = np.concatenate([s["v"] for s in ray_segments])
     
