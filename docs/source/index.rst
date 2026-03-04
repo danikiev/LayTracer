@@ -6,9 +6,9 @@ Overview
 
 **LayTracer** is an open-source Python package for computing ray paths, travel times, and amplitude attributes in horizontally layered (1D) velocity models with constant layer velocities. It is based on the dimensionless ray parameter method of :cite:t:`FangChen2019`, achieving rapid convergence.
 
-**Version:** |release|
-
 **Documentation:** `danikiev.github.io/LayTracer <https://danikiev.github.io/LayTracer>`_
+
+**Current Version:** |release|
 
 ----
 
@@ -22,20 +22,11 @@ Overview
 * Standalone `Matplotlib <https://matplotlib.org/>`_ / `Plotly <https://plotly.com/>`_ visualisation
 * Comprehensive `Sphinx <https://www.sphinx-doc.org/>`_ documentation with extensive theory available at `danikiev.github.io/LayTracer <https://danikiev.github.io/LayTracer>`_
 
-----
-
-.. toctree::
-   :maxdepth: 3
-   :hidden:
-   :caption: Contents
-
-   self   
-   getting_started
-   methodology
-   examples/index
-   api/index
-
 .. only:: html
+
+   ----
+
+   **Quick Links:**
 
    .. grid:: 1 2 4 4
       
@@ -84,3 +75,39 @@ Overview
          :fas:`file-pdf;pst-color-primary` **Download as PDF**
          ^^^
          Download this documentation as a standalone :fas:`file-pdf` PDF file.
+
+----
+
+.. admonition:: Citing LayTracer
+
+   To cite a particular version of LayTracer, please use the following format, e.g. for version 0.1.0:
+
+   | **Anikiev, D. (2026).** *LayTracer: Fast two-point seismic ray tracing in layered media (v0.1.0).* Zenodo.
+   | https://doi.org/10.5281/zenodo.18850920
+
+   To cite the collection of all versions of LayTracer, please use the following format:
+
+   | **Anikiev, D. (2026).** *LayTracer: Fast two-point seismic ray tracing in layered media.* Zenodo. 
+   | https://doi.org/10.5281/zenodo.18850919
+
+   This DOI represents all versions, and will always resolve to the latest one.
+
+.. only:: html
+   
+   **Latest DOI:** |DOI|
+
+   .. |DOI| image:: https://zenodo.org/badge/1160026484.svg
+         :target: https://zenodo.org/badge/latestdoi/1160026484
+
+----
+
+.. toctree::
+   :maxdepth: 3
+   :hidden:
+   :caption: Contents
+
+   self   
+   getting_started
+   methodology
+   examples/index
+   api/index

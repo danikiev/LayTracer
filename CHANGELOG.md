@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (unified from the former `build_layer_stack` / `build_layer_stack_fast` pair)
 - batched parallel dispatch: rays are grouped into ~n_workers batches with
   lightweight NumPy-only serialisation instead of per-ray DataFrame pickling
+- updated documentation index page
 
 ### Removed
 

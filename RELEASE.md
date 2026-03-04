@@ -156,3 +156,64 @@ When to use which workflow:
 - Use `release.yml` if you want publishing to start immediately on tag push (`git push origin vX.Y.Z`).
 - Use `release-on-published.yml` if you want publishing only after explicitly creating/publishing a GitHub Release in the UI.
 - Both workflows enforce strict semver tags (`vMAJOR.MINOR.PATCH`) before build/publish jobs run.
+
+## 7) Zenodo release plan (recommended order)
+
+Use this checklist to publish a citable Zenodo record for each tagged release.
+
+1. One-time integration setup:
+    - Sign in to [https://zenodo.org](https://zenodo.org) (or sandbox first: [https://sandbox.zenodo.org](https://sandbox.zenodo.org)).
+    - In Zenodo GitHub settings, enable the `LayTracer` repository.
+    - Verify the repository has a valid `.zenodo.json` metadata file.
+
+### Zenodo DOI badge (before first release)
+
+- Get the GitHub repository ID from: `https://api.github.com/repos/{user}/{repo}`.
+- Add a DOI badge to your README before the first release.
+
+Markdown (`README.md`):
+
+```markdown
+[![DOI](https://zenodo.org/badge/{github_id}.svg)](https://zenodo.org/badge/latestdoi/{github_id})
+```
+
+reStructuredText (`README.rst`):
+
+```rst
+|DOI|
+
+.. |DOI| image:: https://zenodo.org/badge/{github_id}.svg
+        :target: https://zenodo.org/badge/latestdoi/{github_id}
+```
+
+Example of a badge, this repository:
+
+[![DOI](https://zenodo.org/badge/1160026484.svg)](https://zenodo.org/badge/latestdoi/1160026484)
+
+Notes:
+
+- The DOI badge appears only after the first published release, then points to the latest DOI.
+- See GitHub documentation for Zenodo webhook/setup details.
+- For this repository, DOI badge setup is already done; keep this section as reference for future migrations/new repos.
+
+1. Pre-release metadata update:
+    - Update `.zenodo.json` fields for the new release (`version`, `description`, `keywords`, `creators` as needed).
+    - Ensure `LICENSE` and `README.md` are current and consistent with release notes.
+
+2. Create the release in GitHub:
+    - Push the semver tag (`vMAJOR.MINOR.PATCH`).
+    - Create/publish a GitHub Release for that tag (include highlights from `CHANGELOG.md`).
+
+3. Validate Zenodo deposition:
+    - Confirm Zenodo auto-created a new versioned deposition from the GitHub release.
+    - Check title, version, creators, license, and description in Zenodo UI.
+    - Verify files are attached correctly (source archive and metadata).
+
+4. Finalize and communicate DOI:
+    - Publish/approve the Zenodo record (if not auto-published by your setup).
+    - Copy version DOI and concept DOI into release notes and project docs (e.g., `README.md`).
+    - Optionally add/update DOI badge in `README.md`.
+
+5. Post-release verification:
+    - Open the DOI link and ensure citation metadata resolves correctly.
+    - Confirm the new version is discoverable under the LayTracer concept record.
