@@ -117,13 +117,34 @@ def _trace_one(
         valid = stack.h > 1e-9
         if not np.any(valid):
             ray3d = np.array([[sx, sy, sz], [rx, ry, rz]])
-            return (
-                0.0 if epic < 1e-10 and abs(sz - rz) < 1e-10 else np.nan,
-                ray3d, np.nan,
-                np.nan if compute_amplitude else None,
-                np.nan if compute_amplitude else None,
-                np.nan if compute_amplitude else None,
-            )
+
+            if epic < 1e-10:
+                # Degenerate ray: source and receiver at same point
+                return (
+                    0.0, ray3d, 0.0,
+                    0.0 if compute_amplitude else None,
+                    None if compute_amplitude else None,
+                    1.0 if compute_amplitude else None,
+                )
+
+            # Same-depth horizontal ray: straight line within one layer.
+            # All layers had zero thickness, meaning z_src ≈ z_rcv.
+            # The ray travels horizontally through the layer at that depth.
+            v_hz = float(vel[0])
+            tt_hz = epic / v_hz
+            p_hz = 1.0 / v_hz  # horizontal (grazing) incidence
+
+            if compute_amplitude:
+                q_arr = stack.qp if source_phase == "P" else stack.qs
+                tstar_hz = float(epic / (v_hz * q_arr[0])) if q_arr is not None else 0.0
+                spreading_hz = epic * v_hz  # L = r·v for homogeneous medium
+                trans_hz = 1.0              # no interface crossed
+            else:
+                tstar_hz = None
+                spreading_hz = None
+                trans_hz = None
+
+            return (tt_hz, ray3d, p_hz, tstar_hz, spreading_hz, trans_hz)
 
         h_f = stack.h[valid]
         v_f = vel[valid]

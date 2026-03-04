@@ -29,6 +29,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - handle degenerate case in `_trace_one` function to return minimal result
+- fix NaN results for same-depth source–receiver rays (e.g. stations and grid
+  points both at z = 0): zero-thickness layer stack is now handled as a
+  horizontal straight-line ray with correct travel time, geometrical spreading,
+  attenuation t*, and transmission product instead of returning NaN
 
 ## [v0.1.0] - 2026-03-03
 
