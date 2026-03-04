@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- implemented batched parallel processing for ray tracing and enhance result unpacking
+
 ### Fixed
 
 - handle degenerate case in `_trace_one` function to return minimal result
