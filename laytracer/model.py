@@ -4,12 +4,13 @@ Velocity model representation and layer geometry for 1-D layered media.
 This module provides a :class:`LayerStack` data structure that encapsulates
 the sequence of layers traversed by a ray between a source and receiver,
 and a helper :func:`build_layer_stack` to extract this structure from a
-velocity model DataFrame.
+velocity model (DataFrame or :class:`ModelArrays`).
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Callable, Union
 
 import numpy as np
 import pandas as pd
@@ -69,6 +70,35 @@ class LayerStack:
         return self.qs
 
 
+@dataclass
+class ModelArrays:
+    """Pre-extracted numpy arrays from a velocity DataFrame.
+
+    Use :meth:`from_dataframe` to construct once and pass to
+    :func:`build_layer_stack` to avoid repeated DataFrame
+    column access when tracing many rays.
+    """
+
+    depths: np.ndarray
+    vp: np.ndarray
+    vs: np.ndarray
+    rho: np.ndarray | None = None
+    qp: np.ndarray | None = None
+    qs: np.ndarray | None = None
+
+    @classmethod
+    def from_dataframe(cls, vel_df: pd.DataFrame) -> "ModelArrays":
+        """Extract arrays once from *vel_df*."""
+        return cls(
+            depths=vel_df["Depth"].values.astype(np.float64),
+            vp=vel_df["Vp"].values.astype(np.float64),
+            vs=vel_df["Vs"].values.astype(np.float64),
+            rho=vel_df["Rho"].values.astype(np.float64) if "Rho" in vel_df.columns else None,
+            qp=vel_df["Qp"].values.astype(np.float64) if "Qp" in vel_df.columns else None,
+            qs=vel_df["Qs"].values.astype(np.float64) if "Qs" in vel_df.columns else None,
+        )
+
+
 def _layer_index(depth: float, boundaries: np.ndarray) -> int:
     """Return the index of the layer containing *depth*.
 
@@ -92,8 +122,26 @@ def _layer_index(depth: float, boundaries: np.ndarray) -> int:
     return max(idx, 0)
 
 
+def _extract_arrays(
+    vel_model: Union[pd.DataFrame, ModelArrays],
+) -> tuple[np.ndarray, np.ndarray, np.ndarray,
+           np.ndarray | None, np.ndarray | None, np.ndarray | None]:
+    """Return ``(depths, vp, vs, rho, qp, qs)`` from either input type."""
+    if isinstance(vel_model, ModelArrays):
+        return (vel_model.depths, vel_model.vp, vel_model.vs,
+                vel_model.rho, vel_model.qp, vel_model.qs)
+    # pd.DataFrame path
+    depths = vel_model["Depth"].values.astype(np.float64)
+    vp = vel_model["Vp"].values.astype(np.float64)
+    vs = vel_model["Vs"].values.astype(np.float64)
+    rho = vel_model["Rho"].values.astype(np.float64) if "Rho" in vel_model.columns else None
+    qp = vel_model["Qp"].values.astype(np.float64) if "Qp" in vel_model.columns else None
+    qs = vel_model["Qs"].values.astype(np.float64) if "Qs" in vel_model.columns else None
+    return depths, vp, vs, rho, qp, qs
+
+
 def build_layer_stack(
-    vel_df: pd.DataFrame,
+    vel_model: Union[pd.DataFrame, ModelArrays],
     z_src: float,
     z_rcv: float,
 ) -> LayerStack:
@@ -107,10 +155,11 @@ def build_layer_stack(
 
     Parameters
     ----------
-    vel_df : pandas.DataFrame
-        Velocity model.  Required columns: ``Depth``, ``Vp``, ``Vs``.
-        Optional columns: ``Rho``, ``Qp``, ``Qs``.
-        ``Depth`` values define the *top* of each layer.
+    vel_model : pandas.DataFrame or ModelArrays
+        Velocity model.  A DataFrame must have columns ``Depth``,
+        ``Vp``, ``Vs`` (optional: ``Rho``, ``Qp``, ``Qs``).
+        A :class:`ModelArrays` instance avoids repeated column
+        extraction when tracing many rays.
     z_src : float
         Source depth (positive downward, m).
     z_rcv : float
@@ -120,17 +169,11 @@ def build_layer_stack(
     -------
     LayerStack
     """
-    depths = vel_df["Depth"].values.astype(np.float64)
-    vp_all = vel_df["Vp"].values.astype(np.float64)
-    vs_all = vel_df["Vs"].values.astype(np.float64)
+    depths, vp_all, vs_all, rho_all, qp_all, qs_all = _extract_arrays(vel_model)
 
-    has_rho = "Rho" in vel_df.columns
-    has_qp = "Qp" in vel_df.columns
-    has_qs = "Qs" in vel_df.columns
-
-    rho_all = vel_df["Rho"].values.astype(np.float64) if has_rho else None
-    qp_all = vel_df["Qp"].values.astype(np.float64) if has_qp else None
-    qs_all = vel_df["Qs"].values.astype(np.float64) if has_qs else None
+    has_rho = rho_all is not None
+    has_qp = qp_all is not None
+    has_qs = qs_all is not None
 
     z_top = min(z_src, z_rcv)
     z_bot = max(z_src, z_rcv)
@@ -181,6 +224,10 @@ def build_layer_stack(
         qp=qp_all[slc].copy() if has_qp else None,
         qs=qs_all[slc].copy() if has_qs else None,
     )
+
+
+# Backward-compatible alias
+build_layer_stack_fast = build_layer_stack
 
 
 def discretize_gradient_layer(

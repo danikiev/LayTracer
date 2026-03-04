@@ -17,7 +17,7 @@ import pandas as pd
 import psutil
 from joblib import Parallel, delayed
 
-from .model import LayerStack, build_layer_stack
+from .model import LayerStack, ModelArrays, build_layer_stack
 from .solver import RayResult, solve
 
 
@@ -59,17 +59,20 @@ def _trace_batch(batch):
 
     Receives all shared data packed into *batch* so that the ``loky``
     backend serialises it only once per worker (not once per ray).
+    Uses :class:`ModelArrays` (numpy) instead of a DataFrame for
+    lightweight pickling and avoids repeated column extraction.
     """
-    (batch_pairs, vel_df, source_phase, refl_list, refr_list,
+    (batch_indices, source_coords, receiver_coords, model_arrays,
+     source_phase, refl_list, refr_list,
      compute_amplitude, transcoef_method, tol, max_iter) = batch
 
     results = []
-    for src, rcv in batch_pairs:
+    for isrc, ircv in batch_indices:
         results.append(
             _trace_one(
-                vel_df=vel_df,
-                src=src,
-                rcv=rcv,
+                ma=model_arrays,
+                src=source_coords[isrc],
+                rcv=receiver_coords[ircv],
                 source_phase=source_phase,
                 refl_list=refl_list,
                 refr_list=refr_list,
@@ -83,7 +86,7 @@ def _trace_batch(batch):
 
 
 def _trace_one(
-    vel_df: pd.DataFrame,
+    ma: ModelArrays,
     src: np.ndarray,
     rcv: np.ndarray,
     source_phase: str,
@@ -103,59 +106,64 @@ def _trace_one(
     dx, dy = rx - sx, ry - sy
     epic = np.sqrt(dx * dx + dy * dy)
 
-    current_z = sz
-    current_phase = source_phase
-    
-    # We will accumulate arrays for the solver
-    h_total = []
-    v_total = []
-    lmd_total = []  # will compute after vmax
-    
-    # For amplitude: interactions at interfaces
-    # We need to track: (depth, type, in_phase, out_phase, layer_abover, layer_below)
-    interactions = [] 
-    
-    # Combine reflections and final receiver into a target list
-    # logic: The ray goes from current -> refl1 -> refl2 -> receiver
-    targets = []
-    for z_refl, ph_next in refl_list:
-        targets.append((z_refl, "reflect", ph_next))
-    targets.append((rz, "arrival", None))
+    # ── Fast path for direct waves (no reflections / refractions) ──
+    # Avoids itinerary-loop overhead: one build_layer_stack call,
+    # no dict wrapping, straight into the solver.
+    if not refl_list and not refr_list:
+        stack = build_layer_stack(ma, sz, rz)
+        vel = stack.v("Vp" if source_phase == "P" else "Vs")
 
-    # Helper to extract a stack for one leg
-    full_stack = build_layer_stack(vel_df, -1e9, 1e9) # Get full model for efficient queries
-    # actually build_layer_stack logic is handy, let's just use it per leg
-    
-    for i, (z_target, interaction_type, next_phase) in enumerate(targets):
-        # Build stack for this leg
-        leg_stack = build_layer_stack(vel_df, current_z, z_target)
-                        
-        # We append simple arrays
-        v_leg = leg_stack.v("Vp" if current_phase == "P" else "Vs")
-        h_total.append(leg_stack.h)
-        v_total.append(v_leg)
-        
-        # Handle the interaction at the END of this leg (if not arrival)
-        if interaction_type == "reflect":
-            # Record explicit reflection
-            interactions.append({
-                "type": "reflection",
-                "depth": z_target,
-                "in_phase": current_phase,
-                "out_phase": next_phase,
-                "cum_idx": sum(len(x) for x in h_total) # Index boundary in flattened array
-            })
-            current_phase = next_phase
-      
-        pass # Logic continues below...
-    
-    waypoints = [] # (depth, type, out_phase)
-    
-    # 1. Reflections are mandatory waypoints affecting direction
-    for z, ph in refl_list:
-        waypoints.append((z, "reflect", ph))
-        
-    # Let's start with the sequence of directional targets (Reflections + Receiver).
+        # Filter zero-thickness layers
+        valid = stack.h > 1e-9
+        if not np.any(valid):
+            ray3d = np.array([[sx, sy, sz], [rx, ry, rz]])
+            return (
+                0.0 if epic < 1e-10 and abs(sz - rz) < 1e-10 else np.nan,
+                ray3d, np.nan,
+                np.nan if compute_amplitude else None,
+                np.nan if compute_amplitude else None,
+                np.nan if compute_amplitude else None,
+            )
+
+        h_f = stack.h[valid]
+        v_f = vel[valid]
+
+        # Build a single segment (avoid dict — use list-of-one)
+        seg = {
+            "h": h_f, "v": v_f,
+            "vp": stack.vp[valid], "vs": stack.vs[valid],
+            "rho": stack.rho[valid] if stack.rho is not None else None,
+            "qp": stack.qp[valid] if stack.qp is not None else None,
+            "qs": stack.qs[valid] if stack.qs is not None else None,
+            "phase": source_phase, "start_z": sz, "end_z": rz,
+        }
+
+        res = solve(
+            h=h_f, v=v_f,
+            segments=[seg], interactions=[],
+            epicentral_dist=epic, z_src=sz, z_rcv=rz,
+            compute_amplitude=compute_amplitude,
+            transcoef_method=transcoef_method,
+            tol=tol, max_iter=max_iter,
+        )
+
+        ray2d = res.ray_path
+        M = ray2d.shape[0]
+        ray3d = np.empty((M, 3))
+        if epic > 1e-10:
+            ux, uy = dx / epic, dy / epic
+        else:
+            ux, uy = 1.0, 0.0
+        ray3d[:, 0] = sx + ray2d[:, 0] * ux
+        ray3d[:, 1] = sy + ray2d[:, 0] * uy
+        ray3d[:, 2] = ray2d[:, 1]
+
+        return (
+            res.travel_time, ray3d, res.ray_parameter,
+            res.tstar, res.spreading, res.trans_product,
+        )
+
+    # ── General path: reflections and/or refractions ──
     directional_targets = [(z, ph) for z, ph in refl_list] 
         
     ray_segments = [] # store (h, v, phase, direction_sign)
@@ -200,7 +208,7 @@ def _trace_one(
             # sub_z is the end of this sub-segment
             
             # Note: build_layer_stack is robust for z1 > z2 (computes thickness correctly)
-            stack = build_layer_stack(vel_df, curr_z, sub_z)
+            stack = build_layer_stack(ma, curr_z, sub_z)
             
             # Phase velocity
             vel = stack.v("Vp" if curr_ph == "P" else "Vs")
@@ -237,10 +245,10 @@ def _trace_one(
                 delta = 1.0 # 1 meter check
                 if is_down_interaction:
                     # Look at [z, z+delta]
-                    p_stack = build_layer_stack(vel_df, z_int, z_int + delta)
+                    p_stack = build_layer_stack(ma, z_int, z_int + delta)
                 else:
                     # Look at [z-delta, z]
-                    p_stack = build_layer_stack(vel_df, z_int - delta, z_int)
+                    p_stack = build_layer_stack(ma, z_int - delta, z_int)
                 
                 # Check if we are at model boundary (bottom/top)
                 # build_layer_stack handles this gracefully generally, 
@@ -521,9 +529,11 @@ def trace_rays(
             f"Cannot strictly reflect and refract at the same depth(s): {common}"
         )
 
-    # ── Shared keyword arguments for _trace_one ──
+    # ── Pre-extract arrays from DataFrame once (lightweight pickle) ──
+    ma = ModelArrays.from_dataframe(velocity_df)
+
     common_kw = dict(
-        vel_df=velocity_df,
+        ma=ma,
         source_phase=source_phase,
         refl_list=refl_list,
         refr_list=refr_list,
@@ -535,14 +545,10 @@ def trace_rays(
 
     # ── Sequential path ──
     if n_rays <= sequential_limit or n_jobs == 1:
-        pairs = [
-            (sources[i], receivers[j])
+        results = [
+            _trace_one(src=sources[i], rcv=receivers[j], **common_kw)
             for i in range(n_src)
             for j in range(n_rcv)
-        ]
-        results = [
-            _trace_one(src=s, rcv=r, **common_kw)
-            for s, r in pairs
         ]
         return _unpack_results(results, compute_amplitude)
 
@@ -571,17 +577,22 @@ def trace_rays(
                 f"(based on {available_mem / 1e9:.1f} GB available RAM)"
             )
 
-    # ── Helper: build batches for a set of (src, rcv) pairs ──
-    def _make_batches(pairs_list):
-        """Split *pairs_list* into ~n_workers equal batches, each
-        carrying the shared data needed by :func:`_trace_batch`."""
-        batch_size = max(1, len(pairs_list) // n_workers)
+    # ── Helper: build batches for a set of index pairs ──
+    def _make_batches(index_pairs, src_arr, rcv_arr):
+        """Split *index_pairs* into ~n_workers equal batches.
+
+        Each batch carries the shared source/receiver arrays and
+        :class:`ModelArrays` (numpy-only, fast to pickle) rather
+        than a DataFrame."""
+        batch_size = max(1, len(index_pairs) // n_workers)
         batches = []
-        for i in range(0, len(pairs_list), batch_size):
-            batch_pairs = pairs_list[i : i + batch_size]
+        for i in range(0, len(index_pairs), batch_size):
+            chunk = index_pairs[i : i + batch_size]
             batches.append((
-                batch_pairs,
-                velocity_df,
+                chunk,
+                src_arr,
+                rcv_arr,
+                ma,
                 source_phase,
                 refl_list,
                 refr_list,
@@ -623,14 +634,14 @@ def trace_rays(
             chunk_rcv = receivers[rcv_start:rcv_end]
             chunk_nrcv = rcv_end - rcv_start
 
-            # Build pairs for this chunk
+            # Build index pairs for this chunk (indices into sources / chunk_rcv)
             chunk_pairs = [
-                (sources[i], chunk_rcv[j])
+                (i, j)
                 for i in range(n_src)
                 for j in range(chunk_nrcv)
             ]
 
-            batches = _make_batches(chunk_pairs)
+            batches = _make_batches(chunk_pairs, sources, chunk_rcv)
 
             batch_results = Parallel(
                 n_jobs=n_workers, backend=backend, pre_dispatch="all"
@@ -697,13 +708,13 @@ def trace_rays(
         )
 
     # ── Standard batched parallel path (fits in one chunk) ──
-    pairs = [
-        (sources[i], receivers[j])
+    all_pairs = [
+        (i, j)
         for i in range(n_src)
         for j in range(n_rcv)
     ]
 
-    batches = _make_batches(pairs)
+    batches = _make_batches(all_pairs, sources, receivers)
 
     batch_results = Parallel(
         n_jobs=n_workers, backend=backend, pre_dispatch="all"

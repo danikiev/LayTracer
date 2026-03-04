@@ -8,6 +8,7 @@ Model
 ~~~~~
 .. autosummary::
    LayerStack
+   ModelArrays
    build_layer_stack
 
 Solver
@@ -35,7 +36,7 @@ Visualisation
    plot
 """
 
-from .model import LayerStack, build_layer_stack
+from .model import LayerStack, ModelArrays, build_layer_stack
 from .solver import (
     RayResult,
     solve,
@@ -59,6 +60,7 @@ except ImportError:
 __all__ = [
     # model
     "LayerStack",
+    "ModelArrays",
     "build_layer_stack",
     # solver
     "RayResult",

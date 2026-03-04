@@ -13,6 +13,9 @@ Model
 .. autoclass:: laytracer.LayerStack
    :members:
 
+.. autoclass:: laytracer.ModelArrays
+   :members:
+
 .. autofunction:: laytracer.build_layer_stack
 
 Solver

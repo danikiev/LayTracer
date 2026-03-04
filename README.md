@@ -194,7 +194,8 @@ fig.show()
 | Symbol | Description |
 | --- | --- |
 | `LayerStack` | Data class holding layer thicknesses, velocities (Vp, Vs), densities, and Q-factors |
-| `build_layer_stack(vel_df, z_src, z_rcv)` | Extract the traversed layer stack between source and receiver depths |
+| `ModelArrays` | Pre-extracted NumPy arrays from a velocity DataFrame for efficient repeated tracing |
+| `build_layer_stack(vel_model, z_src, z_rcv)` | Extract the traversed layer stack between source and receiver depths (accepts DataFrame or `ModelArrays`) |
 
 ### Solver
 
@@ -352,7 +353,7 @@ Test modules:
 LayTracer/
 ├── laytracer/               # Main package
 │   ├── __init__.py          # Public API exports
-│   ├── model.py             # LayerStack, build_layer_stack
+│   ├── model.py             # LayerStack, ModelArrays, build_layer_stack
 │   ├── solver.py            # Core ray tracing solver (q-parameter + Newton)
 │   ├── amplitude.py         # Transmission coefficients, Zoeppritz, Brewster
 │   ├── api.py               # High-level multi-ray interface (trace_rays)
