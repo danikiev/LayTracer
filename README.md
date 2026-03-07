@@ -408,10 +408,10 @@ If you use a specific version of LayTracer in your research, please cite:
   title        = {{LayTracer}: {F}ast two-point seismic ray tracing in layered media},
   year         = {2026},
   publisher    = {Zenodo},
-  version      = {0.2.0},  
+  version      = {0.2.1},  
   url          = {https://github.com/danikiev/LayTracer},
   license      = {MIT},
-  doi          = {10.5281/zenodo.18866102}
+  doi          = {10.5281/zenodo.18897224}
 }
 ```
 
