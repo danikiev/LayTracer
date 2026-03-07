@@ -400,22 +400,22 @@ LayTracer is released under the [MIT License](LICENSE).
 
 ## 📝 Citation
 
-If you use LayTracer in your research, please cite:
+If you use a specific version of LayTracer in your research, please cite:
 
 ```bibtex
-@software{Anikiev2026LayTracerv0.1.0,
+@software{Anikiev2026LayTracerVersion,
   author       = {Anikiev, Denis},
   title        = {{LayTracer}: {F}ast two-point seismic ray tracing in layered media},
   year         = {2026},
   publisher    = {Zenodo},
-  version      = {0.1.0},  
+  version      = {0.2.0},  
   url          = {https://github.com/danikiev/LayTracer},
   license      = {MIT},
-  doi          = {10.5281/zenodo.18850920}
+  doi          = {10.5281/zenodo.18866102}
 }
 ```
 
-for a specific version, or the following for collection (the latest version):
+To cite the whole collection (directs to the latest version) please use:
 
 ```bibtex
 @misc{Anikiev2026LayTracer,

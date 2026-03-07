@@ -80,10 +80,10 @@ Overview
 
 .. admonition:: Citing LayTracer
 
-   To cite a particular version of LayTracer, please use the following format, e.g. for version 0.1.0:
+   To cite a particular version of LayTracer, please use the following format, e.g. for version 0.2.0:
 
-   | **Anikiev, D. (2026).** *LayTracer: Fast two-point seismic ray tracing in layered media (0.1.0).* Zenodo.
-   | https://doi.org/10.5281/zenodo.18850920
+   | **Anikiev, D. (2026).** *LayTracer: Fast two-point seismic ray tracing in layered media (0.2.0).* Zenodo.
+   | https://doi.org/10.5281/zenodo.18866102
 
    To cite the collection of all versions of LayTracer, please use the following format:
 
