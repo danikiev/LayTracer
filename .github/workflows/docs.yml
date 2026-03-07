@@ -2,7 +2,7 @@ name: Docs
 
 on:
   push:
-    branches: ["main"]
+    branches: ["main", "dev"]
   workflow_call:
   workflow_dispatch:
 
@@ -69,6 +69,7 @@ jobs:
           path: docs/build/html
 
   deploy-pages:
+    if: github.ref == 'refs/heads/main'
     needs: build-docs
     runs-on: ubuntu-latest
     environment:

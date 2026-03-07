@@ -139,6 +139,7 @@ git push origin v0.1.2
 Notes:
 
 - The workflow uses `fetch-depth: 0` so `setuptools_scm` can resolve the tag correctly.
+- Release tags must point to a commit contained in `main`; tags created from `dev` or any other branch are rejected by the workflow.
 - If PyPI publish fails with "File already exists", bump to a new tag and rerun.
 - Publishing is guarded: only strict semver tags in the form `vMAJOR.MINOR.PATCH` are accepted (example: `v1.2.3`).
 - Upload steps use `skip-existing: true`, so reruns with the same version do not fail if files are already present.
@@ -151,6 +152,7 @@ Behavior:
 
 - Trigger: GitHub Release event `published` (plus optional `workflow_dispatch`).
 - Flow: build package -> publish to TestPyPI -> wait for approval -> publish same artifacts to PyPI.
+- The published release tag must point to a commit contained in `main`; releases created from tags on other branches are rejected during validation.
 
 When to use which workflow:
 
