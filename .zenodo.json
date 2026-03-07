@@ -1,9 +1,9 @@
 {
     "title":"LayTracer: Fast two-point seismic ray tracing in layered media",
-   "version":"0.2.0",    
+   "version":"0.2.1",    
     "license":"MIT",
     "upload_type":"software",
-   "description":"LayTracer is an open-source Python package for computing ray paths, travel times, and amplitude attributes in horizontally layered (1D) velocity models. Version 0.2.0 improves performance and scalability through more efficient data handling for parallel execution, optimized treatment of simple direct-wave cases, adaptive memory-aware workload chunking with progress and ETA feedback, unified model input handling, and batched parallel processing with lighter-weight numerical data transfer.",
+   "description":"LayTracer is an open-source Python package for computing ray paths, travel times, and amplitude attributes in horizontally layered (1D) velocity models. Version 0.2.1 adds energy-flux-normalized reflection and transmission coefficient support following Červený (2001), including a new normalized transmission-coefficient option in ray tracing and solving workflows, updated examples and methodology documentation, and tests covering normalized and vertical-ray cases. The release also renames the transmission-coefficient methods for clarity and removes the former impedance-only normal-incidence option.",
     "keywords":[
        "Geophysics",
        "Seismology",
