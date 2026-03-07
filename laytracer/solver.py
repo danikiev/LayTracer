@@ -272,7 +272,7 @@ def solve(
     z_src: float,
     z_rcv: float,
     compute_amplitude: bool = False,
-    transcoef_method: str = "angle",
+    transcoef_method: str = "standard",
     tol: float = 1e-4,
     max_iter: int = 10,
 ) -> RayResult:
@@ -555,8 +555,8 @@ def solve(
     )
 
 def _calc_interaction_coeff(p, inter, segments, seg_idx, method):
-    from .amplitude import transmission_normal, psv_rt_coefficients
-    
+    from .amplitude import psv_rt_coefficients, normalize_rt_coefficient
+
     # Current segment (incident side)
     seg_in = segments[seg_idx]
     
@@ -591,24 +591,20 @@ def _calc_interaction_coeff(p, inter, segments, seg_idx, method):
     
     prefix = "R" if itype == "reflection" else "T"
     key = f"{prefix}{in_phase.lower()}{out_phase.lower()}"
-    
-    if method == "normal":
-         # Normal incidence approx
-         v1 = vp1 if in_phase == "P" else vs1
-         v2 = vp2 if out_phase == "P" else vs2 
-         # We fallback to standard acoustic logic for P-P / S-S.
-         if in_phase != out_phase:
-             return 0.0
-         return abs(transmission_normal(v1, rho1, v2, rho2)) if itype == "transmission" else abs((v2*rho2 - v1*rho1)/(v2*rho2 + v1*rho1)) # approx
-        
-        
+
     RT = psv_rt_coefficients(p, vp1, vs1, rho1, vp2, vs2, rho2)
     
-    # The keys in psv_rt_coefficients are:
-    # Incident P: Rpp, Rps, Tpp, Tps
-    # Incident S: Rsp, Rss, Tsp, Tss
+    R_bar = RT.get(key, 0.0)
     
-    return float(abs(RT.get(key, 0.0)))
+    if method == "normalized":
+        v_in = vp1 if in_phase == "P" else vs1
+        v_out = vp2 if out_phase == "P" else vs2
+        if itype == "reflection":
+            v_out = vp1 if out_phase == "P" else vs1
+            rho2 = rho1
+        return float(abs(normalize_rt_coefficient(R_bar, p, v_in, rho1, v_out, rho2)))
+    
+    return float(abs(R_bar))
 
 
 def _calc_intra_transmission(
@@ -619,10 +615,9 @@ def _calc_intra_transmission(
     method: str,
 ) -> float:
     """Calculate transmission coefficient between two adjacent layers within a monotonic segment."""
-    from .amplitude import transmission_normal, psv_rt_coefficients
-    
+    from .amplitude import psv_rt_coefficients, normalize_rt_coefficient
+
     # Material properties
-    # Both layers are in the same segment arrays
     vp1 = float(seg["vp"][k_curr])
     vs1 = float(seg["vs"][k_curr])
     rho1 = float(seg["rho"][k_curr])
@@ -634,15 +629,16 @@ def _calc_intra_transmission(
     # Phase
     ph = seg["phase"]
     key = "Tpp" if ph == "P" else "Tss"
-    
-    if method == "normal":
-        v1 = vp1 if ph == "P" else vs1
-        v2 = vp2 if ph == "P" else vs2
-        return abs(transmission_normal(v1, rho1, v2, rho2))
-        
-    # Angle dependent
+
     RT = psv_rt_coefficients(p, vp1, vs1, rho1, vp2, vs2, rho2)
-    return float(abs(RT.get(key, 0.0)))
+    R_bar = RT.get(key, 0.0)
+    
+    if method == "normalized":
+        v_in = vp1 if ph == "P" else vs1
+        v_out = vp2 if ph == "P" else vs2
+        return float(abs(normalize_rt_coefficient(R_bar, p, v_in, rho1, v_out, rho2)))
+    
+    return float(abs(R_bar))
 
 
 
@@ -657,7 +653,7 @@ def _interface_transmission(
     method: str,
 ) -> float:
     """Transmission coefficient at the interface between layers *k_above* and *k_below*."""
-    from .amplitude import transmission_normal, psv_rt_coefficients
+    from .amplitude import psv_rt_coefficients, normalize_rt_coefficient
 
     v_above = stack.v(vel_type)[k_above]
     v_below = stack.v(vel_type)[k_below]
@@ -668,12 +664,16 @@ def _interface_transmission(
     rho_above = stack.rho[k_above]
     rho_below = stack.rho[k_below]
 
-    if method == "normal":
-        return abs(transmission_normal(v_above, rho_above, v_below, rho_below))
-
-    # Angle-dependent (full Zoeppritz)
+    # Full Zoeppritz
     vp_a, vs_a = stack.vp[k_above], stack.vs[k_above]
     vp_b, vs_b = stack.vp[k_below], stack.vs[k_below]
     RT = psv_rt_coefficients(p, vp_a, vs_a, rho_above, vp_b, vs_b, rho_below)
     key = "Tpp" if vel_type.lower() in ("vp", "p") else "Tss"
-    return float(abs(RT[key]))
+    R_bar = RT[key]
+
+    if method == "normalized":
+        v_in = float(v_above)
+        v_out = float(v_below)
+        return float(abs(normalize_rt_coefficient(R_bar, p, v_in, rho_above, v_out, rho_below)))
+
+    return float(abs(R_bar))

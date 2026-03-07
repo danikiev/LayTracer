@@ -127,6 +127,72 @@ for row, col, key, ylabel, title in labels:
 fig.tight_layout()
 plt.show()
 
+###############################################################################
+# Normalized P-wave coefficients (Červený, 2001)
+# -----------------------------------------------
+#
+# Energy-flux-normalized coefficients account for the impedance and
+# directional cosine contrast across the interface.  They are useful
+# for amplitude-preserving modelling because the product of
+# normalized transmission coefficients along a ray is the
+# displacement-amplitude transfer factor that conserves energy flux.
+#
+# The normalization follows :cite:t:`Cerveny2001` Eq. 5.3.10:
+#
+# .. math::
+#    R_{mn}^\text{norm} = \bar{R}_{mn}
+#    \sqrt{\frac{V_{\text{out}}\,\rho_{\text{out}}\,
+#          \cos\theta_{\text{out}}}
+#         {V_{\text{in}}\,\rho_{\text{in}}\,
+#          \cos\theta_{\text{in}}}}
+
+# Mapping: key -> (v_in, rho_in, v_out, rho_out)
+norm_map_P = {
+    "Rpp": (mi_vp, mi_rho, mi_vp, mi_rho),
+    "Rps": (mi_vp, mi_rho, mi_vs, mi_rho),
+    "Tpp": (mi_vp, mi_rho, mt_vp, mt_rho),
+    "Tps": (mi_vp, mi_rho, mt_vs, mt_rho),
+}
+
+RT_norm_P = {}
+for key, (vi, ri, vo, ro) in norm_map_P.items():
+    RT_norm_P[key] = lt.normalize_rt_coefficient(
+        RT[key], p_vec, vi, ri, vo, ro,
+    )
+
+ymax_Pn = max(
+    np.nanmax(np.abs(RT_norm_P[k])) for k in p_keys
+) * 1.1
+ymax_Pn = max(ymax_Pn, 0.5)
+
+fig, axes = plt.subplots(2, 2, figsize=(12, 9))
+fig.suptitle(
+    "Incident P-wave — normalized (Červený, 2001)\n"
+    f"Inc: Vp={mi_vp}, Vs={mi_vs}, ρ={mi_rho}  →  "
+    f"Trans: Vp={mt_vp}, Vs={mt_vs}, ρ={mt_rho}",
+    fontsize=11,
+)
+
+for row, col, key, ylabel, title in labels:
+    ax = axes[row, col]
+    ax.plot(angle_P, np.abs(RT[key]), "k-", lw=0.8, alpha=0.4, label="standard")
+    ax.plot(angle_P, np.abs(RT_norm_P[key]), "tab:blue", lw=1.5, label="normalized")
+    ax.axvline(crit_P, color="r", ls="--", lw=0.8,
+               label=f"T(P) crit. {crit_P:.1f}°")
+    for ba in brew_P.get(key, []):
+        ax.axvline(ba, color="tab:purple", ls=":", lw=0.8,
+                   label=f"Brewster {ba:.1f}°")
+    ax.set_xlim(0, 90)
+    ax.set_ylim(-0.05, max(ymax_P, ymax_Pn))
+    ax.set_xlabel("Incidence angle (°)")
+    ax.set_ylabel(ylabel)
+    ax.set_title(title)
+    ax.legend(fontsize=7, loc="upper right")
+    ax.grid(True, alpha=0.3)
+
+fig.tight_layout()
+plt.show()
+
 # %%
 # Ray diagrams (P-incidence)
 # --------------------------
@@ -363,6 +429,64 @@ for row, col, key, ylabel, title in labels_sv:
                    label=f"Brewster {ba:.1f}°")
     ax.set_xlim(0, 90)
     ax.set_ylim(-0.05, ymax_SV)
+    ax.set_xlabel("Incidence angle (°)")
+    ax.set_ylabel(ylabel)
+    ax.set_title(title)
+    ax.legend(fontsize=7, loc="upper right")
+    ax.grid(True, alpha=0.3)
+
+fig.tight_layout()
+plt.show()
+
+###############################################################################
+# Normalized SV-wave coefficients (Červený, 2001)
+# ------------------------------------------------
+#
+# Same energy-flux normalization applied to the SV-incident
+# coefficients.  The three critical-angle markers are preserved.
+
+# Mapping: key -> (v_in, rho_in, v_out, rho_out)
+norm_map_SV = {
+    "Rsp": (mi_vs, mi_rho, mi_vp, mi_rho),
+    "Rss": (mi_vs, mi_rho, mi_vs, mi_rho),
+    "Tsp": (mi_vs, mi_rho, mt_vp, mt_rho),
+    "Tss": (mi_vs, mi_rho, mt_vs, mt_rho),
+}
+
+RT_norm_SV = {}
+for key, (vi, ri, vo, ro) in norm_map_SV.items():
+    RT_norm_SV[key] = lt.normalize_rt_coefficient(
+        RT_sv[key], p_vec_sv, vi, ri, vo, ro,
+    )
+
+ymax_SVn = max(
+    np.nanmax(np.abs(RT_norm_SV[k])) for k in sv_keys
+) * 1.1
+ymax_SVn = max(ymax_SVn, 0.5)
+
+fig, axes = plt.subplots(2, 2, figsize=(12, 9))
+fig.suptitle(
+    "Incident SV-wave — normalized (Červený, 2001)\n"
+    f"Inc: Vp={mi_vp}, Vs={mi_vs}, ρ={mi_rho}  →  "
+    f"Trans: Vp={mt_vp}, Vs={mt_vs}, ρ={mt_rho}",
+    fontsize=11,
+)
+
+for row, col, key, ylabel, title in labels_sv:
+    ax = axes[row, col]
+    ax.plot(angle_SV, np.abs(RT_sv[key]), "k-", lw=0.8, alpha=0.4, label="standard")
+    ax.plot(angle_SV, np.abs(RT_norm_SV[key]), "tab:blue", lw=1.5, label="normalized")
+    ax.axvline(crit_tp, color="tab:blue", ls=":", lw=0.8,
+               label=f"T(P) crit. {crit_tp:.1f}°")
+    ax.axvline(crit_rp, color="r", ls="--", lw=0.8,
+               label=f"R(P) crit. {crit_rp:.1f}°")
+    ax.axvline(crit_ts, color="tab:green", ls="-.", lw=0.8,
+               label=f"T(SV) crit. {crit_ts:.1f}°")
+    for ba in brew_SV.get(key, []):
+        ax.axvline(ba, color="tab:purple", ls=":", lw=0.8,
+                   label=f"Brewster {ba:.1f}°")
+    ax.set_xlim(0, 90)
+    ax.set_ylim(-0.05, max(ymax_SV, ymax_SVn))
     ax.set_xlabel("Incidence angle (°)")
     ax.set_ylabel(ylabel)
     ax.set_title(title)

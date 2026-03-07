@@ -20,7 +20,7 @@ Documentation: [https://danikiev.github.io/LayTracer](https://danikiev.github.io
 | **Travel time** | Layer-by-layer travel time summation from the solved ray parameter |
 | **Attenuation** | Intrinsic absorption operator *t\** from quality factors *Q* |
 | **Spreading** | Relative geometrical spreading from the analytical ray-tube Jacobian ∂X/∂p |
-| **Reflection/Transmission** | Normal-incidence (impedance) and full angle-dependent Zoeppritz P-SV coefficients (all 8 R/T modes) |
+| **Reflection/Transmission** | Full angle-dependent Zoeppritz P-SV coefficients (all 8 R/T modes) with optional energy-flux normalization (Červený, 2001) |
 | **Brewster angles** | Automatic detection of Brewster-like zeros in R/T coefficient curves |
 | **Parallel execution** | Multi-ray tracing with `joblib` / `loky` backend for large surveys |
 | **Visualisation** | 2-D ray path plots (matplotlib) and interactive 3-D viewer (Plotly) |
@@ -161,7 +161,7 @@ result = laytracer.trace_rays(
     velocity_df=vel_df,
     vel_type="Vp",
     compute_amplitude=True,
-    transcoef_method="angle",  # full Zoeppritz
+    transcoef_method="standard",  # full Zoeppritz
 )
 
 # Access results
@@ -214,8 +214,8 @@ fig.show()
 
 | Symbol | Description |
 | --- | --- |
-| `transmission_normal(v1, rho1, v2, rho2)` | Normal-incidence displacement transmission coefficient |
 | `psv_rt_coefficients(p, vp1, vs1, rho1, vp2, vs2, rho2)` | All 8 P-SV reflection/transmission coefficients (Zoeppritz) |
+| `normalize_rt_coefficient(coeff, p, v_in, rho_in, v_out, rho_out)` | Energy-flux normalization of R/T coefficients (Červený, 2001) |
 | `find_brewster_angles(rt_coefficients, angles, ...)` | Detect Brewster-like zeros in R/T curves |
 
 ### Multi-ray
@@ -339,7 +339,7 @@ pytest
 Test modules:
 
 - `test_solver.py` — Newton convergence, Snell's law, travel time accuracy
-- `test_amplitude.py` — Zoeppritz coefficients, normal-incidence limits, Brewster detection
+- `test_amplitude.py` — Zoeppritz coefficients, energy-flux normalization, Brewster detection
 - `test_api.py` — multi-ray tracing interface
 - `test_generalized.py` — generalized layered-media validation cases
 - `test_homogeneous_equivalence.py` — homogeneous-medium equivalence checks

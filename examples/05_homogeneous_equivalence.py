@@ -138,7 +138,7 @@ res_h = lt.trace_rays(
     velocity_df=homo_df,
     source_phase="P",
     compute_amplitude=True,
-    transcoef_method="angle",
+    transcoef_method="standard",
 )
 
 tt_h  = float(res_h.travel_times[0])
@@ -201,7 +201,7 @@ res_l = lt.trace_rays(
     velocity_df=layered_df,
     source_phase="P",
     compute_amplitude=True,
-    transcoef_method="angle",
+    transcoef_method="standard",
 )
 
 tt_l  = float(res_l.travel_times[0])
@@ -375,7 +375,7 @@ res_h_off = lt.trace_rays(
     velocity_df=homo_df,
     source_phase="P",
     compute_amplitude=True,
-    transcoef_method="angle",
+    transcoef_method="standard",
 )
 
 res_l_off = lt.trace_rays(
@@ -384,7 +384,7 @@ res_l_off = lt.trace_rays(
     velocity_df=layered_df,
     source_phase="P",
     compute_amplitude=True,
-    transcoef_method="angle",
+    transcoef_method="standard",
 )
 
 ###############################################################################

@@ -192,20 +192,10 @@ Reflection and transmission coefficients
 ========================================
 
 In layered media, wave amplitudes are modified at every crossed interface.
-LayTracer supports two methods for computing interface coefficients: normal-incidence (impedance-only) approximation and angle-dependent P-SV formulation (Zoeppritz). Normal-incidence is there only for comparison purposes, as it is not physically accurate. The default method is angle-dependent P-SV formulation.
+LayTracer computes interface coefficients using the full angle-dependent P-SV Zoeppritz formulation.  Two variants are available via the ``transcoef_method`` parameter:
 
-Normal-incidence (impedance-only) approximation
-------------------------------------------------
-
-For a wave crossing an interface from medium 1 to medium 2 at normal
-incidence,
-
-.. math::
-   T = \frac{2 Z_1}{Z_1 + Z_2},
-   \qquad Z_i = \rho_i v_i,
-
-where :math:`Z_i` is the acoustic impedance and :math:`v_i` is the wave speed
-of the considered mode (P or S).
+- ``"standard"`` — displacement-amplitude coefficients (Zoeppritz); this is the default.
+- ``"normalized"`` — energy-flux-normalized coefficients following :cite:t:`Cerveny2001`, Eq. 5.3.10.
 
 Angle-dependent P-SV formulation (welded solid-solid interface)
 ---------------------------------------------------------------
@@ -287,10 +277,28 @@ For references and details on the derivation of these formulas, see
 :cite:t:`LayWallace1995` (Table 3.1, note the sign error in the second
 term of :math:`b`) and :cite:t:`AkiRichards2002` (Equations 5.38–5.40).
 
-The angle-dependent formulation is used by default. It reduces to the
-normal-incidence expression for :math:`p=0`.
 For post-critical incidence the coefficients may become complex; for
 amplitude modelling the software uses :math:`|T_l|`.
+
+Energy-flux-normalized coefficients
+-----------------------------------
+
+The standard (displacement-amplitude) Zoeppritz coefficients
+:math:`\bar{R}_{mn}` do **not** conserve energy flux across an interface.
+For applications where energy conservation is essential (e.g. seismic-moment
+estimation in layered media), :cite:t:`Cerveny2001` (Eq. 5.3.10) defines
+**normalized** reflection/transmission coefficients:
+
+.. math::
+   \mathcal{R}_{mn}
+   = \bar{R}_{mn}\,
+     \sqrt{\frac{v_{\mathrm{out}}\,\rho_{\mathrm{out}}\,
+                 \cos\theta_{\mathrm{out}}}
+                {v_{\mathrm{in}}\,\rho_{\mathrm{in}}\,
+                 \cos\theta_{\mathrm{in}}}},
+
+where :math:`\cos\theta = \sqrt{1 - v^2 p^2}` and subscripts "in"/"out" refer to the incident and scattered wave, respectively (for reflections, "out" uses properties of the same side of the interface). 
+For subcritical incidence at a lossless interface, the normalized coefficients ensure conservation of energy flux, with reflected and transmitted energy fractions summing to unity.
 
 Critical angles
 ---------------

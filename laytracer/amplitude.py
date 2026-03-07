@@ -189,3 +189,67 @@ def find_brewster_angles(
         if brewster:
             result[key] = brewster
     return result
+
+
+# ═══════════════════════════════════════════════════════════════════════
+#  Červený normalized displacement coefficients
+# ═══════════════════════════════════════════════════════════════════════
+
+def normalize_rt_coefficient(
+    R_bar,
+    p: float,
+    v_in: float,
+    rho_in: float,
+    v_out: float,
+    rho_out: float,
+):
+    r"""Apply Červený (2001) normalization to a displacement R/T coefficient.
+
+    Eq. 5.3.10:
+
+    .. math::
+        R_{mn} = \bar{R}_{mn}
+        \left(
+          \frac{V(\tilde Q)\,\rho(\tilde Q)\,P(\tilde Q)}
+               {V(Q)\,\rho(Q)\,P(Q)}
+        \right)^{1/2}
+
+    where :math:`P(Q) = (1 - V^2 p^2)^{1/2}`.
+
+    Parameters
+    ----------
+    R_bar : complex or float
+        Standard (unnormalized) displacement coefficient.
+    p : float
+        Ray parameter (horizontal slowness, s/m).
+    v_in : float
+        Phase velocity of the incident wave (m/s).
+    rho_in : float
+        Density of the incident medium (kg/m³).
+    v_out : float
+        Phase velocity of the outgoing (reflected/transmitted) wave (m/s).
+    rho_out : float
+        Density of the outgoing medium (kg/m³).
+
+    Returns
+    -------
+    complex or float
+        Normalized displacement coefficient.
+    """
+    csqrt = np.lib.scimath.sqrt
+    p = np.asarray(p)
+    P_in = csqrt(1.0 - v_in**2 * p**2)
+    P_out = csqrt(1.0 - v_out**2 * p**2)
+    denom = v_in * rho_in * P_in
+    if p.ndim == 0:
+        if abs(denom) < 1e-30:
+            return R_bar
+        factor = csqrt((v_out * rho_out * P_out) / denom)
+        return R_bar * factor
+    # Vectorised path
+    factor = np.ones_like(R_bar, dtype=complex)
+    mask = np.abs(denom) >= 1e-30
+    factor[mask] = csqrt(
+        (v_out * rho_out * P_out[mask]) / denom[mask]
+    )
+    return R_bar * factor

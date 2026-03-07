@@ -29,6 +29,7 @@ Amplitude
    transmission_normal
    psv_rt_coefficients
    find_brewster_angles
+   normalize_rt_coefficient
 
 Visualisation
 ~~~~~~~~~~~~~
@@ -48,7 +49,7 @@ from .solver import (
     initial_q,
     newton_step,
 )
-from .amplitude import transmission_normal, psv_rt_coefficients, find_brewster_angles
+from .amplitude import transmission_normal, psv_rt_coefficients, find_brewster_angles, normalize_rt_coefficient
 from .api import TraceResult, trace_rays
 from . import plot
 
@@ -76,6 +77,7 @@ __all__ = [
     "transmission_normal",
     "psv_rt_coefficients",
     "find_brewster_angles",
+    "normalize_rt_coefficient",
     # api
     "TraceResult",
     "trace_rays",

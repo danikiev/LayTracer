@@ -177,7 +177,12 @@ def test_refraction_vertical():
     assert np.isclose(res.travel_times[0], 1.0, rtol=1e-5)
 
 def test_transmission_amplitude():
-    """Test amplitude product for normal transmission through 3 layers."""
+    """Test amplitude product for vertical transmission through 3 layers.
+    
+    For a vertical ray (p=0), the Zoeppritz Tpp coefficient reduces exactly
+    to the normal-incidence impedance formula, so we use transmission_normal
+    to compute the expected value.
+    """
     # Model:
     # 0-500: V=2000, Rho=2000 (Z=4e6)
     # 500-1000: V=3000, Rho=2500 (Z=7.5e6)
@@ -200,21 +205,99 @@ def test_transmission_amplitude():
          velocity_df=df,
          source_phase="P",
          compute_amplitude=True,
-         transcoef_method="normal"
+         transcoef_method="standard"
     )
     
-    # Expected: use transmission_normal to ensure consistency with internal code
-    # Int 1 (500m): Z1=4.0, Z2=7.5. T1 = 2*Z1/(Z1+Z2) = 8/11.5
-    # Int 2 (1000m): Z2=7.5, Z3=4.0. T2 = 2*Z2/(Z2+Z3) = 15/11.5
-    
+    # At p=0 the Zoeppritz Tpp equals the impedance formula
     t1 = transmission_normal(2000, 2000, 3000, 2500)
     t2 = transmission_normal(3000, 2500, 2000, 2000)
     expected = abs(t1 * t2)
     
-    print(f"DEBUG: TransProd Calculated={res.trans_product[0]}")
-    print(f"DEBUG: TransProd Expected={expected}")
-    
     assert np.isclose(res.trans_product[0], expected, rtol=1e-4)
+
+
+def test_transmission_normalized():
+    """Normalized transmission product should differ from standard for offset rays."""
+    df = pd.DataFrame({
+        "Depth": [0.0, 1000.0, 2000.0],
+        "Vp": [3000.0, 5000.0, 4000.0],
+        "Vs": [1500.0, 2500.0, 2000.0],
+        "Rho": [2200.0, 2600.0, 2400.0],
+        "Qp": [300.0, 500.0, 400.0],
+        "Qs": [150.0, 250.0, 200.0],
+    })
+
+    # Offset ray so p != 0
+    res_std = trace_rays(
+        sources=[0, 0, 0],
+        receivers=[3000, 0, 2500],
+        velocity_df=df,
+        source_phase="P",
+        compute_amplitude=True,
+        transcoef_method="standard",
+    )
+    res_norm = trace_rays(
+        sources=[0, 0, 0],
+        receivers=[3000, 0, 2500],
+        velocity_df=df,
+        source_phase="P",
+        compute_amplitude=True,
+        transcoef_method="normalized",
+    )
+
+    # Both should be finite and positive
+    assert np.isfinite(res_std.trans_product[0])
+    assert np.isfinite(res_norm.trans_product[0])
+    assert res_std.trans_product[0] > 0
+    assert res_norm.trans_product[0] > 0
+
+    # They should differ for non-vertical rays
+    assert not np.isclose(res_std.trans_product[0], res_norm.trans_product[0], rtol=1e-6)
+
+    # Travel times and ray parameters must be identical (kinematics unchanged)
+    assert np.isclose(res_std.travel_times[0], res_norm.travel_times[0], rtol=1e-10)
+    assert np.isclose(res_std.ray_parameters[0], res_norm.ray_parameters[0], rtol=1e-10)
+
+
+def test_normalized_vertical_ray():
+    """At normal incidence (p=0), normalized T equals standard T * sqrt(Z_out/Z_in).
+    
+    The Červený (2001) normalization factor at p=0 simplifies to
+    sqrt(v_out * rho_out / (v_in * rho_in)) = sqrt(Z_out / Z_in).
+    """
+    from laytracer.amplitude import psv_rt_coefficients, normalize_rt_coefficient
+
+    df = pd.DataFrame({
+        "Depth": [0.0, 1000.0],
+        "Vp": [3000.0, 5000.0],
+        "Vs": [1500.0, 2500.0],
+        "Rho": [2200.0, 2600.0],
+        "Qp": [300.0, 500.0],
+        "Qs": [150.0, 250.0],
+    })
+
+    res_std = trace_rays(
+        sources=[0, 0, 0],
+        receivers=[0, 0, 1500],
+        velocity_df=df,
+        source_phase="P",
+        compute_amplitude=True,
+        transcoef_method="standard",
+    )
+    res_norm = trace_rays(
+        sources=[0, 0, 0],
+        receivers=[0, 0, 1500],
+        velocity_df=df,
+        source_phase="P",
+        compute_amplitude=True,
+        transcoef_method="normalized",
+    )
+
+    # Verify normalized = standard * sqrt(Z_out / Z_in) at p=0
+    Z_in = 3000.0 * 2200.0
+    Z_out = 5000.0 * 2600.0
+    expected_norm = res_std.trans_product[0] * np.sqrt(Z_out / Z_in)
+    assert np.isclose(res_norm.trans_product[0], expected_norm, rtol=1e-6)
 
 if __name__ == "__main__":
     # Manually run if executed as script

@@ -430,7 +430,7 @@ def trace_rays(
     reflection: Sequence[tuple[float, str]] | None = None,
     refraction: Sequence[tuple[float, str]] | None = None,
     compute_amplitude: bool = False,
-    transcoef_method: str = "angle",
+    transcoef_method: str = "standard",
     n_jobs: int = -1,
     backend: str = "loky",
     sequential_limit: int = 10_000,
@@ -479,7 +479,8 @@ def trace_rays(
         :math:`t^*`, relative geometrical spreading, and Zoeppritz transmission
         products.
     transcoef_method : str
-        ``'normal'`` or ``'angle'`` (Zoeppritz).
+        ``'standard'`` (Zoeppritz) or ``'normalized'``
+        (Zoeppritz with Červený (2001) Eq. 5.3.10 energy-flux normalization).
     n_jobs : int
         Number of parallel jobs (``-1`` = all physical cores).
     backend : str

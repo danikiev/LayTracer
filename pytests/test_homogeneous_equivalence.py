@@ -114,7 +114,7 @@ def _run_code(vel_df: pd.DataFrame):
         velocity_df=vel_df,
         source_phase="P",
         compute_amplitude=True,
-        transcoef_method="angle",
+        transcoef_method="standard",
     )
     tt = float(result.travel_times[0])
     p = float(result.ray_parameters[0])
