@@ -125,6 +125,7 @@ Required GitHub setup:
 2. Create repository environments:
     - `testpypi` (optional protection rules)
     - `pypi` (recommended: require reviewers for manual approval gate)
+    - `github-pages`: in **Settings → Environments → github-pages → Deployment branches and tags**, add a tag rule with pattern `v*` so that tag-triggered releases can deploy docs with the correct version.
 
 3. Trigger a release by tag:
 
