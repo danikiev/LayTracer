@@ -26,7 +26,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - updated example 4 to compare standard vs normalized transmission coefficients ([#1])
 - updated example 3 to show comparison of standard vs normalized transmission and reflection coefficients ([#1])
 
-### Remov
+### Removed
+
 - `"normal"` (impedance-only) transmission coefficient method — only
   `"standard"` and `"normalized"` are supported ([#1])
 - normal-incidence section removed from methodology docs ([#1])
