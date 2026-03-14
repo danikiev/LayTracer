@@ -18,9 +18,9 @@ def _simple_model():
         "Qs":    [100.0,  200.0,  300.0],
     })
 
-# ═══════════════════════════════════════════════════════════════════════
+# =====================================================================================================================================================================================================================
 #  Theory Verification
-# ═══════════════════════════════════════════════════════════════════════
+# =====================================================================================================================================================================================================================
 
 class TestTheoryVerification:
     """Rigorous quantitative verification of mathematical theory for t* and spreading."""
@@ -51,7 +51,7 @@ class TestTheoryVerification:
         # Run solver exactly to the target X
         res = laytracer.solve(
             h, v, segments, [], epicentral_dist=X_target, z_src=0.0, z_rcv=3000.0,
-            compute_amplitude=True, tol=1e-10
+            requested={"travel_times", "rays", "ray_parameters", "tstar", "spreading", "trans_product"}, tol=1e-10
         )
         
         # Verify it matched the expected parameter and the theoretical tstar formula exactly
@@ -104,7 +104,7 @@ class TestTheoryVerification:
         # Run solver exactly to the target X
         res = laytracer.solve(
             h, v, segments, [], epicentral_dist=X_target, z_src=0.0, z_rcv=3000.0,
-            compute_amplitude=True, tol=1e-10
+            requested={"travel_times", "rays", "ray_parameters", "tstar", "spreading", "trans_product"}, tol=1e-10
         )
         
         assert res.ray_parameter == pytest.approx(p, rel=1e-5)
@@ -127,7 +127,7 @@ class TestTheoryVerification:
         
         res = laytracer.solve(
             h, v, segments, [], X_target, 0.0, 3000.0,
-            compute_amplitude=False, tol=1e-10
+            requested={"travel_times", "rays", "ray_parameters"}, tol=1e-10
         )
         
         # Recompute offset from returned p using internal q logic
@@ -155,9 +155,9 @@ class TestTheoryVerification:
         assert offset_dq2(q, h, lmd) == pytest.approx(d2_fd, rel=1e-2)
 
 
-# ═══════════════════════════════════════════════════════════════════════
+# =====================================================================================================================================================================================================================
 #  Transmission coefficients
-# ═══════════════════════════════════════════════════════════════════════
+# =====================================================================================================================================================================================================================
 
 class TestTransmission:
     def test_normal_same_medium(self):
@@ -213,9 +213,9 @@ class TestTransmission:
         assert abs(RTp["Tsp"]) == pytest.approx(0.0, abs=1e-8)
 
 
-# ═══════════════════════════════════════════════════════════════════════
+# =====================================================================================================================================================================================================================
 #  t* computation
-# ═══════════════════════════════════════════════════════════════════════
+# =====================================================================================================================================================================================================================
 
 
 class TestTstar:
@@ -236,7 +236,7 @@ class TestTstar:
         
         res = laytracer.solve(
             h, v, segments, [], epicentral_dist=0.0, z_src=0.0, z_rcv=3000.0,
-            compute_amplitude=True,
+            requested={"travel_times", "rays", "ray_parameters", "tstar", "spreading", "trans_product"},
         )
         expected = 3000.0 / 5000.0 / 500.0  # h / v / Q = tt / Q
         assert res.tstar == pytest.approx(expected, rel=1e-4)
@@ -264,14 +264,14 @@ class TestTstar:
         
         res = laytracer.solve(
             h, v, segments, [], epicentral_dist=5000.0, z_src=100.0, z_rcv=2500.0,
-            compute_amplitude=True,
+            requested={"travel_times", "rays", "ray_parameters", "tstar", "spreading", "trans_product"},
         )
         assert res.tstar == pytest.approx(res.travel_time / Q, rel=1e-4)
 
 
-# ═══════════════════════════════════════════════════════════════════════
+# =====================================================================================================================================================================================================================
 #  Geometrical spreading
-# ═══════════════════════════════════════════════════════════════════════
+# =====================================================================================================================================================================================================================
 
 class TestSpreading:
     def test_spreading_homogeneous(self):
@@ -294,7 +294,7 @@ class TestSpreading:
         z_src, z_rcv = 0.0, 3000.0
         res = laytracer.solve(
             h, v, segments, [], epicentral_dist=X, z_src=z_src, z_rcv=z_rcv,
-            compute_amplitude=True,
+            requested={"travel_times", "rays", "ray_parameters", "tstar", "spreading", "trans_product"},
         )
         dist = np.sqrt(X**2 + (z_rcv - z_src)**2)
         # Definition: relative spreading = distance * velocity (formally at receiver)
@@ -316,7 +316,7 @@ class TestSpreading:
 
         res = laytracer.solve(
             h, v, segments, [], X, z_src, z_rcv, 
-            compute_amplitude=True, tol=1e-10
+            requested={"travel_times", "rays", "ray_parameters", "tstar", "spreading", "trans_product"}, tol=1e-10
         )
 
         dist = np.sqrt(X**2 + (z_rcv - z_src)**2)
@@ -338,14 +338,14 @@ class TestSpreading:
         
         res = laytracer.solve(
             h, v, segments, [], epicentral_dist=5000.0, z_src=500.0, z_rcv=2500.0,
-            compute_amplitude=True,
+            requested={"travel_times", "rays", "ray_parameters", "tstar", "spreading", "trans_product"},
         )
         assert res.spreading is not None
         assert res.spreading > 0
 
-# ═══════════════════════════════════════════════════════════════════════
+# =====================================================================================================================================================================================================================
 #  Brewster-angle detection
-# ═══════════════════════════════════════════════════════════════════════
+# =====================================================================================================================================================================================================================
 
 def _ammon_model_rt(n=1000):
     """Compute RT coefficients for Ammon's crust/mantle test case.
@@ -386,7 +386,7 @@ class TestBrewsterAngles:
         assert result == {}
 
     def test_p_incident_rps_brewster(self):
-        """For Ammon model, |Rps| has a Brewster angle near 37.9°."""
+        """For Ammon model, |Rps| has a Brewster angle near 37.9??."""
         RT_P, angle_P, _, _ = _ammon_model_rt()
         result = laytracer.find_brewster_angles(RT_P, angle_P, keys=["Rps"])
         assert "Rps" in result
@@ -394,7 +394,7 @@ class TestBrewsterAngles:
         assert result["Rps"][0] == pytest.approx(37.9, abs=0.5)
 
     def test_sv_incident_rss_brewster(self):
-        """For Ammon model, |Rss| has a Brewster angle near 19.8°."""
+        """For Ammon model, |Rss| has a Brewster angle near 19.8??."""
         _, _, RT_SV, angle_SV = _ammon_model_rt()
         result = laytracer.find_brewster_angles(RT_SV, angle_SV, keys=["Rss"])
         assert "Rss" in result
@@ -402,7 +402,7 @@ class TestBrewsterAngles:
         assert result["Rss"][0] == pytest.approx(19.8, abs=0.5)
 
     def test_sv_incident_rsp_two_brewsters(self):
-        """For Ammon model, |Rsp| has two Brewster angles near 21° and 40°."""
+        """For Ammon model, |Rsp| has two Brewster angles near 21?? and 40??."""
         _, _, RT_SV, angle_SV = _ammon_model_rt()
         result = laytracer.find_brewster_angles(RT_SV, angle_SV, keys=["Rsp"])
         assert "Rsp" in result
@@ -431,3 +431,4 @@ class TestBrewsterAngles:
         n_strict = len(strict.get("Rps", []))
         n_loose = len(loose.get("Rps", []))
         assert n_loose >= n_strict
+

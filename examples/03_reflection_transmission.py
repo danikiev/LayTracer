@@ -63,24 +63,24 @@ RT = lt.psv_rt_coefficients(
 # ----------------------------
 #
 # For an incident P-wave the ray parameter sweeps from 0 to
-# :math:`1/V_P` (grazing P incidence), covering the full 0–90° range.
+# :math:`1/V_P` (grazing P incidence), covering the full :math:`0--90^{\circ}` range.
 #
 # **Critical angle** (dashed red line):
 #
 # * Transmitted P becomes evanescent at
-#   :math:`\theta_c^{T(P)} = \arcsin(V_P^{(1)}/V_P^{(2)}) \approx 38.5°`.
+#   :math:`\theta_c^{T(P)} = \arcsin(V_P^{(1)}/V_P^{(2)}) \approx 38.5^{\circ}`.
 #   Beyond this angle :math:`|R_{PP}| \to 1` (total reflection).
 #   There is no transmitted-SV critical angle because
 #   :math:`V_P^{(1)} > V_S^{(2)}` for this model.
 #
 # **Brewster angles** (dotted purple lines):
 #
-# * :math:`|R_{PS}|` has a near-zero at ≈37.9°, just before the
+# * :math:`|R_{PS}|` has a near-zero at :math:`37.9^{\circ}`, just before the
 #   critical angle.  This is the P-to-SV mode-conversion null,
 #   analogous to the optical Brewster angle.  Its position depends
 #   on all six elastic parameters, not just the velocity ratio.
 
-# Incidence angle (P-wave): θ = arcsin(p · Vp)
+# Incidence angle (P-wave): :math:`\theta` = \arcsin{p \cdot V_p}`
 angle_P = np.rad2deg(np.arcsin(np.clip(p_vec * mi_vp, -1, 1)))
 crit_P = np.rad2deg(np.arcsin(mi_vp / mt_vp))   # transmitted P critical
 
@@ -128,8 +128,8 @@ fig.tight_layout()
 plt.show()
 
 ###############################################################################
-# Normalized P-wave coefficients (Červený, 2001)
-# -----------------------------------------------
+# Normalized P-wave coefficients
+# ------------------------------
 #
 # Energy-flux-normalized coefficients account for the impedance and
 # directional cosine contrast across the interface.  They are useful
@@ -167,7 +167,7 @@ ymax_Pn = max(ymax_Pn, 0.5)
 
 fig, axes = plt.subplots(2, 2, figsize=(12, 9))
 fig.suptitle(
-    "Incident P-wave — normalized (Červený, 2001)\n"
+    "Incident P-wave ??? normalized (Červený, 2001)\n"
     f"Inc: Vp={mi_vp}, Vs={mi_vs}, ρ={mi_rho}  →  "
     f"Trans: Vp={mt_vp}, Vs={mt_vs}, ρ={mt_rho}",
     fontsize=11,
@@ -287,7 +287,7 @@ def plot_ray_situation(angle, wave_type, title, ax):
                 source_phase=wave_type,
                 reflection=reflection_arg,
                 refraction=refraction_arg,
-                compute_amplitude=False
+                requested={"travel_times", "rays", "ray_parameters"}
             )
             
             if res.rays and len(res.rays) > 0 and res.rays[0] is not None:
@@ -353,22 +353,22 @@ plt.show()
 # -----------------------------
 #
 # For an incident SV-wave the ray parameter sweeps from 0 to
-# :math:`1/V_S` (grazing SV incidence), covering the full 0–90° range.
+# :math:`1/V_S` (grazing SV incidence), covering the full :math:`0--90^{\circ}` range.
 #
-# **Critical angles** (coloured lines) – three distinct thresholds:
+# **Critical angles** (coloured lines) - three distinct thresholds:
 #
-# * :math:`\theta_c^{T(P)} = \arcsin(V_S^{(1)}/V_P^{(2)}) \approx 21.3°`
-#   – transmitted P goes evanescent (blue dotted)
-# * :math:`\theta_c^{R(P)} = \arcsin(V_S^{(1)}/V_P^{(1)}) \approx 35.6°`
-#   – reflected P goes evanescent (red dashed)
-# * :math:`\theta_c^{T(SV)} = \arcsin(V_S^{(1)}/V_S^{(2)}) \approx 39.1°`
-#   – transmitted SV goes evanescent (green dash-dot);
+# * :math:`\theta_c^{T(P)} = \arcsin(V_S^{(1)}/V_P^{(2)}) \approx 21.3^{\circ}`
+#   - transmitted P goes evanescent (blue dotted)
+# * :math:`\theta_c^{R(P)} = \arcsin(V_S^{(1)}/V_P^{(1)}) \approx 35.6^{\circ}`
+#   - reflected P goes evanescent (red dashed)
+# * :math:`\theta_c^{T(SV)} = \arcsin(V_S^{(1)}/V_S^{(2)}) \approx 39.1^{\circ}`
+#   - transmitted SV goes evanescent (green dash-dot);
 #   beyond this angle all energy is reflected as SV
 #   (:math:`|R_{SS}| = 1`).
 #
 # The reflected SV wave is always real (same medium, same velocity).
 #
-# **Brewster angles** (purple dotted lines) – the near-zeros of
+# **Brewster angles** (purple dotted lines) - the near-zeros of
 # :math:`|R_{SP}|` near 21° and 40°, and of :math:`|R_{SS}|` near
 # 20°, are mode-conversion nulls governed by the full elastic
 # contrast.
@@ -381,7 +381,7 @@ RT_sv = lt.psv_rt_coefficients(
     vp2=mt_vp, vs2=mt_vs, rho2=mt_rho,
 )
 
-# Incidence angle (SV-wave): θ = arcsin(p · Vs)
+# Incidence angle (SV-wave):  :math:`\theta = \arcsin(p \cdot V_s)`
 angle_SV = np.rad2deg(np.arcsin(np.clip(p_vec_sv * mi_vs, -1, 1)))
 
 # Critical angles
@@ -466,7 +466,7 @@ ymax_SVn = max(ymax_SVn, 0.5)
 
 fig, axes = plt.subplots(2, 2, figsize=(12, 9))
 fig.suptitle(
-    "Incident SV-wave — normalized (Červený, 2001)\n"
+    "Incident SV-wave - normalized (Červený, 2001)\n"
     f"Inc: Vp={mi_vp}, Vs={mi_vs}, ρ={mi_rho}  →  "
     f"Trans: Vp={mt_vp}, Vs={mt_vs}, ρ={mt_rho}",
     fontsize=11,

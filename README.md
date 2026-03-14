@@ -159,9 +159,9 @@ result = laytracer.trace_rays(
     sources=src,
     receivers=rcvs,
     velocity_df=vel_df,
-    vel_type="Vp",
-    compute_amplitude=True,
-    transcoef_method="standard",  # full Zoeppritz
+    source_phase="P",
+    requested={"travel_times", "rays", "ray_parameters", "tstar", "spreading", "trans_product"},
+    transcoef_method="standard",  # standard Zoeppritz coefficients without normalization
 )
 
 # Access results

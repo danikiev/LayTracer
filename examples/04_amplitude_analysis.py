@@ -71,7 +71,7 @@ result = lt.trace_rays(
     receivers=rcvs,
     velocity_df=vel_df,
     source_phase="P",
-    compute_amplitude=True,
+    requested={"travel_times", "rays", "ray_parameters", "tstar", "spreading", "trans_product"},
     transcoef_method="standard",
 )
 
@@ -179,13 +179,13 @@ result_normalized = lt.trace_rays(
     receivers=rcvs,
     velocity_df=vel_df,
     source_phase="P",
-    compute_amplitude=True,
+    requested={"travel_times", "rays", "ray_parameters", "tstar", "spreading", "trans_product"},
     transcoef_method="normalized",
 )
 
 fig, ax = plt.subplots(figsize=(8, 4))
 ax.plot(offsets / 1000, result.trans_product, "o-", label="Standard (Zoeppritz)", markersize=3)
-ax.plot(offsets / 1000, result_normalized.trans_product, "s-", label="Normalized (\u010cerven\u00fd)", markersize=3)
+ax.plot(offsets / 1000, result_normalized.trans_product, "s-", label="Normalized", markersize=3)
 ax.set_xlabel("Offset (km)")
 ax.set_ylabel(r"$\prod |T_k|$")
 ax.set_title("Transmission: standard vs. energy-flux-normalized")
@@ -259,7 +259,7 @@ rcvs_p = np.column_stack([offsets, np.zeros_like(offsets), np.zeros_like(offsets
 res_refr = lt.trace_rays(
     sources=src_p, receivers=rcvs_p, velocity_df=refr_df,
     source_phase="P", reflection=[(3000.0, "P")], 
-    compute_amplitude=True, transcoef_method="standard"
+    requested={"travel_times", "rays", "ray_parameters", "tstar", "spreading", "trans_product"}, transcoef_method="standard"
 )
 
 # Trace Category 2: Gradient (reflect off last interface ~3km)
@@ -267,7 +267,7 @@ z_reflect = grad_df["Depth"].iloc[-1]
 res_grad = lt.trace_rays(
     sources=src_p, receivers=rcvs_p, velocity_df=grad_df,
     source_phase="P", reflection=[(z_reflect, "P")],
-    compute_amplitude=True, transcoef_method="standard"
+    requested={"travel_times", "rays", "ray_parameters", "tstar", "spreading", "trans_product"}, transcoef_method="standard"
 )
 
 # --- 2. Advanced Visualisation ---

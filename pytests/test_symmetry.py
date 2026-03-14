@@ -20,7 +20,7 @@ def _simple_model():
 
 class TestSymmetry:
     def test_traveltime_reciprocity(self):
-        """tt(A→B) = tt(B→A)."""
+        """tt(A???B) = tt(B???A)."""
         df = _simple_model()
         src = np.array([0.0, 0.0, 500.0])
         rcv = np.array([5000.0, 0.0, 2500.0])
@@ -53,12 +53,12 @@ class TestSymmetry:
         })
         src = np.array([0.0, 0.0, 3000.0])
         rcv = np.array([8000.0, 0.0, 0.0])
-        r_fwd = laytracer.trace_rays(src, rcv, df, compute_amplitude=True)
-        r_rev = laytracer.trace_rays(rcv, src, df, compute_amplitude=True)
+        r_fwd = laytracer.trace_rays(src, rcv, df, requested={"travel_times", "rays", "ray_parameters", "tstar", "spreading", "trans_product"})
+        r_rev = laytracer.trace_rays(rcv, src, df, requested={"travel_times", "rays", "ray_parameters", "tstar", "spreading", "trans_product"})
         assert r_fwd.tstar[0] == pytest.approx(r_rev.tstar[0], rel=1e-6)
 
     def test_spreading_reciprocity(self):
-        """L(S,R) = L(R,S) (Červený-style invariant)."""
+        """L(S,R) = L(R,S) (??erven??-style invariant)."""
         # Spreading is invariant under source-receiver swap
         df = pd.DataFrame({
             "Depth": [0.0, 1000.0, 2000.0, 3500.0],
@@ -70,12 +70,12 @@ class TestSymmetry:
         })
         src = np.array([0.0, 0.0, 3000.0])
         rcv = np.array([8000.0, 0.0, 0.0])
-        r_fwd = laytracer.trace_rays(src, rcv, df, compute_amplitude=True)
-        r_rev = laytracer.trace_rays(rcv, src, df, compute_amplitude=True)
+        r_fwd = laytracer.trace_rays(src, rcv, df, requested={"travel_times", "rays", "ray_parameters", "tstar", "spreading", "trans_product"})
+        r_rev = laytracer.trace_rays(rcv, src, df, requested={"travel_times", "rays", "ray_parameters", "tstar", "spreading", "trans_product"})
         assert r_fwd.spreading[0] == pytest.approx(r_rev.spreading[0], rel=1e-5)
 
     def test_ray_path_reversal(self):
-        """Forward ray ≈ flipped reverse ray (geometry invariance)."""
+        """Forward ray ??? flipped reverse ray (geometry invariance)."""
         df = _simple_model()
         src = np.array([0.0, 0.0, 500.0])
         rcv = np.array([5000.0, 0.0, 2500.0])
@@ -112,8 +112,8 @@ class TestSymmetry:
         src = np.array([0.0, 0.0, 500.0])
         rcv = np.array([5000.0, 0.0, 2500.0])
 
-        fwd = laytracer.trace_rays(src, rcv, df, compute_amplitude=True)
-        rev = laytracer.trace_rays(rcv, src, df, compute_amplitude=True)
+        fwd = laytracer.trace_rays(src, rcv, df, requested={"travel_times", "rays", "ray_parameters", "tstar", "spreading", "trans_product"})
+        rev = laytracer.trace_rays(rcv, src, df, requested={"travel_times", "rays", "ray_parameters", "tstar", "spreading", "trans_product"})
 
         T_fwd = fwd.trans_product[0]
         T_rev = rev.trans_product[0]
@@ -155,14 +155,14 @@ class TestSymmetry:
         assert r1.ray_parameters[0] == pytest.approx(r3.ray_parameters[0], rel=1e-6)
 
     def test_translation_invariance(self):
-        """In 1D models, absolute x/y doesn't matter—only relative offset."""
+        """In 1D models, absolute x/y doesn't matter???only relative offset."""
         df = _simple_model()
         src = np.array([0.0, 0.0, 500.0])
         rcv = np.array([5000.0, 0.0, 2500.0])
         shift = np.array([1234.0, -987.0, 0.0])
 
-        r0 = laytracer.trace_rays(src, rcv, df, compute_amplitude=True)
-        rS = laytracer.trace_rays(src + shift, rcv + shift, df, compute_amplitude=True)
+        r0 = laytracer.trace_rays(src, rcv, df, requested={"travel_times", "rays", "ray_parameters", "tstar", "spreading", "trans_product"})
+        rS = laytracer.trace_rays(src + shift, rcv + shift, df, requested={"travel_times", "rays", "ray_parameters", "tstar", "spreading", "trans_product"})
 
         assert r0.travel_times[0] == pytest.approx(rS.travel_times[0], rel=1e-6)
         assert r0.ray_parameters[0] == pytest.approx(rS.ray_parameters[0], rel=1e-6)
@@ -191,3 +191,4 @@ class TestSymmetry:
         # Range and depth should match perfectly
         np.testing.assert_allclose(range1, range2, atol=1e-5)
         np.testing.assert_allclose(path1[:, 2], path2[:, 2], atol=1e-5)
+

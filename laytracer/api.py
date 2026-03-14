@@ -2,14 +2,14 @@ r"""
 High-level multi-ray tracing interface.
 
 Provides :func:`trace_rays`, the main entry point for tracing all
-source–receiver pairs through a 1-D layered velocity model, with
+source-receiver pairs through a 1-D layered velocity model, with
 optional parallel execution using the ``loky`` backend.
 """
 
 from __future__ import annotations
 
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Sequence
 
 import numpy as np
@@ -17,8 +17,19 @@ import pandas as pd
 import psutil
 from joblib import Parallel, delayed
 
-from .model import LayerStack, ModelArrays, build_layer_stack
-from .solver import RayResult, solve
+from .model import ModelArrays, build_layer_stack
+from .solver import solve
+
+
+TRACE_OUTPUTS = frozenset({
+    "travel_times",
+    "rays",
+    "ray_parameters",
+    "tstar",
+    "spreading",
+    "trans_product",
+})
+DEFAULT_REQUESTED = ("travel_times", "rays", "ray_parameters")
 
 
 @dataclass
@@ -50,21 +61,43 @@ class TraceResult:
     trans_product: np.ndarray | None = None
 
 
-# ═══════════════════════════════════════════════════════════════════════
-#  Worker functions
-# ═══════════════════════════════════════════════════════════════════════
+def _normalize_requested(requested: Sequence[str] | None) -> frozenset[str]:
+    """Validate and normalize the requested output names."""
+    if requested is None:
+        requested = DEFAULT_REQUESTED
+
+    normalized = frozenset(str(name) for name in requested)
+    invalid = normalized - TRACE_OUTPUTS
+    if invalid:
+        valid = ", ".join(sorted(TRACE_OUTPUTS))
+        invalid_str = ", ".join(sorted(invalid))
+        raise ValueError(f"Invalid requested outputs: {invalid_str}. Valid outputs: {valid}")
+
+    if "travel_times" not in normalized:
+        raise ValueError("requested must include 'travel_times'")
+
+    return normalized
+
 
 def _trace_batch(batch):
-    """Worker function for parallel ray computation — processes a batch.
-
-    Receives all shared data packed into *batch* so that the ``loky``
-    backend serialises it only once per worker (not once per ray).
-    Uses :class:`ModelArrays` (numpy) instead of a DataFrame for
-    lightweight pickling and avoids repeated column extraction.
-    """
-    (batch_indices, source_coords, receiver_coords, model_arrays,
-     source_phase, refl_list, refr_list,
-     compute_amplitude, transcoef_method, tol, max_iter) = batch
+    """Worker function for parallel ray computation."""
+    (
+        batch_indices,
+        source_coords,
+        receiver_coords,
+        model_arrays,
+        source_phase,
+        refl_list,
+        refr_list,
+        need_rays,
+        need_ray_parameters,
+        need_tstar,
+        need_spreading,
+        need_trans_product,
+        transcoef_method,
+        tol,
+        max_iter,
+    ) = batch
 
     results = []
     for isrc, ircv in batch_indices:
@@ -76,13 +109,41 @@ def _trace_batch(batch):
                 source_phase=source_phase,
                 refl_list=refl_list,
                 refr_list=refr_list,
-                compute_amplitude=compute_amplitude,
+                need_rays=need_rays,
+                need_ray_parameters=need_ray_parameters,
+                need_tstar=need_tstar,
+                need_spreading=need_spreading,
+                need_trans_product=need_trans_product,
                 transcoef_method=transcoef_method,
                 tol=tol,
                 max_iter=max_iter,
             )
         )
     return results
+
+
+def _project_ray_to_3d(
+    ray2d: np.ndarray | None,
+    sx: float,
+    sy: float,
+    dx: float,
+    dy: float,
+    epic: float,
+) -> np.ndarray | None:
+    """Project a 2-D ray in the epicentral plane back into 3-D."""
+    if ray2d is None:
+        return None
+
+    mpts = ray2d.shape[0]
+    ray3d = np.empty((mpts, 3))
+    if epic > 1e-10:
+        ux, uy = dx / epic, dy / epic
+    else:
+        ux, uy = 1.0, 0.0
+    ray3d[:, 0] = sx + ray2d[:, 0] * ux
+    ray3d[:, 1] = sy + ray2d[:, 0] * uy
+    ray3d[:, 2] = ray2d[:, 1]
+    return ray3d
 
 
 def _trace_one(
@@ -92,120 +153,112 @@ def _trace_one(
     source_phase: str,
     refl_list: list[tuple[float, str]],
     refr_list: list[tuple[float, str]],
-    compute_amplitude: bool,
+    need_rays: bool,
+    need_ray_parameters: bool,
+    need_tstar: bool,
+    need_spreading: bool,
+    need_trans_product: bool,
     transcoef_method: str,
     tol: float,
     max_iter: int,
-) -> tuple[float, np.ndarray, float, float | None, float | None, float | None]:
-    """Trace a single source→receiver ray.  Returns a plain tuple for
-    efficient serialisation in parallel workers."""
+) -> tuple[float, np.ndarray | None, float | None, float | None, float | None, float | None]:
+    """Trace a single source->receiver ray."""
     sx, sy, sz = float(src[0]), float(src[1]), float(src[2])
     rx, ry, rz = float(rcv[0]), float(rcv[1]), float(rcv[2])
 
-    # Epicentral distance (horizontal)
     dx, dy = rx - sx, ry - sy
     epic = np.sqrt(dx * dx + dy * dy)
 
-    # ── Fast path for direct waves (no reflections / refractions) ──
-    # Avoids itinerary-loop overhead: one build_layer_stack call,
-    # no dict wrapping, straight into the solver.
     if not refl_list and not refr_list:
         stack = build_layer_stack(ma, sz, rz)
         vel = stack.v("Vp" if source_phase == "P" else "Vs")
 
-        # Filter zero-thickness layers
         valid = stack.h > 1e-9
         if not np.any(valid):
-            ray3d = np.array([[sx, sy, sz], [rx, ry, rz]])
+            ray3d = np.array([[sx, sy, sz], [rx, ry, rz]]) if need_rays else None
 
             if epic < 1e-10:
-                # Degenerate ray: source and receiver at same point
                 return (
-                    0.0, ray3d, 0.0,
-                    0.0 if compute_amplitude else None,
-                    None if compute_amplitude else None,
-                    1.0 if compute_amplitude else None,
+                    0.0,
+                    ray3d,
+                    0.0 if need_ray_parameters else None,
+                    0.0 if need_tstar else None,
+                    0.0 if need_spreading else None,
+                    1.0 if need_trans_product else None,
                 )
 
-            # Same-depth horizontal ray: straight line within one layer.
-            # All layers had zero thickness, meaning z_src ≈ z_rcv.
-            # The ray travels horizontally through the layer at that depth.
             v_hz = float(vel[0])
             tt_hz = epic / v_hz
-            p_hz = 1.0 / v_hz  # horizontal (grazing) incidence
+            p_hz = 1.0 / v_hz
 
-            if compute_amplitude:
-                q_arr = stack.qp if source_phase == "P" else stack.qs
-                tstar_hz = float(epic / (v_hz * q_arr[0])) if q_arr is not None else 0.0
-                spreading_hz = epic * v_hz  # L = r·v for homogeneous medium
-                trans_hz = 1.0              # no interface crossed
-            else:
-                tstar_hz = None
-                spreading_hz = None
-                trans_hz = None
+            q_arr = stack.qp if source_phase == "P" else stack.qs
+            tstar_hz = float(epic / (v_hz * q_arr[0])) if (need_tstar and q_arr is not None) else (0.0 if need_tstar else None)
+            spreading_hz = epic * v_hz if need_spreading else None
+            trans_hz = 1.0 if need_trans_product else None
 
-            return (tt_hz, ray3d, p_hz, tstar_hz, spreading_hz, trans_hz)
+            return (
+                tt_hz,
+                ray3d,
+                p_hz if need_ray_parameters else None,
+                tstar_hz,
+                spreading_hz,
+                trans_hz,
+            )
 
         h_f = stack.h[valid]
         v_f = vel[valid]
 
-        # Build a single segment (avoid dict — use list-of-one)
         seg = {
-            "h": h_f, "v": v_f,
-            "vp": stack.vp[valid], "vs": stack.vs[valid],
+            "h": h_f,
+            "v": v_f,
+            "vp": stack.vp[valid],
+            "vs": stack.vs[valid],
             "rho": stack.rho[valid] if stack.rho is not None else None,
             "qp": stack.qp[valid] if stack.qp is not None else None,
             "qs": stack.qs[valid] if stack.qs is not None else None,
-            "phase": source_phase, "start_z": sz, "end_z": rz,
+            "phase": source_phase,
+            "start_z": sz,
+            "end_z": rz,
         }
 
         res = solve(
-            h=h_f, v=v_f,
-            segments=[seg], interactions=[],
-            epicentral_dist=epic, z_src=sz, z_rcv=rz,
-            compute_amplitude=compute_amplitude,
+            h=h_f,
+            v=v_f,
+            segments=[seg],
+            interactions=[],
+            epicentral_dist=epic,
+            z_src=sz,
+            z_rcv=rz,
+            return_ray_path=need_rays,
+            need_ray_parameter=need_ray_parameters,
+            need_tstar=need_tstar,
+            need_spreading=need_spreading,
+            need_trans_product=need_trans_product,
             transcoef_method=transcoef_method,
-            tol=tol, max_iter=max_iter,
+            tol=tol,
+            max_iter=max_iter,
         )
 
-        ray2d = res.ray_path
-        M = ray2d.shape[0]
-        ray3d = np.empty((M, 3))
-        if epic > 1e-10:
-            ux, uy = dx / epic, dy / epic
-        else:
-            ux, uy = 1.0, 0.0
-        ray3d[:, 0] = sx + ray2d[:, 0] * ux
-        ray3d[:, 1] = sy + ray2d[:, 0] * uy
-        ray3d[:, 2] = ray2d[:, 1]
-
+        ray3d = _project_ray_to_3d(res.ray_path, sx, sy, dx, dy, epic)
         return (
-            res.travel_time, ray3d, res.ray_parameter,
-            res.tstar, res.spreading, res.trans_product,
+            res.travel_time,
+            ray3d,
+            res.ray_parameter,
+            res.tstar,
+            res.spreading,
+            res.trans_product,
         )
 
-    # ── General path: reflections and/or refractions ──
-    directional_targets = [(z, ph) for z, ph in refl_list] 
-        
-    ray_segments = [] # store (h, v, phase, direction_sign)
-    
+    ray_segments = []
     curr_z = sz
     curr_ph = source_phase
-    
-    # Full itinerary points: [Start] -> [Refl1] -> [Refl2] -> [Receiver]
+    directional_targets = [(z, ph) for z, ph in refl_list]
     itinerary_points = directional_targets + [(rz, None)]
-    
-    inter_meta = [] # metadata for amplitude
-    
+    inter_meta = []
+
     for target_z, target_ph_after_turn in itinerary_points:
-        # Direction for this major leg
-        going_down = (target_z >= curr_z)
-        
-        # Identify any refractions that occur on this path
-        # Filter refr_list for depths strictly between curr_z and target_z
-        # If going down: curr_z < z_refr < target_z
-        # If going up: target_z < z_refr < curr_z
-        
+        going_down = target_z >= curr_z
+
         relevant_refr = []
         for r_z, r_ph in refr_list:
             if going_down:
@@ -214,29 +267,19 @@ def _trace_one(
             else:
                 if target_z < r_z < curr_z:
                     relevant_refr.append((r_z, r_ph))
-        
-        # Sort refractions by proximity to curr_z
+
         if going_down:
             relevant_refr.sort(key=lambda x: x[0])
         else:
             relevant_refr.sort(key=lambda x: x[0], reverse=True)
-            
-        # Build sub-legs
+
         sub_targets = relevant_refr + [(target_z, target_ph_after_turn)]
-        
+
         for sub_z, sub_out_phase in sub_targets:
-            # Build stack for this sub-segment
-            # sub_z is the end of this sub-segment
-            
-            # Note: build_layer_stack is robust for z1 > z2 (computes thickness correctly)
             stack = build_layer_stack(ma, curr_z, sub_z)
-            
-            # Phase velocity
             vel = stack.v("Vp" if curr_ph == "P" else "Vs")
-                        
-            # Filter zero-thickness layers to avoid Vmax pollution
             valid_mask = stack.h > 1e-9
-                       
+
             if np.any(valid_mask):
                 ray_segments.append({
                     "h": stack.h[valid_mask],
@@ -248,107 +291,76 @@ def _trace_one(
                     "qs": stack.qs[valid_mask] if stack.qs is not None else None,
                     "phase": curr_ph,
                     "start_z": curr_z,
-                    "end_z": sub_z
+                    "end_z": sub_z,
                 })
-            else:                
-                pass
 
-            # Check if this sub-target is a Refraction or the Major Turn
             is_major_turn = (sub_z == target_z) and (target_ph_after_turn is not None or target_z == rz)
-            
-            # Helper to get properties of the layer BEYOND the interface
-            # If going down, "beyond" is layer starting at sub_z.
-            # If going up, "beyond" is layer ending at sub_z.
-            # We use build_layer_stack on a small interval to probe it.
-            
-            def _get_material_props(z_int, is_down_interaction):
-                # Probe a tiny segment beyond the interface
-                delta = 1.0 # 1 meter check
+
+            def _get_material_props(z_int: float, is_down_interaction: bool) -> dict[str, float]:
+                delta = 1.0
                 if is_down_interaction:
-                    # Look at [z, z+delta]
                     p_stack = build_layer_stack(ma, z_int, z_int + delta)
                 else:
-                    # Look at [z-delta, z]
                     p_stack = build_layer_stack(ma, z_int - delta, z_int)
-                
-                # Check if we are at model boundary (bottom/top)
-                # build_layer_stack handles this gracefully generally, 
-                # but let's be safe.
-                # Just return the first layer props of the stack
                 return {
                     "vp": float(p_stack.vp[0]),
                     "vs": float(p_stack.vs[0]),
-                    "rho": float(p_stack.rho[0]) if p_stack.rho is not None else 0.0
+                    "rho": float(p_stack.rho[0]) if p_stack.rho is not None else 0.0,
                 }
 
             if is_major_turn:
-                 # This is the endpoint of the major leg (Reflection or Receiver)
-                 if target_ph_after_turn is not None:
-                     # Reflection
-                     # "Beyond" side is the layer we WOULD have entered if we didn't turn.
-                     # If we are going down, beyond is Below.
-                     # If we are going up, beyond is Above (reflection from underside!).
-                     props_beyond = _get_material_props(sub_z, going_down)
-                     
-                     seg_idx = len(ray_segments) - 1
-                     if seg_idx < 0:
-                         raise ValueError(f"Cannot reflect at the starting depth {sub_z} immediately.")
+                if target_ph_after_turn is not None:
+                    props_beyond = _get_material_props(sub_z, going_down)
+                    seg_idx = len(ray_segments) - 1
+                    if seg_idx < 0:
+                        raise ValueError(f"Cannot reflect at the starting depth {sub_z} immediately.")
 
-                     inter_meta.append({
-                         "type": "reflection",
-                         "depth": sub_z,
-                         "in_phase": curr_ph,
-                         "out_phase": target_ph_after_turn,
-                         "seg_idx": seg_idx,
-                         "vp_beyond": props_beyond["vp"],
-                         "vs_beyond": props_beyond["vs"],
-                         "rho_beyond": props_beyond["rho"]
-                     })
-                     curr_ph = target_ph_after_turn
+                    inter_meta.append({
+                        "type": "reflection",
+                        "depth": sub_z,
+                        "in_phase": curr_ph,
+                        "out_phase": target_ph_after_turn,
+                        "seg_idx": seg_idx,
+                        "vp_beyond": props_beyond["vp"],
+                        "vs_beyond": props_beyond["vs"],
+                        "rho_beyond": props_beyond["rho"],
+                    })
+                    curr_ph = target_ph_after_turn
             else:
-                # Refraction/Transmission                
-                # "Beyond" side is the layer we are ABOUT to enter (which will be first layer of next segment).
-                # We can fetch it now.
                 props_beyond = _get_material_props(sub_z, going_down)
-                
                 seg_idx = len(ray_segments) - 1
                 if seg_idx < 0:
-                     raise ValueError(f"Cannot refract at the starting depth {sub_z} immediately.")
+                    raise ValueError(f"Cannot refract at the starting depth {sub_z} immediately.")
 
                 inter_meta.append({
-                     "type": "refraction",
-                     "depth": sub_z,
-                     "in_phase": curr_ph,
-                     "out_phase": sub_out_phase,
-                     "seg_idx": seg_idx,
-                     "vp_beyond": props_beyond["vp"],
-                     "vs_beyond": props_beyond["vs"],
-                     "rho_beyond": props_beyond["rho"]
+                    "type": "refraction",
+                    "depth": sub_z,
+                    "in_phase": curr_ph,
+                    "out_phase": sub_out_phase,
+                    "seg_idx": seg_idx,
+                    "vp_beyond": props_beyond["vp"],
+                    "vs_beyond": props_beyond["vs"],
+                    "rho_beyond": props_beyond["rho"],
                 })
                 curr_ph = sub_out_phase
-            
+
             curr_z = sub_z
 
-    # Flatten arrays for solver
     if len(ray_segments) == 0:
-        # Degenerate case: source and receiver share the same depth,
-        # or the path lies entirely outside the model.  Return a
-        # minimal result (zero travel time, straight-line ray, NaN
-        # amplitude quantities) so the caller can proceed.
-        ray3d = np.array([[sx, sy, sz], [rx, ry, rz]])
+        ray3d = np.array([[sx, sy, sz], [rx, ry, rz]]) if need_rays else None
+        is_same_point = epic < 1e-10 and abs(sz - rz) < 1e-10
         return (
-            0.0 if epic < 1e-10 and abs(sz - rz) < 1e-10 else np.nan,
+            0.0 if is_same_point else np.nan,
             ray3d,
-            np.nan,
-            np.nan if compute_amplitude else None,
-            np.nan if compute_amplitude else None,
-            np.nan if compute_amplitude else None,
+            np.nan if need_ray_parameters else None,
+            np.nan if need_tstar else None,
+            np.nan if need_spreading else None,
+            np.nan if need_trans_product else None,
         )
 
     all_h = np.concatenate([s["h"] for s in ray_segments])
     all_v = np.concatenate([s["v"] for s in ray_segments])
-    
-    # Solve 2-D ray    
+
     res = solve(
         h=all_h,
         v=all_v,
@@ -357,26 +369,17 @@ def _trace_one(
         epicentral_dist=epic,
         z_src=sz,
         z_rcv=rz,
-        compute_amplitude=compute_amplitude,
+        return_ray_path=need_rays,
+        need_ray_parameter=need_ray_parameters,
+        need_tstar=need_tstar,
+        need_spreading=need_spreading,
+        need_trans_product=need_trans_product,
         transcoef_method=transcoef_method,
         tol=tol,
         max_iter=max_iter,
     )
 
-    # ── Convert 2-D ray path to 3-D ──
-    ray2d = res.ray_path  # (M, 2) — [x_ray, z]
-    M = ray2d.shape[0]
-    ray3d = np.empty((M, 3))
-
-    if epic > 1e-10:
-        ux, uy = dx / epic, dy / epic
-    else:
-        ux, uy = 1.0, 0.0
-
-    ray3d[:, 0] = sx + ray2d[:, 0] * ux
-    ray3d[:, 1] = sy + ray2d[:, 0] * uy
-    ray3d[:, 2] = ray2d[:, 1]
-
+    ray3d = _project_ray_to_3d(res.ray_path, sx, sy, dx, dy, epic)
     return (
         res.travel_time,
         ray3d,
@@ -387,30 +390,20 @@ def _trace_one(
     )
 
 
-# ═══════════════════════════════════════════════════════════════════════
-#  Public API
-# ═══════════════════════════════════════════════════════════════════════
+def _unpack_results(results: list, requested: frozenset[str]) -> TraceResult:
+    """Unpack a flat list of per-ray result tuples into a TraceResult."""
 
-def _unpack_results(
-    results: list,
-    compute_amplitude: bool,
-) -> TraceResult:
-    """Unpack a flat list of per-ray result tuples into a :class:`TraceResult`."""
-    tt = np.array([r[0] for r in results])
-    rays = [r[1] for r in results]
-    p_arr = np.array([r[2] for r in results])
+    def _maybe_array(values):
+        if all(v is None for v in values):
+            return None
+        return np.array([np.nan if v is None else v for v in values], dtype=float)
 
-    tstar = None
-    spreading = None
-    trans_product = None
-
-    if compute_amplitude:
-        ts = [r[3] for r in results]
-        sp = [r[4] for r in results]
-        tp = [r[5] for r in results]
-        tstar = np.array(ts, dtype=float) if ts[0] is not None else None
-        spreading = np.array(sp, dtype=float) if sp[0] is not None else None
-        trans_product = np.array(tp, dtype=float) if tp[0] is not None else None
+    tt = np.array([r[0] for r in results], dtype=float)
+    rays = [r[1] for r in results] if "rays" in requested else None
+    p_arr = _maybe_array([r[2] for r in results]) if "ray_parameters" in requested else None
+    tstar = _maybe_array([r[3] for r in results]) if "tstar" in requested else None
+    spreading = _maybe_array([r[4] for r in results]) if "spreading" in requested else None
+    trans_product = _maybe_array([r[5] for r in results]) if "trans_product" in requested else None
 
     return TraceResult(
         travel_times=tt,
@@ -429,7 +422,7 @@ def trace_rays(
     source_phase: str = "P",
     reflection: Sequence[tuple[float, str]] | None = None,
     refraction: Sequence[tuple[float, str]] | None = None,
-    compute_amplitude: bool = False,
+    requested: Sequence[str] | None = DEFAULT_REQUESTED,
     transcoef_method: str = "standard",
     n_jobs: int = -1,
     backend: str = "loky",
@@ -439,23 +432,15 @@ def trace_rays(
     max_iter: int = 10,
     verbose: bool = True,
 ) -> TraceResult:
-    r"""Trace rays for all source–receiver pairs.
+    r"""Trace rays for all source-receiver pairs.
 
     Every source is paired with every receiver, producing
-    ``n_src × n_rcv`` rays (each source traced to all receivers).
-
-    Parallel execution uses a **batched** dispatch strategy: rays are
-    grouped into large batches (one per worker core) so that the
-    velocity model is serialised only once per batch rather than once
-    per ray.  For very large problems the work is further split into
-    **memory-bounded chunks** whose size is automatically determined
-    from available RAM (or set explicitly via *rays_per_chunk*).
+    ``n_src x n_rcv`` rays (each source traced to all receivers).
 
     Parameters
     ----------
     sources : numpy.ndarray
-        Source coordinates, shape ``(n_src, 3)`` or ``(3,)``
-        for a single source.  Columns: ``[X, Y, Z]``.
+        Source coordinates, shape ``(n_src, 3)`` or ``(3,)``.
     receivers : numpy.ndarray
         Receiver coordinates, shape ``(n_rcv, 3)`` or ``(3,)``.
     velocity_df : pandas.DataFrame
@@ -464,23 +449,16 @@ def trace_rays(
     source_phase : str
         Initial wave phase at source: ``'P'`` or ``'S'``.
     reflection : list of (depth, phase), optional
-        List of reflection points. Each element is a tuple
-        ``(depth, out_phase)`` where ``depth`` matches a layer
-        interface in ``velocity_df`` and ``out_phase`` is the
-        phase of the reflected wave (``'P'`` or ``'S'``).
-        Example: ``[(2000.0, 'S')]`` for P-to-S reflection at 2km.
+        Reflection points as ``(depth, out_phase)`` tuples.
     refraction : list of (depth, phase), optional
-        List of specific refraction/mode-conversion points.
-        Each element is a tuple ``(depth, out_phase)``.
-        If a depth is not listed here, transmission assumes
-        preservation of the incident phase.
-    compute_amplitude : bool
-        If *True*, computes the travel time alongside the ray path, the attenuation operator
-        :math:`t^*`, relative geometrical spreading, and Zoeppritz transmission
-        products.
+        Refraction / mode-conversion points as ``(depth, out_phase)`` tuples.
+    requested : sequence of str, optional
+        Explicit set of requested outputs. Valid names are
+        ``travel_times``, ``rays``, ``ray_parameters``, ``tstar``,
+        ``spreading``, and ``trans_product``. The set must include
+        ``travel_times``.
     transcoef_method : str
-        ``'standard'`` (Zoeppritz) or ``'normalized'``
-        (Zoeppritz with Červený (2001) Eq. 5.3.10 energy-flux normalization).
+        ``'standard'`` (Zoeppritz) or ``'normalized'``.
     n_jobs : int
         Number of parallel jobs (``-1`` = all physical cores).
     backend : str
@@ -490,9 +468,6 @@ def trace_rays(
         sequentially to avoid parallel overhead.
     rays_per_chunk : int or None
         Maximum number of rays to process per memory-bounded chunk.
-        Larger values use more memory but have less overhead.  If
-        *None* (default), the chunk size is automatically determined
-        from available system memory.
     tol : float
         Newton convergence tolerance (m).
     max_iter : int
@@ -504,24 +479,25 @@ def trace_rays(
     -------
     TraceResult
     """
+    requested_set = _normalize_requested(requested)
+    need_rays = "rays" in requested_set
+    need_ray_parameters = "ray_parameters" in requested_set
+    need_tstar = "tstar" in requested_set
+    need_spreading = "spreading" in requested_set
+    need_trans_product = "trans_product" in requested_set
+
     sources = np.atleast_2d(sources)
     receivers = np.atleast_2d(receivers)
     n_src = sources.shape[0]
     n_rcv = receivers.shape[0]
     n_rays = n_src * n_rcv
 
-    # Helper: Normalize phase list to list of tuples
-    def _norm_interaction(
-        arg: Sequence[tuple[float, str]] | None
-    ) -> list[tuple[float, str]]:
-        if arg is None:
-            return []
-        return list(arg)
+    def _norm_interaction(arg: Sequence[tuple[float, str]] | None) -> list[tuple[float, str]]:
+        return [] if arg is None else list(arg)
 
     refl_list = _norm_interaction(reflection)
     refr_list = _norm_interaction(refraction)
 
-    # Validate depths against model
     model_depths = velocity_df["Depth"].values
     tol_depth = 1e-6
 
@@ -533,8 +509,9 @@ def trace_rays(
                 )
             if name == "reflection" and z < tol_depth:
                 raise ValueError(
-                    f"Reflection at the surface (z=0.0) is not currently supported for "
-                    "physical amplitude calculations. Please use a shallow internal interface instead."
+                    "Reflection at the surface (z=0.0) is not currently supported "
+                    "for physical amplitude calculations. Please use a shallow "
+                    "internal interface instead."
                 )
             if ph.upper() not in ("P", "S"):
                 raise ValueError(f"Invalid phase '{ph}' in {name}. Must be 'P' or 'S'.")
@@ -542,16 +519,12 @@ def trace_rays(
     _validate_depths(refl_list, "reflection")
     _validate_depths(refr_list, "refraction")
 
-    # Check for conflicts (same depth in both lists)
     refl_z = {z for z, _ in refl_list}
     refr_z = {z for z, _ in refr_list}
     common = refl_z.intersection(refr_z)
     if common:
-        raise ValueError(
-            f"Cannot strictly reflect and refract at the same depth(s): {common}"
-        )
+        raise ValueError(f"Cannot strictly reflect and refract at the same depth(s): {common}")
 
-    # ── Pre-extract arrays from DataFrame once (lightweight pickle) ──
     ma = ModelArrays.from_dataframe(velocity_df)
 
     common_kw = dict(
@@ -559,22 +532,24 @@ def trace_rays(
         source_phase=source_phase,
         refl_list=refl_list,
         refr_list=refr_list,
-        compute_amplitude=compute_amplitude,
+        need_rays=need_rays,
+        need_ray_parameters=need_ray_parameters,
+        need_tstar=need_tstar,
+        need_spreading=need_spreading,
+        need_trans_product=need_trans_product,
         transcoef_method=transcoef_method,
         tol=tol,
         max_iter=max_iter,
     )
 
-    # ── Sequential path ──
     if n_rays <= sequential_limit or n_jobs == 1:
         results = [
             _trace_one(src=sources[i], rcv=receivers[j], **common_kw)
             for i in range(n_src)
             for j in range(n_rcv)
         ]
-        return _unpack_results(results, compute_amplitude)
+        return _unpack_results(results, requested_set)
 
-    # ── Determine worker count ──
     if n_jobs == -1:
         n_workers = min(psutil.cpu_count(logical=False) or 4, n_rays)
     elif n_jobs < 0:
@@ -582,15 +557,19 @@ def trace_rays(
     else:
         n_workers = n_jobs
 
-    # ── Auto-determine rays_per_chunk from available memory ──
     if rays_per_chunk is None:
         available_mem = psutil.virtual_memory().available
-        # Estimate memory per ray (indices + result tuple + ray path array)
-        bytes_per_ray = 64  # base: index tuple + travel-time scalar
-        bytes_per_ray += 200  # ray path (typical ~8 points × 3 coords × 8 bytes)
-        if compute_amplitude:
-            bytes_per_ray += 200  # tstar, spreading, trans_product extras
-        # Use 50% of available memory, divided by worker count
+        bytes_per_ray = 64
+        if need_rays:
+            bytes_per_ray += 200
+        if need_ray_parameters:
+            bytes_per_ray += 8
+        if need_tstar:
+            bytes_per_ray += 8
+        if need_spreading:
+            bytes_per_ray += 8
+        if need_trans_product:
+            bytes_per_ray += 8
         usable_mem = available_mem * 0.5 / n_workers
         rays_per_chunk = max(100_000, int(usable_mem / bytes_per_ray))
         if verbose:
@@ -599,17 +578,11 @@ def trace_rays(
                 f"(based on {available_mem / 1e9:.1f} GB available RAM)"
             )
 
-    # ── Helper: build batches for a set of index pairs ──
     def _make_batches(index_pairs, src_arr, rcv_arr):
-        """Split *index_pairs* into ~n_workers equal batches.
-
-        Each batch carries the shared source/receiver arrays and
-        :class:`ModelArrays` (numpy-only, fast to pickle) rather
-        than a DataFrame."""
         batch_size = max(1, len(index_pairs) // n_workers)
         batches = []
         for i in range(0, len(index_pairs), batch_size):
-            chunk = index_pairs[i : i + batch_size]
+            chunk = index_pairs[i:i + batch_size]
             batches.append((
                 chunk,
                 src_arr,
@@ -618,32 +591,33 @@ def trace_rays(
                 source_phase,
                 refl_list,
                 refr_list,
-                compute_amplitude,
+                need_rays,
+                need_ray_parameters,
+                need_tstar,
+                need_spreading,
+                need_trans_product,
                 transcoef_method,
                 tol,
                 max_iter,
             ))
         return batches
 
-    # ── Chunked processing for very large problems ──
     if n_rays > rays_per_chunk:
-        # Chunk along the receiver axis to keep memory bounded
         rcv_per_chunk = max(1, rays_per_chunk // n_src)
         n_chunks = (n_rcv + rcv_per_chunk - 1) // rcv_per_chunk
 
         if verbose:
             print(
-                f"Total rays: {n_rays:,} — processing in {n_chunks} chunks "
+                f"Total rays: {n_rays:,} - processing in {n_chunks} chunks "
                 f"({rcv_per_chunk:,} receivers per chunk)..."
             )
 
-        # Pre-allocate flat result arrays
         tt_all = np.empty(n_rays, dtype=np.float64)
-        p_all = np.empty(n_rays, dtype=np.float64)
-        rays_all: list[np.ndarray | None] = [None] * n_rays
-        tstar_all = np.empty(n_rays, dtype=np.float64) if compute_amplitude else None
-        spread_all = np.empty(n_rays, dtype=np.float64) if compute_amplitude else None
-        trans_all = np.empty(n_rays, dtype=np.float64) if compute_amplitude else None
+        rays_all: list[np.ndarray | None] | None = [None] * n_rays if need_rays else None
+        p_all = np.full(n_rays, np.nan, dtype=np.float64) if need_ray_parameters else None
+        tstar_all = np.full(n_rays, np.nan, dtype=np.float64) if need_tstar else None
+        spread_all = np.full(n_rays, np.nan, dtype=np.float64) if need_spreading else None
+        trans_all = np.full(n_rays, np.nan, dtype=np.float64) if need_trans_product else None
 
         chunk_times: list[float] = []
         total_start = time.time()
@@ -656,20 +630,13 @@ def trace_rays(
             chunk_rcv = receivers[rcv_start:rcv_end]
             chunk_nrcv = rcv_end - rcv_start
 
-            # Build index pairs for this chunk (indices into sources / chunk_rcv)
-            chunk_pairs = [
-                (i, j)
-                for i in range(n_src)
-                for j in range(chunk_nrcv)
-            ]
-
+            chunk_pairs = [(i, j) for i in range(n_src) for j in range(chunk_nrcv)]
             batches = _make_batches(chunk_pairs, sources, chunk_rcv)
 
             batch_results = Parallel(
                 n_jobs=n_workers, backend=backend, pre_dispatch="all"
             )(delayed(_trace_batch)(b) for b in batches)
 
-            # Flatten and store at correct global indices
             flat_idx = 0
             for batch_result in batch_results:
                 for res in batch_result:
@@ -679,18 +646,18 @@ def trace_rays(
                     global_idx = local_isrc * n_rcv + global_ircv
 
                     tt_all[global_idx] = res[0]
-                    rays_all[global_idx] = res[1]
-                    p_all[global_idx] = res[2]
-                    if compute_amplitude:
-                        if tstar_all is not None and res[3] is not None:
-                            tstar_all[global_idx] = res[3]
-                        if spread_all is not None and res[4] is not None:
-                            spread_all[global_idx] = res[4]
-                        if trans_all is not None and res[5] is not None:
-                            trans_all[global_idx] = res[5]
+                    if rays_all is not None:
+                        rays_all[global_idx] = res[1]
+                    if p_all is not None and res[2] is not None:
+                        p_all[global_idx] = res[2]
+                    if tstar_all is not None and res[3] is not None:
+                        tstar_all[global_idx] = res[3]
+                    if spread_all is not None and res[4] is not None:
+                        spread_all[global_idx] = res[4]
+                    if trans_all is not None and res[5] is not None:
+                        trans_all[global_idx] = res[5]
                     flat_idx += 1
 
-            # Timing / progress
             chunk_elapsed = time.time() - chunk_start
             chunk_times.append(chunk_elapsed)
             if verbose:
@@ -704,10 +671,9 @@ def trace_rays(
                     eta = f"{remaining:.0f}s"
                 print(
                     f"  Chunk {chunk_idx + 1}/{n_chunks} done "
-                    f"({chunk_elapsed:.1f}s) — ETA: {eta}"
+                    f"({chunk_elapsed:.1f}s) - ETA: {eta}"
                 )
 
-            # Free intermediate memory
             del chunk_pairs, batches, batch_results
 
         if verbose:
@@ -729,22 +695,15 @@ def trace_rays(
             trans_product=trans_all,
         )
 
-    # ── Standard batched parallel path (fits in one chunk) ──
-    all_pairs = [
-        (i, j)
-        for i in range(n_src)
-        for j in range(n_rcv)
-    ]
-
+    all_pairs = [(i, j) for i in range(n_src) for j in range(n_rcv)]
     batches = _make_batches(all_pairs, sources, receivers)
 
     batch_results = Parallel(
         n_jobs=n_workers, backend=backend, pre_dispatch="all"
     )(delayed(_trace_batch)(b) for b in batches)
 
-    # Flatten batches into a single result list
     results: list = []
     for br in batch_results:
         results.extend(br)
 
-    return _unpack_results(results, compute_amplitude)
+    return _unpack_results(results, requested_set)
