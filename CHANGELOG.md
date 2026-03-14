@@ -9,11 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- add explicit `requested={...}` output selection to `trace_rays()` and `solve()`, replacing the coarse amplitude switch (#2)
+- add explicit `requested={...}` output selection to `trace_rays()` and `solve()`, replacing the coarse amplitude switch (#3)
 
 ### Changed
 
-- only build and return ray paths, ray parameters, and path-dependent scalar outputs when explicitly requested (#2)
+- only build and return ray paths, ray parameters, and path-dependent scalar outputs when explicitly requested (#3)
 
 ### Fixed
 
