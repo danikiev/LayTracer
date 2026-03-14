@@ -3,7 +3,7 @@
 This project uses `setuptools_scm`, so the package version is derived from Git tags.
 Use semantic tags in the form `vX.Y.Z` (example: `v0.1.1`).
 
-## 1) One-time setup
+## 1. One-time setup
 
 Install tools:
 
@@ -35,7 +35,7 @@ username = __token__
 password = pypi-PYPI_TOKEN_HERE
 ```
 
-## 2) Standard release flow (TestPyPI first)
+## 2. Standard release flow (TestPyPI first)
 
 From repo root:
 
@@ -77,7 +77,7 @@ Upload to PyPI:
 python -m twine upload -r pypi dist/*
 ```
 
-## 3) Quick automation commands
+## 3. Quick automation commands
 
 Use these two command blocks as a repeatable release routine.
 
@@ -101,13 +101,13 @@ python -m twine upload -r testpypi dist/*
 python -m twine upload -r pypi dist/*
 ```
 
-## 4) Common errors
+## 4. Common errors
 
 - `403 Forbidden`: wrong token or wrong repository (PyPI token vs TestPyPI token).
 - `File already exists`: this version is already uploaded; bump tag/version and rebuild.
 - Unexpected dev version: release tag missing or not fetched in current Git checkout.
 
-## 5) GitHub Actions automation (`release.yml`)
+## 5. GitHub Actions automation (`release.yml`)
 
 This repository includes `.github/workflows/release.yml`.
 
@@ -144,7 +144,7 @@ Notes:
 - Publishing is guarded: only strict semver tags in the form `vMAJOR.MINOR.PATCH` are accepted (example: `v1.2.3`).
 - Upload steps use `skip-existing: true`, so reruns with the same version do not fail if files are already present.
 
-## 6) Release-event automation (`release-on-published.yml`)
+## 6. Release-event automation (`release-on-published.yml`)
 
 This repository also includes `.github/workflows/release-on-published.yml`.
 
@@ -160,7 +160,7 @@ When to use which workflow:
 - Use `release-on-published.yml` if you want publishing only after explicitly creating/publishing a GitHub Release in the UI.
 - Both workflows enforce strict semver tags (`vMAJOR.MINOR.PATCH`) before build/publish jobs run.
 
-## 7) Zenodo release plan (recommended order)
+## 7. Zenodo release plan (recommended order)
 
 Use this checklist to publish a citable Zenodo record for each tagged release.
 

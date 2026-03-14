@@ -1,24 +1,23 @@
 {
-    "title":"LayTracer: Fast two-point seismic ray tracing in layered media",
-   "version":"0.2.1",    
-    "license":"MIT",
-    "upload_type":"software",
-   "description":"LayTracer is an open-source Python package for computing ray paths, travel times, and amplitude attributes in horizontally layered (1D) velocity models. Version 0.2.1 adds energy-flux-normalized reflection and transmission coefficient support following Červený (2001), including a new normalized transmission-coefficient option in ray tracing and solving workflows, updated examples and methodology documentation, and tests covering normalized and vertical-ray cases. The release also renames the transmission-coefficient methods for clarity and removes the former impedance-only normal-incidence option.",
-    "keywords":[
-       "Geophysics",
-       "Seismology",
-       "Ray Tracing",
-       "Layered Media"       
+    "title": "LayTracer: Fast two-point seismic ray tracing in layered media",
+    "version": "0.3.0",
+    "license": "MIT",
+    "upload_type": "software",
+    "description": "LayTracer is an open-source Python package for computing ray paths, travel times, and path-dependent scalar quantities in horizontally layered (1D) velocity models. Version 0.3.0 replaces the coarse amplitude switch with explicit requested-output selection in trace_rays() and solve(), so callers can request only the fields they need, such as travel times, rays, ray parameters, tstar, geometrical spreading, and transmission-coefficient products. The release also fixes degenerate direct-ray amplitude outputs for zero-offset vertical rays and exact same-point rays, makes scalar result packing robust to mixed None and finite values, and adds regression tests for these edge cases.",
+    "keywords": [
+        "Geophysics",
+        "Seismology",
+        "Ray Tracing",
+        "Layered Media"
     ],
-    "access_right":"open",    
-    "language":"eng",
-    "creators":[       
-       {
-          "affiliation": "Center for Integrative Petroleum Research, King Fahd University of Petroleum and Minerals, Dhahran, Saudi Arabia",
-          "name":"Anikiev, Denis",
-          "orcid":"0000-0002-4729-2659",
-          "type":"contactperson"
-       }
+    "access_right": "open",
+    "language": "eng",
+    "creators": [
+        {
+            "affiliation": "Center for Integrative Petroleum Research, King Fahd University of Petroleum and Minerals, Dhahran, Saudi Arabia",
+            "name": "Anikiev, Denis",
+            "orcid": "0000-0002-4729-2659",
+            "type": "contactperson"
+        }
     ]
- }
- 
+}
