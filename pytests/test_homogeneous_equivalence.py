@@ -18,24 +18,24 @@ import pytest
 import laytracer
 
 
-# ── Model parameters (shared by all three approaches) ──────────────────
+# Model parameters (shared by all three approaches)
 
 VP = 5000.0          # P-wave velocity  (m/s)
 VS = VP / 1.732      # S-wave velocity   (m/s)
-RHO = 2700.0         # density           (kg/m³)
+RHO = 2700.0         # density           (kg/m??)
 QP = 500.0           # P-wave quality factor
 QS = 250.0           # S-wave quality factor
 
 # Geometry
-SRC = np.array([0.0, 0.0, 500.0])       # source  (x, y, z) — 500 m depth
-RCV = np.array([5000.0, 0.0, 2500.0])   # receiver (x, y, z) — 2500 m depth
+SRC = np.array([0.0, 0.0, 500.0])       # source  (x, y, z) ??? 500 m depth
+RCV = np.array([5000.0, 0.0, 2500.0])   # receiver (x, y, z) ??? 2500 m depth
 
 EPIC = np.sqrt((RCV[0] - SRC[0]) ** 2 + (RCV[1] - SRC[1]) ** 2)  # 5000 m
 DZ = abs(RCV[2] - SRC[2])                                          # 2000 m
 DIST = np.sqrt(EPIC ** 2 + DZ ** 2)                                # ~5385 m
 
 
-# ── Model DataFrames ───────────────────────────────────────────────────
+# Model DataFrames
 
 def _homo_model() -> pd.DataFrame:
     """Single-layer (homogeneous) model."""
@@ -61,7 +61,7 @@ def _two_layer_identical_model() -> pd.DataFrame:
     })
 
 
-# ── (a) Analytical homogeneous formulas ───────────────────────────────
+# (a) Analytical homogeneous formulas
 
 def _analytical_solution():
     """Closed-form quantities for a straight ray in a homogeneous medium.
@@ -79,14 +79,14 @@ def _analytical_solution():
     # t* (attenuation operator)
     tstar = tt / QP
 
-    # Ray parameter  p = sin(θ) / V = X / (V * R)
+    # Ray parameter  p = sin(??) / V = X / (V * R)
     p = EPIC / (VP * R)
 
-    # Geometrical spreading (relative, Červený convention used in LayTracer)
+    # Geometrical spreading (relative, ??erven?? convention used in LayTracer)
     #   For a homogeneous medium: L = R * V
     spreading = R * VP
 
-    # Transmission coefficient product (no interfaces → 1.0)
+    # Transmission coefficient product (no interfaces ??? 1.0)
     trans_product = 1.0
 
     # Combined amplitude factor  (T / L) * exp(-pi * f * tstar)
@@ -104,7 +104,7 @@ def _analytical_solution():
     )
 
 
-# ── (b) & (c) Code-based solutions ────────────────────────────────────
+# (b) & (c) Code-based solutions
 
 def _run_code(vel_df: pd.DataFrame):
     """Trace one ray through *vel_df* and return the same dict as _analytical_solution."""
@@ -113,7 +113,7 @@ def _run_code(vel_df: pd.DataFrame):
         receivers=RCV,
         velocity_df=vel_df,
         source_phase="P",
-        compute_amplitude=True,
+        requested={"travel_times", "rays", "ray_parameters", "tstar", "spreading", "trans_product"},
         transcoef_method="standard",
     )
     tt = float(result.travel_times[0])
@@ -133,14 +133,14 @@ def _run_code(vel_df: pd.DataFrame):
     )
 
 
-# ═══════════════════════════════════════════════════════════════════════
+# =====================================================================================================================================================================================================================
 #  Test class
-# ═══════════════════════════════════════════════════════════════════════
+# =====================================================================================================================================================================================================================
 
 class TestHomogeneousEquivalence:
     """All three approaches must agree on every computed quantity."""
 
-    # ── fixtures ──────────────────────────────────────────────────────
+    # fixtures
 
     @pytest.fixture(scope="class")
     def analytical(self):
@@ -154,7 +154,7 @@ class TestHomogeneousEquivalence:
     def layered_code(self):
         return _run_code(_two_layer_identical_model())
 
-    # ── travel time ───────────────────────────────────────────────────
+    # travel time
 
     def test_travel_time_analytical_vs_homo(self, analytical, homo_code):
         """(a) vs (b): travel time."""
@@ -174,7 +174,7 @@ class TestHomogeneousEquivalence:
             homo_code["travel_time"], rel=1e-6
         )
 
-    # ── ray parameter ─────────────────────────────────────────────────
+    # ray parameter 
 
     def test_ray_parameter_analytical_vs_homo(self, analytical, homo_code):
         """(a) vs (b): ray parameter."""
@@ -188,7 +188,7 @@ class TestHomogeneousEquivalence:
             analytical["ray_parameter"], rel=1e-6
         )
 
-    # ── t* ────────────────────────────────────────────────────────────
+    # t*
 
     def test_tstar_analytical_vs_homo(self, analytical, homo_code):
         """(a) vs (b): t*."""
@@ -208,7 +208,7 @@ class TestHomogeneousEquivalence:
             homo_code["tstar"], rel=1e-6
         )
 
-    # ── geometrical spreading ─────────────────────────────────────────
+    # geometrical spreading
 
     def test_spreading_analytical_vs_homo(self, analytical, homo_code):
         """(a) vs (b): geometrical spreading."""
@@ -228,7 +228,7 @@ class TestHomogeneousEquivalence:
             homo_code["spreading"], rel=1e-6
         )
 
-    # ── transmission coefficient product ──────────────────────────────
+    # transmission coefficient product
 
     def test_trans_product_analytical_vs_homo(self, analytical, homo_code):
         """(a) vs (b): transmission coefficient product."""
@@ -248,7 +248,7 @@ class TestHomogeneousEquivalence:
             homo_code["trans_product"], rel=1e-6
         )
 
-    # ── combined amplitude factor (T / L) ─────────────────────────────
+    # combined amplitude factor (T / L)
 
     def test_combined_analytical_vs_homo(self, analytical, homo_code):
         """(a) vs (b): combined deterministic amplitude factor."""
@@ -268,7 +268,7 @@ class TestHomogeneousEquivalence:
             homo_code["combined"], rel=1e-6
         )
 
-    # ── summary print (always runs last) ──────────────────────────────
+    # summary print (always runs last)
 
     def test_zz_summary(self, analytical, homo_code, layered_code):
         """Print a comparison table (always passes)."""
@@ -283,3 +283,4 @@ class TestHomogeneousEquivalence:
             )
         lines.append(sep)
         print("\n" + "\n".join(lines))
+

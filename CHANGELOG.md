@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- add explicit `requested={...}` output selection to `trace_rays()` and `solve()`, replacing the coarse amplitude switch (#2)
+
+### Changed
+
+- only build and return ray paths, ray parameters, and path-dependent scalar outputs when explicitly requested (#2)
+
 ### Fixed
 
 - fix degenerate direct-ray amplitude outputs for zero-offset vertical rays and

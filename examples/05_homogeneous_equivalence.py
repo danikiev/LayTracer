@@ -64,7 +64,7 @@ import matplotlib.pyplot as plt
 # Common parameters
 # -----------------
 #
-# We use a single set of elastic constants and a fixed source–receiver
+# We use a single set of elastic constants and a fixed source-receiver
 # geometry throughout the example.
 
 VP = 5000.0       # P-wave velocity  (m/s)
@@ -121,7 +121,7 @@ print(f"Combined (T/L):   {C_a:.10e}")
 # (b) Homogeneous model via LayTracer
 # -----------------------------------
 #
-# A single-layer DataFrame — the simplest possible model.
+# A single-layer DataFrame - the simplest possible model.
 
 homo_df = pd.DataFrame({
     "Depth": [0.0],
@@ -137,7 +137,7 @@ res_h = lt.trace_rays(
     receivers=rcv,
     velocity_df=homo_df,
     source_phase="P",
-    compute_amplitude=True,
+    requested={"travel_times", "rays", "ray_parameters", "tstar", "spreading", "trans_product"},
     transcoef_method="standard",
 )
 
@@ -171,7 +171,7 @@ ax = lt.plot.rays_2d(
     discrete_colorbar=True,
     unit="km",
 )
-ax.set_title("(b) Homogeneous model — single layer")
+ax.set_title("(b) Homogeneous model ??? single layer")
 ax.legend(loc="upper right")
 plt.show()
 
@@ -200,7 +200,7 @@ res_l = lt.trace_rays(
     receivers=rcv,
     velocity_df=layered_df,
     source_phase="P",
-    compute_amplitude=True,
+    requested={"travel_times", "rays", "ray_parameters", "tstar", "spreading", "trans_product"},
     transcoef_method="standard",
 )
 
@@ -224,7 +224,7 @@ print(f"Combined (T/L):   {C_l:.10e}")
 # ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 #
 # The interface at 1500 m is visible, but the ray is identical to the
-# homogeneous case — a straight line — because the two layers share the
+# homogeneous case (a straight line) because the two layers share the
 # same velocity.
 
 ax = lt.plot.rays_2d(
@@ -238,7 +238,7 @@ ax = lt.plot.rays_2d(
     discrete_colorbar=True,
     unit="km",
 )
-ax.set_title("(c) Two-layer model — identical parameters")
+ax.set_title("(c) Two-layer model - identical parameters")
 ax.legend(loc="upper right")
 plt.show()
 
@@ -347,9 +347,9 @@ print(check_df.to_string(index=False, float_format="{:.6e}".format))
 n_fail = (check_df["Status"] == "FAIL").sum()
 print(f"\nResult: {len(checks) - n_fail}/{len(checks)} checks passed.")
 if n_fail:
-    print(">>> SOME CHECKS FAILED — investigate! <<<")
+    print(">>> SOME CHECKS FAILED - investigate! <<<")
 else:
-    print("All checks passed — homogeneous equivalence confirmed.")
+    print("All checks passed - homogeneous equivalence confirmed.")
 
 #%%
 
@@ -374,7 +374,7 @@ res_h_off = lt.trace_rays(
     receivers=rcvs,
     velocity_df=homo_df,
     source_phase="P",
-    compute_amplitude=True,
+    requested={"travel_times", "rays", "ray_parameters", "tstar", "spreading", "trans_product"},
     transcoef_method="standard",
 )
 
@@ -383,7 +383,7 @@ res_l_off = lt.trace_rays(
     receivers=rcvs,
     velocity_df=layered_df,
     source_phase="P",
-    compute_amplitude=True,
+    requested={"travel_times", "rays", "ray_parameters", "tstar", "spreading", "trans_product"},
     transcoef_method="standard",
 )
 
@@ -404,7 +404,7 @@ ax = lt.plot.rays_2d(
     discrete_colorbar=True,
     unit="km",
 )
-ax.set_title("Offset fan — homogeneous model")
+ax.set_title("Offset fan - homogeneous model")
 ax.legend(loc="lower right")
 plt.show()
 
@@ -419,7 +419,7 @@ ax = lt.plot.rays_2d(
     discrete_colorbar=True,
     unit="km",
 )
-ax.set_title("Offset fan — two-layer identical model")
+ax.set_title("Offset fan - two-layer identical model")
 ax.legend(loc="lower right")
 plt.show()
 
@@ -495,7 +495,7 @@ plt.show()
 #
 # This extended quality test now validates equivalence at two levels:
 #
-# 1. **Single source–receiver pair**:
+# 1. **Single source-receiver pair**:
 #    analytical homogeneous formulas, homogeneous code, and identical-layered
 #    code agree for travel time, ray parameter, :math:`t^*`, geometrical
 #    spreading, transmission product, and combined factor.
@@ -508,3 +508,4 @@ plt.show()
 # Therefore, inserting an interface between layers with identical elastic
 # parameters introduces no spurious kinematic or amplitude effects in LayTracer,
 # as required by the underlying physics.
+

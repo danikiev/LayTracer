@@ -204,7 +204,7 @@ def test_transmission_amplitude():
          receivers=[0,0,1200],
          velocity_df=df,
          source_phase="P",
-         compute_amplitude=True,
+         requested={"travel_times", "rays", "ray_parameters", "tstar", "spreading", "trans_product"},
          transcoef_method="standard"
     )
     
@@ -233,7 +233,7 @@ def test_transmission_normalized():
         receivers=[3000, 0, 2500],
         velocity_df=df,
         source_phase="P",
-        compute_amplitude=True,
+        requested={"travel_times", "rays", "ray_parameters", "tstar", "spreading", "trans_product"},
         transcoef_method="standard",
     )
     res_norm = trace_rays(
@@ -241,7 +241,7 @@ def test_transmission_normalized():
         receivers=[3000, 0, 2500],
         velocity_df=df,
         source_phase="P",
-        compute_amplitude=True,
+        requested={"travel_times", "rays", "ray_parameters", "tstar", "spreading", "trans_product"},
         transcoef_method="normalized",
     )
 
@@ -262,7 +262,7 @@ def test_transmission_normalized():
 def test_normalized_vertical_ray():
     """At normal incidence (p=0), normalized T equals standard T * sqrt(Z_out/Z_in).
     
-    The Červený (2001) normalization factor at p=0 simplifies to
+    The ??erven?? (2001) normalization factor at p=0 simplifies to
     sqrt(v_out * rho_out / (v_in * rho_in)) = sqrt(Z_out / Z_in).
     """
     from laytracer.amplitude import psv_rt_coefficients, normalize_rt_coefficient
@@ -281,7 +281,7 @@ def test_normalized_vertical_ray():
         receivers=[0, 0, 1500],
         velocity_df=df,
         source_phase="P",
-        compute_amplitude=True,
+        requested={"travel_times", "rays", "ray_parameters", "tstar", "spreading", "trans_product"},
         transcoef_method="standard",
     )
     res_norm = trace_rays(
@@ -289,7 +289,7 @@ def test_normalized_vertical_ray():
         receivers=[0, 0, 1500],
         velocity_df=df,
         source_phase="P",
-        compute_amplitude=True,
+        requested={"travel_times", "rays", "ray_parameters", "tstar", "spreading", "trans_product"},
         transcoef_method="normalized",
     )
 
@@ -315,3 +315,4 @@ if __name__ == "__main__":
         print(f"Test failed: {e}")
         import traceback
         traceback.print_exc()
+
