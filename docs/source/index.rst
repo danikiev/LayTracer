@@ -8,7 +8,7 @@ Overview
 
 **Documentation:** `danikiev.github.io/LayTracer <https://danikiev.github.io/LayTracer>`_
 
-**Current Version:** |release|
+**Current Version:** |release| (:ref:`changelog`)
 
 ----
 
@@ -28,8 +28,9 @@ Overview
 
    **Quick Links:**
 
-   .. grid:: 1 2 4 4
-      
+   .. grid:: 1 2 2 2
+      :gutter: 3
+        
       .. grid-item-card::
          :link: getting_started
          :link-type: ref
@@ -66,7 +67,14 @@ Overview
          ^^^
          Access detailed API documentation for all modules.
 
-   .. grid:: 1
+      .. grid-item-card::
+         :link: changelog
+         :link-type: ref
+         :link-alt: changelog
+
+         :fas:`clock-rotate-left;pst-color-primary` **Changelog**
+         ^^^
+         Review release notes and notable changes across versions.
 
       .. grid-item-card::
          :link: _static/laytracer.pdf     
@@ -80,10 +88,10 @@ Overview
 
 .. admonition:: Citing LayTracer
 
-   To cite a particular version of LayTracer, please use the following format, e.g. for version 0.2.0:
+   To cite a particular version of LayTracer, please use the following format, e.g. for version 0.3.0:
 
-   | **Anikiev, D. (2026).** *LayTracer: Fast two-point seismic ray tracing in layered media (0.2.0).* Zenodo.
-   | https://doi.org/10.5281/zenodo.18866102
+   | **Anikiev, D. (2026).** *LayTracer: Fast two-point seismic ray tracing in layered media (0.3.0).* Zenodo.
+   | https://doi.org/10.5281/zenodo.19020694
 
    To cite the collection of all versions of LayTracer, please use the following format:
 
@@ -108,6 +116,7 @@ Overview
 
    self   
    getting_started
-   methodology
+   methodology   
    examples/index
    api/index
+   changelog
