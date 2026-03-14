@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- fix degenerate direct-ray amplitude outputs for zero-offset vertical rays and
+  exact same-point rays (#2)
+- make amplitude result packing robust to mixed `None` and finite values (#2)
+- add regression tests for degenerate direct-ray amplitude cases (#2)
+
 ## [v0.2.1] - 2026-03-07
 
 ### Added
@@ -31,7 +40,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `"normal"` (impedance-only) transmission coefficient method — only
   `"standard"` and `"normalized"` are supported (#1)
 - normal-incidence section removed from methodology docs (#1)
-
 
 ## [v0.2.0] - 2026-03-04
 

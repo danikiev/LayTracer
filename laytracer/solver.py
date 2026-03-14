@@ -326,11 +326,15 @@ def solve(
 
         tstar = None
         trans_prod_val = None
+        spreading_val = None
         
         if compute_amplitude:
-            # sum dt / Q over all layers
+            # Use the p -> 0 limit of the direct-wave spreading expression.
+            # For a layered vertical ray this reduces to sum(h_k * v_k), i.e.
+            # Vrms^2 * travel time along the traversed path.
             tstar_val = 0.0
             trans_prod_val = 1.0
+            spreading_val = float(np.sum(h * v))
             
             # Since p=0 for vertical ray
             p_vert = 0.0
@@ -378,7 +382,7 @@ def solve(
             ray_path=pts,
             ray_parameter=0.0,
             tstar=tstar,
-            spreading=None,  # undefined for vertical ray (p=0)
+            spreading=spreading_val,
             trans_product=trans_prod_val,
         )
 

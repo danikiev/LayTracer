@@ -5,6 +5,7 @@ import pandas as pd
 import pytest
 
 import laytracer
+from laytracer.api import _unpack_results
 
 
 def _simple_model():
@@ -118,6 +119,30 @@ class TestTraceRays:
         assert result.tstar is None
         assert result.spreading is None
 
+    def test_zero_offset_vertical_ray_has_finite_amplitudes(self):
+        """Zero-offset direct rays through multiple layers must keep finite amplitudes."""
+        df = _simple_model()
+        src = np.array([0.0, 0.0, 500.0])
+        rcv = np.array([0.0, 0.0, 1500.0])
+        result = laytracer.trace_rays(
+            src, rcv, df, compute_amplitude=True, n_jobs=1
+        )
+
+        expected_tt = 500.0 / 3000.0 + 500.0 / 4500.0
+        expected_tstar = 500.0 / (3000.0 * 200.0) + 500.0 / (4500.0 * 400.0)
+        expected_spreading = 500.0 * 3000.0 + 500.0 * 4500.0
+        expected_trans = abs(
+            laytracer.transmission_normal(3000.0, 2200.0, 4500.0, 2500.0)
+        )
+
+        assert result.travel_times[0] == pytest.approx(expected_tt, rel=1e-6)
+        assert result.tstar[0] == pytest.approx(expected_tstar, rel=1e-6)
+        assert result.spreading[0] == pytest.approx(expected_spreading, rel=1e-6)
+        assert result.trans_product[0] == pytest.approx(expected_trans, rel=1e-6)
+        assert np.isfinite(result.tstar[0])
+        assert np.isfinite(result.spreading[0])
+        assert np.isfinite(result.trans_product[0])
+
     def test_same_point_degenerate(self):
         """Source and receiver at the exact same point."""
         df = _simple_model()
@@ -127,6 +152,10 @@ class TestTraceRays:
             src, rcv, df, compute_amplitude=True
         )
         assert result.travel_times[0] == pytest.approx(0.0)
+        assert result.tstar[0] == pytest.approx(0.0)
+        assert result.spreading[0] == pytest.approx(0.0)
+        assert result.trans_product[0] == pytest.approx(1.0)
+        assert np.isfinite(result.spreading[0])
 
     def test_3d_ray_path_coords(self):
         """3-D ray path starts at source and ends at receiver."""
@@ -139,3 +168,20 @@ class TestTraceRays:
         np.testing.assert_allclose(ray[0], src, atol=1.0)
         # End point z
         assert ray[-1, 2] == pytest.approx(rcv[2], abs=1.0)
+
+
+def test_unpack_results_handles_mixed_none_amplitudes():
+    """Mixed finite/None amplitude values should unpack to arrays with NaNs."""
+    results = [
+        (1.0, np.array([[0.0, 0.0, 0.0]]), 0.1, 0.2, None, 1.0),
+        (2.0, np.array([[1.0, 0.0, 0.0]]), 0.2, 0.3, 4.5, None),
+    ]
+
+    unpacked = _unpack_results(results, compute_amplitude=True)
+
+    np.testing.assert_allclose(unpacked.travel_times, [1.0, 2.0])
+    np.testing.assert_allclose(unpacked.tstar, [0.2, 0.3])
+    assert np.isnan(unpacked.spreading[0])
+    assert unpacked.spreading[1] == pytest.approx(4.5)
+    assert unpacked.trans_product[0] == pytest.approx(1.0)
+    assert np.isnan(unpacked.trans_product[1])

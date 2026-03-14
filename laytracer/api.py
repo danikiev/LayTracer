@@ -123,7 +123,7 @@ def _trace_one(
                 return (
                     0.0, ray3d, 0.0,
                     0.0 if compute_amplitude else None,
-                    None if compute_amplitude else None,
+                    0.0 if compute_amplitude else None,
                     1.0 if compute_amplitude else None,
                 )
 
@@ -405,12 +405,17 @@ def _unpack_results(
     trans_product = None
 
     if compute_amplitude:
+        def _maybe_array(values):
+            if all(v is None for v in values):
+                return None
+            return np.array([np.nan if v is None else v for v in values], dtype=float)
+
         ts = [r[3] for r in results]
         sp = [r[4] for r in results]
         tp = [r[5] for r in results]
-        tstar = np.array(ts, dtype=float) if ts[0] is not None else None
-        spreading = np.array(sp, dtype=float) if sp[0] is not None else None
-        trans_product = np.array(tp, dtype=float) if tp[0] is not None else None
+        tstar = _maybe_array(ts)
+        spreading = _maybe_array(sp)
+        trans_product = _maybe_array(tp)
 
     return TraceResult(
         travel_times=tt,
@@ -641,9 +646,9 @@ def trace_rays(
         tt_all = np.empty(n_rays, dtype=np.float64)
         p_all = np.empty(n_rays, dtype=np.float64)
         rays_all: list[np.ndarray | None] = [None] * n_rays
-        tstar_all = np.empty(n_rays, dtype=np.float64) if compute_amplitude else None
-        spread_all = np.empty(n_rays, dtype=np.float64) if compute_amplitude else None
-        trans_all = np.empty(n_rays, dtype=np.float64) if compute_amplitude else None
+        tstar_all = np.full(n_rays, np.nan, dtype=np.float64) if compute_amplitude else None
+        spread_all = np.full(n_rays, np.nan, dtype=np.float64) if compute_amplitude else None
+        trans_all = np.full(n_rays, np.nan, dtype=np.float64) if compute_amplitude else None
 
         chunk_times: list[float] = []
         total_start = time.time()
