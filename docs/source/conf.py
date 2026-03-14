@@ -2,6 +2,7 @@
 import sys
 import os
 import datetime
+from pathlib import Path
 from importlib.metadata import version as pkg_version
 from importlib.metadata import PackageNotFoundError
 from sphinx_gallery.sorting import ExampleTitleSortKey
@@ -9,8 +10,16 @@ import plotly.io as pio
 
 pio.renderers.default = 'sphinx_gallery'
 
+DOCS_SOURCE = Path(__file__).resolve().parent
+PROJECT_ROOT = DOCS_SOURCE.parents[1]
+
 # Sphinx needs to be able to import the package
+sys.path.insert(0, str(DOCS_SOURCE))
 sys.path.insert(0, os.path.abspath("../../laytracer"))
+
+from _ext.changelog import generate_changelog_include
+
+generate_changelog_include(PROJECT_ROOT, DOCS_SOURCE)
 
 extensions = [
     "sphinx.ext.autodoc",
@@ -146,7 +155,7 @@ else:
 html_theme = "pydata_sphinx_theme"
 html_theme_options = {
 #     "logo_only": True,
-    "display_version": True,
+#     "display_version": True,
 #     "logo": {
 #         "image_light": "logo.png",
 #         "image_dark": "logo.png",
