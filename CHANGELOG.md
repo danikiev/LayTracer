@@ -5,7 +5,7 @@ All notable changes to Laytracer will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [v0.3.1] - 2026-04-20
 
 ### Added
 
@@ -15,12 +15,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   reflection/transmission coefficient curves
 - new regression tests for the critical-angle helpers and coefficient-panel
   plotting helper
+- citing docs section with updated DOI and citation info
+- credits docs section with author and contributor acknowledgements and library credits
 
 ### Changed
 
 - refactored example 3 to use the new critical-angle and coefficient-panel
   helpers instead of open-coded calculations and repeated subplot logic
 - updated the API reference to include the new amplitude and plotting helpers
+- docs index page revised
 
 ## [v0.3.0] - 2026-03-14
 

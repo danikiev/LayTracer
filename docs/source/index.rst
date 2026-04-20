@@ -6,9 +6,20 @@ Overview
 
 **LayTracer** is an open-source Python package for computing ray paths, travel times, and amplitude attributes in horizontally layered (1D) velocity models with constant layer velocities. It is based on the dimensionless ray parameter method of :cite:t:`FangChen2019`, achieving rapid convergence.
 
-**Documentation:** `danikiev.github.io/LayTracer <https://danikiev.github.io/LayTracer>`_
-
 **Current Version:** |release| (:ref:`changelog`)
+
+.. only:: html
+   
+   **Latest DOI:** |DOI| (:ref:`citing`)
+
+   .. |DOI| image:: https://zenodo.org/badge/1160026484.svg
+         :target: https://zenodo.org/badge/latestdoi/1160026484
+
+.. only:: latex
+
+   **This documentation online:** `danikiev.github.io/LayTracer <https://danikiev.github.io/LayTracer>`_
+
+   **DOI:** `10.5281/zenodo.18850919 <https://doi.org/10.5281/zenodo.18850919>`__ (:ref:`citing`)
 
 ----
 
@@ -68,6 +79,24 @@ Overview
          Access detailed API documentation for all modules.
 
       .. grid-item-card::
+         :link: citing
+         :link-type: ref
+         :link-alt: citing
+
+         :fas:`quote-right;pst-color-primary` **Citing**
+         ^^^
+         Find citation information and BibTeX entries for referencing LayTracer in your research.
+
+      .. grid-item-card::
+         :link: credits
+         :link-type: ref
+         :link-alt: credits
+
+         :fas:`users;pst-color-primary` **Credits**
+         ^^^
+         Acknowledge authors, contributors and used libraries in the development of LayTracer.
+
+      .. grid-item-card::
          :link: changelog
          :link-type: ref
          :link-alt: changelog
@@ -86,29 +115,6 @@ Overview
 
 ----
 
-.. admonition:: Citing LayTracer
-
-   To cite a particular version of LayTracer, please use the following format, e.g. for version 0.3.0:
-
-   | **Anikiev, D. (2026).** *LayTracer: Fast two-point seismic ray tracing in layered media (0.3.0).* Zenodo.
-   | https://doi.org/10.5281/zenodo.19020694
-
-   To cite the collection of all versions of LayTracer, please use the following format:
-
-   | **Anikiev, D. (2026).** *LayTracer: Fast two-point seismic ray tracing in layered media.* Zenodo. 
-   | https://doi.org/10.5281/zenodo.18850919
-
-   This DOI represents all versions, and will always resolve to the latest one.
-
-.. only:: html
-   
-   **Latest DOI:** |DOI|
-
-   .. |DOI| image:: https://zenodo.org/badge/1160026484.svg
-         :target: https://zenodo.org/badge/latestdoi/1160026484
-
-----
-
 .. toctree::
    :maxdepth: 3
    :hidden:
@@ -119,4 +125,6 @@ Overview
    methodology   
    examples/index
    api/index
+   citing
+   credits
    changelog
