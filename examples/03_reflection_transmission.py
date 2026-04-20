@@ -47,6 +47,48 @@ fig.suptitle("P-SV Test Model", fontsize=14)
 fig.tight_layout()
 plt.show()
 
+
+def _marker_spec(angle, label, color, linestyle, linewidth=0.8):
+    return {
+        "angle": angle,
+        "label": label,
+        "line_kwargs": {
+            "color": color,
+            "ls": linestyle,
+            "lw": linewidth,
+        },
+    }
+
+
+def _coefficient_panels(panel_defs, curve_defs, common_markers, panel_markers, ylim):
+    panels = []
+    for key, ylabel, title in panel_defs:
+        curves = []
+        for curve_def in curve_defs:
+            curves.append(
+                {
+                    "y": np.abs(curve_def["data"][key]),
+                    "label": curve_def.get("label"),
+                    "plot_kwargs": dict(curve_def["plot_kwargs"]),
+                }
+            )
+
+        markers = [dict(marker) for marker in common_markers]
+        markers.extend(panel_markers.get(key, []))
+
+        panels.append(
+            {
+                "curves": curves,
+                "markers": markers,
+                "title": title,
+                "ylabel": ylabel,
+                "ylim": ylim,
+                "legend": True,
+            }
+        )
+
+    return panels
+
 # Ray-parameter sweep: p from 0 to 1/Vp_incident
 n_p = 200
 p_vec = np.linspace(0, 1.0 / mi_vp, n_p + 1)
@@ -82,7 +124,7 @@ RT = lt.psv_rt_coefficients(
 
 # Incidence angle (P-wave): :math:`\theta` = \arcsin{p \cdot V_p}`
 angle_P = np.rad2deg(np.arcsin(np.clip(p_vec * mi_vp, -1, 1)))
-crit_P = np.rad2deg(np.arcsin(mi_vp / mt_vp))   # transmitted P critical
+crit_P = lt.find_critical_angles(mi_vp, {"T(P)": mt_vp})
 
 # Detect Brewster angles for all P-incident coefficients
 brew_P = lt.find_brewster_angles(RT, angle_P, keys=["Rpp", "Rps", "Tpp", "Tps"])
@@ -92,39 +134,47 @@ p_keys = ["Rpp", "Rps", "Tpp", "Tps"]
 ymax_P = max(np.nanmax(np.abs(RT[k])) for k in p_keys) * 1.1
 ymax_P = max(ymax_P, 0.5)
 
-fig, axes = plt.subplots(2, 2, figsize=(12, 9))
-fig.suptitle(
-    "Incident P-wave\n"
-    f"Inc: Vp={mi_vp}, Vs={mi_vs}, ρ={mi_rho}  →  "
-    f"Trans: Vp={mt_vp}, Vs={mt_vs}, ρ={mt_rho}",
-    fontsize=11,
-)
-
 labels = [
-    (0, 0, "Rpp", r"$|R_{PP}|$",  "Reflected P"),
-    (0, 1, "Rps", r"$|R_{PS}|$",  "Reflected SV"),
-    (1, 0, "Tpp", r"$|T_{PP}|$",  "Transmitted P"),
-    (1, 1, "Tps", r"$|T_{PS}|$",  "Transmitted SV"),
+    ("Rpp", r"$|R_{PP}|$", "Reflected P"),
+    ("Rps", r"$|R_{PS}|$", "Reflected SV"),
+    ("Tpp", r"$|T_{PP}|$", "Transmitted P"),
+    ("Tps", r"$|T_{PS}|$", "Transmitted SV"),
 ]
-
-for row, col, key, ylabel, title in labels:
-    ax = axes[row, col]
-    ax.plot(angle_P, np.abs(RT[key]), "k-", lw=1.5)
-    ax.axvline(crit_P, color="r", ls="--", lw=0.8,
-               label=f"T(P) crit. {crit_P:.1f}°")
-    # Brewster lines for this coefficient
-    for ba in brew_P.get(key, []):
-        ax.axvline(ba, color="tab:purple", ls=":", lw=0.8,
-                   label=f"Brewster {ba:.1f}°")
-    ax.set_xlim(0, 90)
-    ax.set_ylim(-0.05, ymax_P)
-    ax.set_xlabel("Incidence angle (°)")
-    ax.set_ylabel(ylabel)
-    ax.set_title(title)
-    ax.legend(fontsize=7, loc="upper right")
-    ax.grid(True, alpha=0.3)
-
-fig.tight_layout()
+common_markers_P = [
+    _marker_spec(
+        crit_P["T(P)"],
+        f"T(P) crit. {crit_P['T(P)']:.1f} deg",
+        "r",
+        "--",
+    )
+]
+panel_markers_P = {
+    key: [
+        _marker_spec(ba, f"Brewster {ba:.1f} deg", "tab:purple", ":")
+        for ba in brew_P.get(key, [])
+    ]
+    for key in p_keys
+}
+panels = _coefficient_panels(
+    labels,
+    curve_defs=[{"data": RT, "plot_kwargs": {"color": "k", "lw": 1.5}}],
+    common_markers=common_markers_P,
+    panel_markers=panel_markers_P,
+    ylim=(-0.05, ymax_P),
+)
+fig, axes = lt.plot.coefficient_panels(
+    panels,
+    shape=(2, 2),
+    figsize=(12, 9),
+    default_x=angle_P,
+    default_xlim=(0.0, 90.0),
+    default_xlabel="Incidence angle (deg)",
+    suptitle=(
+        "Incident P-wave\n"
+        f"Inc: Vp={mi_vp}, Vs={mi_vs}, rho={mi_rho}  ->  "
+        f"Trans: Vp={mt_vp}, Vs={mt_vs}, rho={mt_rho}"
+    ),
+)
 plt.show()
 
 ###############################################################################
@@ -165,32 +215,37 @@ ymax_Pn = max(
 ) * 1.1
 ymax_Pn = max(ymax_Pn, 0.5)
 
-fig, axes = plt.subplots(2, 2, figsize=(12, 9))
-fig.suptitle(
-    "Incident P-wave ??? normalized (Červený, 2001)\n"
-    f"Inc: Vp={mi_vp}, Vs={mi_vs}, ρ={mi_rho}  →  "
-    f"Trans: Vp={mt_vp}, Vs={mt_vs}, ρ={mt_rho}",
-    fontsize=11,
+panels = _coefficient_panels(
+    labels,
+    curve_defs=[
+        {
+            "data": RT,
+            "label": "standard",
+            "plot_kwargs": {"color": "k", "lw": 0.8, "alpha": 0.4},
+        },
+        {
+            "data": RT_norm_P,
+            "label": "normalized",
+            "plot_kwargs": {"color": "tab:blue", "lw": 1.5},
+        },
+    ],
+    common_markers=common_markers_P,
+    panel_markers=panel_markers_P,
+    ylim=(-0.05, max(ymax_P, ymax_Pn)),
 )
-
-for row, col, key, ylabel, title in labels:
-    ax = axes[row, col]
-    ax.plot(angle_P, np.abs(RT[key]), "k-", lw=0.8, alpha=0.4, label="standard")
-    ax.plot(angle_P, np.abs(RT_norm_P[key]), "tab:blue", lw=1.5, label="normalized")
-    ax.axvline(crit_P, color="r", ls="--", lw=0.8,
-               label=f"T(P) crit. {crit_P:.1f}°")
-    for ba in brew_P.get(key, []):
-        ax.axvline(ba, color="tab:purple", ls=":", lw=0.8,
-                   label=f"Brewster {ba:.1f}°")
-    ax.set_xlim(0, 90)
-    ax.set_ylim(-0.05, max(ymax_P, ymax_Pn))
-    ax.set_xlabel("Incidence angle (°)")
-    ax.set_ylabel(ylabel)
-    ax.set_title(title)
-    ax.legend(fontsize=7, loc="upper right")
-    ax.grid(True, alpha=0.3)
-
-fig.tight_layout()
+fig, axes = lt.plot.coefficient_panels(
+    panels,
+    shape=(2, 2),
+    figsize=(12, 9),
+    default_x=angle_P,
+    default_xlim=(0.0, 90.0),
+    default_xlabel="Incidence angle (deg)",
+    suptitle=(
+        "Incident P-wave - normalized (Cerveny, 2001)\n"
+        f"Inc: Vp={mi_vp}, Vs={mi_vs}, rho={mi_rho}  ->  "
+        f"Trans: Vp={mt_vp}, Vs={mt_vs}, rho={mt_rho}"
+    ),
+)
 plt.show()
 
 # %%
@@ -385,28 +440,21 @@ RT_sv = lt.psv_rt_coefficients(
 angle_SV = np.rad2deg(np.arcsin(np.clip(p_vec_sv * mi_vs, -1, 1)))
 
 # Critical angles
-crit_tp = np.rad2deg(np.arcsin(mi_vs / mt_vp))   # transmitted P
-crit_rp = np.rad2deg(np.arcsin(mi_vs / mi_vp))   # reflected P
-crit_ts = np.rad2deg(np.arcsin(mi_vs / mt_vs))   # transmitted SV
+crit_SV = lt.find_critical_angles(
+    mi_vs,
+    {"T(P)": mt_vp, "R(P)": mi_vp, "T(SV)": mt_vs},
+)
 
 # Detect Brewster angles for all SV-incident coefficients
 brew_SV = lt.find_brewster_angles(
     RT_sv, angle_SV, keys=["Rsp", "Rss", "Tsp", "Tss"],
 )
 
-fig, axes = plt.subplots(2, 2, figsize=(12, 9))
-fig.suptitle(
-    "Incident SV-wave\n"
-    f"Inc: Vp={mi_vp}, Vs={mi_vs}, ρ={mi_rho}  →  "
-    f"Trans: Vp={mt_vp}, Vs={mt_vs}, ρ={mt_rho}",
-    fontsize=11,
-)
-
 labels_sv = [
-    (0, 0, "Rsp", r"$|R_{SP}|$",  "Reflected P"),
-    (0, 1, "Rss", r"$|R_{SS}|$",  "Reflected SV"),
-    (1, 0, "Tsp", r"$|T_{SP}|$",  "Transmitted P"),
-    (1, 1, "Tss", r"$|T_{SS}|$",  "Transmitted SV"),
+    ("Rsp", r"$|R_{SP}|$", "Reflected P"),
+    ("Rss", r"$|R_{SS}|$", "Reflected SV"),
+    ("Tsp", r"$|T_{SP}|$", "Transmitted P"),
+    ("Tss", r"$|T_{SS}|$", "Transmitted SV"),
 ]
 
 # Shared y-limit across all four SV-incident panels
@@ -414,28 +462,38 @@ sv_keys = ["Rsp", "Rss", "Tsp", "Tss"]
 ymax_SV = max(np.nanmax(np.abs(RT_sv[k])) for k in sv_keys) * 1.1
 ymax_SV = max(ymax_SV, 0.5)
 
-for row, col, key, ylabel, title in labels_sv:
-    ax = axes[row, col]
-    ax.plot(angle_SV, np.abs(RT_sv[key]), "k-", lw=1.5)
-    ax.axvline(crit_tp, color="tab:blue", ls=":", lw=0.8,
-               label=f"T(P) crit. {crit_tp:.1f}°")
-    ax.axvline(crit_rp, color="r", ls="--", lw=0.8,
-               label=f"R(P) crit. {crit_rp:.1f}°")
-    ax.axvline(crit_ts, color="tab:green", ls="-.", lw=0.8,
-               label=f"T(SV) crit. {crit_ts:.1f}°")
-    # Brewster lines for this coefficient
-    for ba in brew_SV.get(key, []):
-        ax.axvline(ba, color="tab:purple", ls=":", lw=0.8,
-                   label=f"Brewster {ba:.1f}°")
-    ax.set_xlim(0, 90)
-    ax.set_ylim(-0.05, ymax_SV)
-    ax.set_xlabel("Incidence angle (°)")
-    ax.set_ylabel(ylabel)
-    ax.set_title(title)
-    ax.legend(fontsize=7, loc="upper right")
-    ax.grid(True, alpha=0.3)
-
-fig.tight_layout()
+common_markers_SV = [
+    _marker_spec(crit_SV["T(P)"], f"T(P) crit. {crit_SV['T(P)']:.1f} deg", "tab:blue", ":"),
+    _marker_spec(crit_SV["R(P)"], f"R(P) crit. {crit_SV['R(P)']:.1f} deg", "r", "--"),
+    _marker_spec(crit_SV["T(SV)"], f"T(SV) crit. {crit_SV['T(SV)']:.1f} deg", "tab:green", "-."),
+]
+panel_markers_SV = {
+    key: [
+        _marker_spec(ba, f"Brewster {ba:.1f} deg", "tab:purple", ":")
+        for ba in brew_SV.get(key, [])
+    ]
+    for key in sv_keys
+}
+panels = _coefficient_panels(
+    labels_sv,
+    curve_defs=[{"data": RT_sv, "plot_kwargs": {"color": "k", "lw": 1.5}}],
+    common_markers=common_markers_SV,
+    panel_markers=panel_markers_SV,
+    ylim=(-0.05, ymax_SV),
+)
+fig, axes = lt.plot.coefficient_panels(
+    panels,
+    shape=(2, 2),
+    figsize=(12, 9),
+    default_x=angle_SV,
+    default_xlim=(0.0, 90.0),
+    default_xlabel="Incidence angle (deg)",
+    suptitle=(
+        "Incident SV-wave\n"
+        f"Inc: Vp={mi_vp}, Vs={mi_vs}, rho={mi_rho}  ->  "
+        f"Trans: Vp={mt_vp}, Vs={mt_vs}, rho={mt_rho}"
+    ),
+)
 plt.show()
 
 ###############################################################################
@@ -464,36 +522,37 @@ ymax_SVn = max(
 ) * 1.1
 ymax_SVn = max(ymax_SVn, 0.5)
 
-fig, axes = plt.subplots(2, 2, figsize=(12, 9))
-fig.suptitle(
-    "Incident SV-wave - normalized (Červený, 2001)\n"
-    f"Inc: Vp={mi_vp}, Vs={mi_vs}, ρ={mi_rho}  →  "
-    f"Trans: Vp={mt_vp}, Vs={mt_vs}, ρ={mt_rho}",
-    fontsize=11,
+panels = _coefficient_panels(
+    labels_sv,
+    curve_defs=[
+        {
+            "data": RT_sv,
+            "label": "standard",
+            "plot_kwargs": {"color": "k", "lw": 0.8, "alpha": 0.4},
+        },
+        {
+            "data": RT_norm_SV,
+            "label": "normalized",
+            "plot_kwargs": {"color": "tab:blue", "lw": 1.5},
+        },
+    ],
+    common_markers=common_markers_SV,
+    panel_markers=panel_markers_SV,
+    ylim=(-0.05, max(ymax_SV, ymax_SVn)),
 )
-
-for row, col, key, ylabel, title in labels_sv:
-    ax = axes[row, col]
-    ax.plot(angle_SV, np.abs(RT_sv[key]), "k-", lw=0.8, alpha=0.4, label="standard")
-    ax.plot(angle_SV, np.abs(RT_norm_SV[key]), "tab:blue", lw=1.5, label="normalized")
-    ax.axvline(crit_tp, color="tab:blue", ls=":", lw=0.8,
-               label=f"T(P) crit. {crit_tp:.1f}°")
-    ax.axvline(crit_rp, color="r", ls="--", lw=0.8,
-               label=f"R(P) crit. {crit_rp:.1f}°")
-    ax.axvline(crit_ts, color="tab:green", ls="-.", lw=0.8,
-               label=f"T(SV) crit. {crit_ts:.1f}°")
-    for ba in brew_SV.get(key, []):
-        ax.axvline(ba, color="tab:purple", ls=":", lw=0.8,
-                   label=f"Brewster {ba:.1f}°")
-    ax.set_xlim(0, 90)
-    ax.set_ylim(-0.05, max(ymax_SV, ymax_SVn))
-    ax.set_xlabel("Incidence angle (°)")
-    ax.set_ylabel(ylabel)
-    ax.set_title(title)
-    ax.legend(fontsize=7, loc="upper right")
-    ax.grid(True, alpha=0.3)
-
-fig.tight_layout()
+fig, axes = lt.plot.coefficient_panels(
+    panels,
+    shape=(2, 2),
+    figsize=(12, 9),
+    default_x=angle_SV,
+    default_xlim=(0.0, 90.0),
+    default_xlabel="Incidence angle (deg)",
+    suptitle=(
+        "Incident SV-wave - normalized (Cerveny, 2001)\n"
+        f"Inc: Vp={mi_vp}, Vs={mi_vs}, rho={mi_rho}  ->  "
+        f"Trans: Vp={mt_vp}, Vs={mt_vs}, rho={mt_rho}"
+    ),
+)
 plt.show()
 
 # %%

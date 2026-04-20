@@ -432,3 +432,38 @@ class TestBrewsterAngles:
         n_loose = len(loose.get("Rps", []))
         assert n_loose >= n_strict
 
+
+class TestCriticalAngles:
+    """Tests for :func:`laytracer.critical_angle` and :func:`laytracer.find_critical_angles`."""
+
+    def test_critical_angle_known_value(self):
+        """A faster outgoing wave must yield the textbook critical angle."""
+        angle = laytracer.critical_angle(2.9, 8.0)
+        assert angle == pytest.approx(np.rad2deg(np.arcsin(2.9 / 8.0)))
+
+    def test_critical_angle_none_when_outgoing_is_slower(self):
+        """No critical angle exists when the outgoing wave is not faster."""
+        assert laytracer.critical_angle(4.98, 4.6) is None
+        assert laytracer.critical_angle(4.98, 4.98) is None
+
+    def test_find_critical_angles_mapping(self):
+        """Dictionary input should preserve labels and omit absent angles by default."""
+        result = laytracer.find_critical_angles(
+            2.9,
+            {"T(P)": 8.0, "R(P)": 4.98, "T(SV)": 4.6},
+        )
+        assert set(result) == {"T(P)", "R(P)", "T(SV)"}
+        assert result["T(P)"] == pytest.approx(np.rad2deg(np.arcsin(2.9 / 8.0)))
+        assert result["R(P)"] == pytest.approx(np.rad2deg(np.arcsin(2.9 / 4.98)))
+        assert result["T(SV)"] == pytest.approx(np.rad2deg(np.arcsin(2.9 / 4.6)))
+
+    def test_find_critical_angles_include_none(self):
+        """include_none should keep labels without a critical angle."""
+        result = laytracer.find_critical_angles(
+            4.98,
+            {"T(P)": 8.0, "T(SV)": 4.6},
+            include_none=True,
+        )
+        assert result["T(P)"] == pytest.approx(np.rad2deg(np.arcsin(4.98 / 8.0)))
+        assert result["T(SV)"] is None
+

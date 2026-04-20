@@ -3,6 +3,7 @@
 [![DOI](https://zenodo.org/badge/1160026484.svg)](https://zenodo.org/badge/latestdoi/1160026484)
 [![Pytest](https://github.com/danikiev/LayTracer/actions/workflows/pytest.yml/badge.svg)](https://github.com/danikiev/LayTracer/actions/workflows/pytest.yml)
 [![Docs](https://github.com/danikiev/LayTracer/actions/workflows/docs.yml/badge.svg)](https://github.com/danikiev/LayTracer/actions/workflows/docs.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellowgreen.svg)](https://github.com/danikiev/LayTracer/blob/main/LICENSE)
 
 **Fast two-point seismic ray tracing in layered media.**
 
@@ -400,7 +401,21 @@ LayTracer is released under the [MIT License](LICENSE).
 
 ## 📝 Citation
 
-If you use a specific version of LayTracer in your research, please cite:
+If you use a LayTracer in your research, please cite:
+
+```bibtex
+@software{Anikiev2026LayTracer,
+  author       = {Anikiev, Denis},
+  title        = {{LayTracer}: {F}ast two-point seismic ray tracing in layered media},
+  year         = {2026},
+  publisher    = {Zenodo},
+  doi          = {10.5281/zenodo.18850919},  
+  url          = {https://github.com/danikiev/LayTracer}
+}
+```
+
+The DOI in the above citation points to the latest version of LayTracer.
+If you use a specific version, please cite that version's DOI (available on the Zenodo release page), e.g.:
 
 ```bibtex
 @software{Anikiev2026LayTracerVersion,
@@ -408,22 +423,9 @@ If you use a specific version of LayTracer in your research, please cite:
   title        = {{LayTracer}: {F}ast two-point seismic ray tracing in layered media},
   year         = {2026},
   publisher    = {Zenodo},
-  version      = {0.3.0},  
-  url          = {https://github.com/danikiev/LayTracer},
+  version      = {0.3.0},    
   license      = {MIT},
-  doi          = {10.5281/zenodo.19020694}
-}
-```
-
-To cite the whole collection (directs to the latest version) please use:
-
-```bibtex
-@misc{Anikiev2026LayTracer,
-  author       = {Anikiev, Denis},
-  title        = {{LayTracer}: {F}ast two-point seismic ray tracing in layered media},
-  year         = {2026},
-  publisher    = {Zenodo},
-  doi          = {10.5281/zenodo.18850919},
-  howpublished = {\url{https://doi.org/10.5281/zenodo.18850919}}
+  doi          = {10.5281/zenodo.19020694},
+  url          = {https://github.com/danikiev/LayTracer}
 }
 ```

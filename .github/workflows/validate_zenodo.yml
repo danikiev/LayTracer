@@ -1,0 +1,20 @@
+name: Validate Zenodo Metadata
+
+on:
+  push:
+    branches: [ "main", "dev" ] # Runs on every push to your main and dev branches
+  pull_request:
+    branches: [ "main", "dev" ] # Runs on pull requests
+  workflow_dispatch:      # Adds a manual "Run workflow" button in GitHub
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v6 # Uses the latest credential security version
+
+      - name: 🛡️ Validate Zenodo Metadata
+        uses: vsoch/zenodo-validator@main 
+        with:
+          path: '.zenodo.json'
