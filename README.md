@@ -375,14 +375,20 @@ LayTracer/
 │   └── test_symmetry.py
 ├── docs/                    # Sphinx documentation
 │   └── source/
-│       ├── index.rst
-│       ├── getting_started.rst
-│       ├── methodology.rst   # Full mathematical derivations
-│       └── references.bib
+|       ├── api/                  # Generated API reference pages
+│       |   └── index.rst         # API reference landing page
+|       ├── changelog.rst       # Changelog page with a placeholder for changelog content generated from CHANGELOG.md
+│       ├── citing.rst          # Citation information and BibTeX entries
+│       ├── conf.py             # Sphinx configuration
+│       ├── credits.rst         # Author and contributor acknowledgements and library credits
+│       ├── getting_started.rst # Installation and quick start
+│       ├── index.rst           # Main index page with links to all sections
+│       ├── methodology.rst     # Full mathematical derivations
+│       └── references.bib      # Bibliography for the docs
 ├── pyproject.toml           # Build configuration (setuptools + setuptools-scm)
 ├── environment.yml          # Conda environment specification
 ├── pytest.ini               # Pytest configuration
-└── LICENSE                  # MIT License
+└── LICENSE                  # MIT License file
 ```
 
 ---
