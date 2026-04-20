@@ -3,6 +3,7 @@
 [![DOI](https://zenodo.org/badge/1160026484.svg)](https://zenodo.org/badge/latestdoi/1160026484)
 [![Pytest](https://github.com/danikiev/LayTracer/actions/workflows/pytest.yml/badge.svg)](https://github.com/danikiev/LayTracer/actions/workflows/pytest.yml)
 [![Docs](https://github.com/danikiev/LayTracer/actions/workflows/docs.yml/badge.svg)](https://github.com/danikiev/LayTracer/actions/workflows/docs.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellowgreen.svg)](https://github.com/danikiev/LayTracer/blob/main/LICENSE)
 
 **Fast two-point seismic ray tracing in layered media.**
 
