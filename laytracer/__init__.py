@@ -28,6 +28,8 @@ Amplitude
 .. autosummary::
    transmission_normal
    psv_rt_coefficients
+   critical_angle
+   find_critical_angles
    find_brewster_angles
    normalize_rt_coefficient
 
@@ -49,7 +51,14 @@ from .solver import (
     initial_q,
     newton_step,
 )
-from .amplitude import transmission_normal, psv_rt_coefficients, find_brewster_angles, normalize_rt_coefficient
+from .amplitude import (
+    transmission_normal,
+    psv_rt_coefficients,
+    critical_angle,
+    find_critical_angles,
+    find_brewster_angles,
+    normalize_rt_coefficient,
+)
 from .api import TraceResult, trace_rays
 from . import plot
 
@@ -76,6 +85,8 @@ __all__ = [
     # amplitude
     "transmission_normal",
     "psv_rt_coefficients",
+    "critical_angle",
+    "find_critical_angles",
     "find_brewster_angles",
     "normalize_rt_coefficient",
     # api

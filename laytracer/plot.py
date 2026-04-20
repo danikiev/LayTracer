@@ -12,6 +12,163 @@ import numpy as np
 import pandas as pd
 
 
+def coefficient_panels(
+    panels: Sequence[dict],
+    shape: tuple[int, int],
+    *,
+    figsize: tuple[float, float] = (12, 9),
+    sharex: bool = True,
+    sharey: bool = False,
+    suptitle: str | None = None,
+    suptitle_fontsize: float = 11,
+    default_x=None,
+    default_xlim: tuple[float, float] | None = None,
+    default_ylim: tuple[float, float] | None = None,
+    default_xlabel: str | None = None,
+    legend_fontsize: float | str = 8,
+    grid_alpha: float = 0.3,
+):
+    r"""Plot coefficient curves in a configurable panel grid.
+
+    Parameters
+    ----------
+    panels : sequence of dict
+        One panel specification per subplot in row-major order. Each
+        panel dictionary may contain:
+
+        ``x`` : array_like, optional
+            Shared abscissa for all curves in the panel. If omitted,
+            *default_x* is used.
+        ``curves`` : list of dict, optional
+            Curve specifications. Each curve dict must contain ``y`` and
+            may contain ``label`` plus ``plot_kwargs``.
+        ``markers`` : list of dict, optional
+            Vertical-line marker specifications. Each marker dict must
+            contain ``angle`` and may contain ``label`` plus
+            ``line_kwargs``.
+        ``title``, ``xlabel``, ``ylabel`` : str, optional
+            Per-panel labels.
+        ``xlim``, ``ylim`` : tuple, optional
+            Per-panel axis limits.
+        ``legend`` : bool, optional
+            Whether to draw a legend for this panel.
+        ``legend_loc`` : str, optional
+            Legend location. Default ``'upper right'``.
+        ``legend_fontsize`` : float or str, optional
+            Legend font size override for this panel.
+        ``grid`` : bool, optional
+            Whether to draw the grid. Default *True*.
+        ``grid_alpha`` : float, optional
+            Grid alpha override for this panel.
+    shape : tuple of int
+        Panel layout ``(nrows, ncols)``.
+    figsize : tuple of float, optional
+        Figure size passed to :func:`matplotlib.pyplot.subplots`.
+    sharex, sharey : bool, optional
+        Forwarded to :func:`matplotlib.pyplot.subplots`.
+    suptitle : str, optional
+        Figure title.
+    suptitle_fontsize : float, optional
+        Font size for *suptitle*.
+    default_x : array_like, optional
+        Shared x-axis array used when a panel does not define ``x``.
+    default_xlim, default_ylim : tuple, optional
+        Default axis limits for panels that do not override them.
+    default_xlabel : str, optional
+        Default x-axis label for panels that do not define ``xlabel``.
+    legend_fontsize : float or str, optional
+        Default legend font size.
+    grid_alpha : float, optional
+        Default grid alpha.
+
+    Returns
+    -------
+    tuple
+        ``(fig, axes)`` from matplotlib.
+    """
+    import matplotlib.pyplot as plt
+
+    nrows, ncols = shape
+    if len(panels) != nrows * ncols:
+        raise ValueError("Number of panels must match shape[0] * shape[1].")
+
+    fig, axes = plt.subplots(
+        nrows,
+        ncols,
+        figsize=figsize,
+        sharex=sharex,
+        sharey=sharey,
+        squeeze=False,
+    )
+
+    for ax, panel in zip(axes.flat, panels):
+        x = panel.get("x", default_x)
+        curves = panel.get("curves", [])
+        markers = panel.get("markers", [])
+        has_labeled_artist = False
+
+        if curves and x is None:
+            raise ValueError("Each panel with curves must define x or use default_x.")
+
+        for curve in curves:
+            plot_kwargs = dict(curve.get("plot_kwargs", {}))
+            label = curve.get("label")
+            if label is not None:
+                plot_kwargs.setdefault("label", label)
+                has_labeled_artist = True
+            ax.plot(x, curve["y"], **plot_kwargs)
+
+        for marker in markers:
+            angle = marker.get("angle")
+            if angle is None or not np.isfinite(angle):
+                continue
+
+            line_kwargs = dict(marker.get("line_kwargs", {}))
+            label = marker.get("label")
+            if label is not None:
+                line_kwargs.setdefault("label", label)
+                has_labeled_artist = True
+            ax.axvline(angle, **line_kwargs)
+
+        xlim = panel.get("xlim", default_xlim)
+        if xlim is not None:
+            ax.set_xlim(xlim)
+
+        ylim = panel.get("ylim", default_ylim)
+        if ylim is not None:
+            ax.set_ylim(*ylim)
+
+        xlabel = panel.get("xlabel", default_xlabel)
+        if xlabel is not None:
+            ax.set_xlabel(xlabel)
+
+        ylabel = panel.get("ylabel")
+        if ylabel is not None:
+            ax.set_ylabel(ylabel)
+
+        title = panel.get("title")
+        if title is not None:
+            ax.set_title(title)
+
+        if panel.get("grid", True):
+            ax.grid(True, alpha=panel.get("grid_alpha", grid_alpha))
+
+        show_legend = panel.get("legend", has_labeled_artist)
+        if show_legend and has_labeled_artist:
+            ax.legend(
+                fontsize=panel.get("legend_fontsize", legend_fontsize),
+                loc=panel.get("legend_loc", "upper right"),
+            )
+
+    if suptitle is not None:
+        fig.suptitle(suptitle, fontsize=suptitle_fontsize)
+        fig.tight_layout(rect=(0.0, 0.0, 1.0, 0.96))
+    else:
+        fig.tight_layout()
+
+    return fig, axes
+
+
 def velocity_profile(
     vel_df: pd.DataFrame,
     param: str = "Vp",

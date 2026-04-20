@@ -130,6 +130,88 @@ def psv_rt_coefficients(
                 Tpp=Tpp, Tps=Tps, Tss=Tss, Tsp=Tsp)
 
 
+def critical_angle(
+    v_incident: float,
+    v_outgoing: float,
+) -> float | None:
+    r"""Return the critical angle for a faster outgoing wave.
+
+    The critical angle exists only when ``v_outgoing > v_incident`` and is
+
+    .. math::
+        \theta_c = \arcsin\left(\frac{v_\mathrm{incident}}{v_\mathrm{outgoing}}\right)
+
+    Parameters
+    ----------
+    v_incident : float
+        Phase velocity of the incident wave.
+    v_outgoing : float
+        Phase velocity of the reflected or transmitted wave.
+
+    Returns
+    -------
+    float or None
+        Critical angle in degrees, or *None* when the outgoing wave
+        remains propagating over the full 0--90 degree incidence range.
+    """
+    v_incident = float(v_incident)
+    v_outgoing = float(v_outgoing)
+
+    if v_incident <= 0.0 or v_outgoing <= 0.0:
+        raise ValueError("Wave velocities must be positive.")
+
+    if v_incident >= v_outgoing:
+        return None
+
+    ratio = np.clip(v_incident / v_outgoing, -1.0, 1.0)
+    return float(np.rad2deg(np.arcsin(ratio)))
+
+
+def find_critical_angles(
+    v_incident: float,
+    velocities,
+    labels: list[str] | None = None,
+    include_none: bool = False,
+) -> dict[str, float | None]:
+    r"""Find critical angles for one or more outgoing wave speeds.
+
+    Parameters
+    ----------
+    v_incident : float
+        Phase velocity of the incident wave.
+    velocities : dict or sequence of float
+        Candidate outgoing wave speeds. If a dictionary is provided, its
+        keys are used as labels.
+    labels : list of str, optional
+        Labels to use when *velocities* is not a dictionary.
+    include_none : bool, optional
+        If *True*, keep entries without a critical angle as ``None``.
+        Default *False*.
+
+    Returns
+    -------
+    dict[str, float or None]
+        Mapping from label to critical angle in degrees. Entries without
+        a critical angle are omitted unless ``include_none=True``.
+    """
+    if isinstance(velocities, dict):
+        items = list(velocities.items())
+    else:
+        velocities = np.atleast_1d(velocities)
+        if labels is None:
+            labels = [f"v{i}" for i in range(len(velocities))]
+        if len(labels) != len(velocities):
+            raise ValueError("labels must have the same length as velocities.")
+        items = list(zip(labels, velocities))
+
+    result: dict[str, float | None] = {}
+    for label, v_outgoing in items:
+        angle = critical_angle(v_incident, float(v_outgoing))
+        if angle is not None or include_none:
+            result[str(label)] = angle
+    return result
+
+
 # ═══════════════════════════════════════════════════════════════════════
 #  Brewster-angle detection
 # ═══════════════════════════════════════════════════════════════════════

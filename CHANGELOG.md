@@ -5,6 +5,23 @@ All notable changes to Laytracer will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- `critical_angle()` and `find_critical_angles()` helpers in `laytracer.amplitude`
+  for reusable critical-angle detection
+- `laytracer.plot.coefficient_panels()` for reusable multi-panel plotting of
+  reflection/transmission coefficient curves
+- new regression tests for the critical-angle helpers and coefficient-panel
+  plotting helper
+
+### Changed
+
+- refactored example 3 to use the new critical-angle and coefficient-panel
+  helpers instead of open-coded calculations and repeated subplot logic
+- updated the API reference to include the new amplitude and plotting helpers
+
 ## [v0.3.0] - 2026-03-14
 
 ### Added

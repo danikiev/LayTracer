@@ -51,16 +51,22 @@ Multi-ray interface
 Amplitude
 ---------
 
+.. autofunction:: laytracer.transmission_normal
+
 .. autofunction:: laytracer.psv_rt_coefficients
+
+.. autofunction:: laytracer.critical_angle
+
+.. autofunction:: laytracer.find_critical_angles
 
 .. autofunction:: laytracer.normalize_rt_coefficient
 
 .. autofunction:: laytracer.find_brewster_angles
 
-.. autofunction:: laytracer.transmission_normal
-
 Visualisation
 -------------
+
+.. autofunction:: laytracer.plot.coefficient_panels
 
 .. autofunction:: laytracer.plot.velocity_profile
 
