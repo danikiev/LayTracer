@@ -5,6 +5,22 @@ All notable changes to Laytracer will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- `trace_rays(..., source_phase=...)` now accepts a list of phases, for example `["P", "SH", "SV"]`, and returns a `dict[str, TraceResult]` for multi-phase requests
+- explicit SH-wave ray tracing support, including SH-SH reflection/transmission coefficients for welded isotropic interfaces
+- `TraceResult.source_phase` to record the canonical traced phase
+- regression tests for multi-phase API behavior, S/SV aliasing, SV/SH shared kinematics, SH energy conservation, SH post-critical behavior, and upward-path SV/SH equality for `tstar` and spreading
+
+### Changed
+
+- canonicalized phase handling so legacy `S` maps to `SV`, while `P`, `SV`, and `SH` are available as explicit source phases
+- multi-phase tracing reuses kinematic solves across phases when possible; SV and SH share ray paths, travel times, ray parameters, `tstar`, and geometrical spreading, while retaining phase-specific transmission/reflection products
+- example 03 now includes SH reflection/transmission cases
+- API and methodology documentation now describe SH support, multi-phase tracing, and the decoupled SH behavior in isotropic 1-D media
+
 ## [v0.3.1] - 2026-04-20
 
 ### Added
