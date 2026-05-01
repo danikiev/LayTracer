@@ -95,6 +95,23 @@ class TestTraceRays:
         np.testing.assert_allclose(result["SV"].rays[0], result["SH"].rays[0])
         assert not np.isclose(result["SV"].trans_product[0], result["SH"].trans_product[0])
 
+    def test_upward_sv_and_sh_share_tstar_and_spreading(self):
+        """Upward SV and SH direct rays share Vs/Qs attenuation and spreading."""
+        df = _simple_model()
+        src = np.array([0.0, 0.0, 2500.0])
+        rcv = np.array([5000.0, 0.0, 500.0])
+        requested = {"travel_times", "rays", "ray_parameters", "tstar", "spreading"}
+
+        result = laytracer.trace_rays(
+            src, rcv, df, source_phase=["SV", "SH"], requested=requested
+        )
+
+        np.testing.assert_allclose(result["SV"].travel_times, result["SH"].travel_times)
+        np.testing.assert_allclose(result["SV"].ray_parameters, result["SH"].ray_parameters)
+        np.testing.assert_allclose(result["SV"].tstar, result["SH"].tstar)
+        np.testing.assert_allclose(result["SV"].spreading, result["SH"].spreading)
+        np.testing.assert_allclose(result["SV"].rays[0], result["SH"].rays[0])
+
     def test_multi_phase_duplicate_alias_returns_one_entry(self):
         """Duplicate canonical phases are de-duplicated."""
         df = _simple_model()
