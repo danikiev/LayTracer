@@ -17,8 +17,8 @@ import pandas as pd
 import psutil
 from joblib import Parallel, delayed
 
-from .model import ModelArrays, build_layer_stack
-from .solver import solve
+from .model import ModelArrays, build_layer_stack, normalize_phase, velocity_key
+from .solver import solve, transmission_product
 
 
 TRACE_OUTPUTS = frozenset({
@@ -51,6 +51,8 @@ class TraceResult:
         Relative geometrical spreading factor for each ray, shape ``(n_rays,)``.
     trans_product : numpy.ndarray or None
         Product of transmission coefficients along each ray.
+    source_phase : str or None
+        Canonical source phase for this result.
     """
 
     travel_times: np.ndarray
@@ -59,6 +61,7 @@ class TraceResult:
     tstar: np.ndarray | None = None
     spreading: np.ndarray | None = None
     trans_product: np.ndarray | None = None
+    source_phase: str | None = None
 
 
 def _normalize_requested(requested: Sequence[str] | None) -> frozenset[str]:
@@ -79,6 +82,43 @@ def _normalize_requested(requested: Sequence[str] | None) -> frozenset[str]:
     return normalized
 
 
+def _normalize_source_phases(source_phase) -> tuple[tuple[str, ...], bool]:
+    """Normalize source_phase while preserving list order and de-duplicating."""
+    if isinstance(source_phase, str):
+        return (normalize_phase(source_phase),), False
+
+    phases: list[str] = []
+    seen = set()
+    for phase in source_phase:
+        phase_norm = normalize_phase(phase)
+        if phase_norm not in seen:
+            phases.append(phase_norm)
+            seen.add(phase_norm)
+
+    if not phases:
+        raise ValueError("source_phase must contain at least one phase.")
+
+    return tuple(phases), True
+
+
+def _normalize_interaction_phases(
+    arg: Sequence[tuple[float, str]] | None,
+) -> list[tuple[float, str]]:
+    """Normalize interaction phase labels."""
+    if arg is None:
+        return []
+    return [(float(z), normalize_phase(ph)) for z, ph in arg]
+
+
+def _validate_sh_coupling(source_phase: str, interactions: list[tuple[float, str]]) -> None:
+    """Reject SH/P-SV mode conversions in isotropic media."""
+    source_is_sh = source_phase == "SH"
+    for _, phase in interactions:
+        phase_is_sh = phase == "SH"
+        if source_is_sh != phase_is_sh:
+            raise ValueError("SH is decoupled from P-SV in isotropic 1-D media.")
+
+
 def _trace_batch(batch):
     """Worker function for parallel ray computation."""
     (
@@ -86,7 +126,8 @@ def _trace_batch(batch):
         source_coords,
         receiver_coords,
         model_arrays,
-        source_phase,
+        source_phases,
+        return_dict,
         refl_list,
         refr_list,
         need_rays,
@@ -101,24 +142,44 @@ def _trace_batch(batch):
 
     results = []
     for isrc, ircv in batch_indices:
-        results.append(
-            _trace_one(
-                ma=model_arrays,
-                src=source_coords[isrc],
-                rcv=receiver_coords[ircv],
-                source_phase=source_phase,
-                refl_list=refl_list,
-                refr_list=refr_list,
-                need_rays=need_rays,
-                need_ray_parameters=need_ray_parameters,
-                need_tstar=need_tstar,
-                need_spreading=need_spreading,
-                need_trans_product=need_trans_product,
-                transcoef_method=transcoef_method,
-                tol=tol,
-                max_iter=max_iter,
+        if return_dict:
+            results.append(
+                _trace_one_many(
+                    ma=model_arrays,
+                    src=source_coords[isrc],
+                    rcv=receiver_coords[ircv],
+                    source_phases=source_phases,
+                    refl_list=refl_list,
+                    refr_list=refr_list,
+                    need_rays=need_rays,
+                    need_ray_parameters=need_ray_parameters,
+                    need_tstar=need_tstar,
+                    need_spreading=need_spreading,
+                    need_trans_product=need_trans_product,
+                    transcoef_method=transcoef_method,
+                    tol=tol,
+                    max_iter=max_iter,
+                )
             )
-        )
+        else:
+            results.append(
+                _trace_one(
+                    ma=model_arrays,
+                    src=source_coords[isrc],
+                    rcv=receiver_coords[ircv],
+                    source_phase=source_phases[0],
+                    refl_list=refl_list,
+                    refr_list=refr_list,
+                    need_rays=need_rays,
+                    need_ray_parameters=need_ray_parameters,
+                    need_tstar=need_tstar,
+                    need_spreading=need_spreading,
+                    need_trans_product=need_trans_product,
+                    transcoef_method=transcoef_method,
+                    tol=tol,
+                    max_iter=max_iter,
+                )
+            )
     return results
 
 
@@ -146,6 +207,130 @@ def _project_ray_to_3d(
     return ray3d
 
 
+def _direct_segments_for_phase(
+    ma: ModelArrays,
+    z_src: float,
+    z_rcv: float,
+    source_phase: str,
+) -> list[dict] | None:
+    """Build direct-path segments for coefficient reuse."""
+    stack = build_layer_stack(ma, z_src, z_rcv)
+    vel = stack.v(velocity_key(source_phase))
+    valid = stack.h > 1e-9
+    if not np.any(valid):
+        return None
+
+    return [{
+        "h": stack.h[valid],
+        "v": vel[valid],
+        "vp": stack.vp[valid],
+        "vs": stack.vs[valid],
+        "rho": stack.rho[valid] if stack.rho is not None else None,
+        "qp": stack.qp[valid] if stack.qp is not None else None,
+        "qs": stack.qs[valid] if stack.qs is not None else None,
+        "phase": source_phase,
+        "start_z": z_src,
+        "end_z": z_rcv,
+    }]
+
+
+def _direct_trans_product(
+    ma: ModelArrays,
+    z_src: float,
+    z_rcv: float,
+    source_phase: str,
+    ray_parameter: float | None,
+    transcoef_method: str,
+) -> float:
+    """Compute direct-path transmission product for a solved ray."""
+    segments = _direct_segments_for_phase(ma, z_src, z_rcv, source_phase)
+    if segments is None:
+        return 1.0
+    p = 0.0 if ray_parameter is None or not np.isfinite(ray_parameter) else float(ray_parameter)
+    return transmission_product(p, segments, [], transcoef_method)
+
+
+def _trace_one_many(
+    ma: ModelArrays,
+    src: np.ndarray,
+    rcv: np.ndarray,
+    source_phases: tuple[str, ...],
+    refl_list: list[tuple[float, str]],
+    refr_list: list[tuple[float, str]],
+    need_rays: bool,
+    need_ray_parameters: bool,
+    need_tstar: bool,
+    need_spreading: bool,
+    need_trans_product: bool,
+    transcoef_method: str,
+    tol: float,
+    max_iter: int,
+) -> dict[str, tuple[float, np.ndarray | None, float | None, float | None, float | None, float | None]]:
+    """Trace one source-receiver pair for multiple source phases."""
+    sz = float(src[2])
+    rz = float(rcv[2])
+    can_share_direct = not refl_list and not refr_list
+    cache: dict[str, tuple[float, np.ndarray | None, float | None, float | None, float | None, float | None]] = {}
+    results = {}
+
+    for source_phase in source_phases:
+        _validate_sh_coupling(source_phase, refl_list + refr_list)
+        family = velocity_key(source_phase)
+
+        if can_share_direct and family in cache:
+            tt, ray3d, p_val, tstar, spreading, _ = cache[family]
+            trans = (
+                _direct_trans_product(ma, sz, rz, source_phase, p_val, transcoef_method)
+                if need_trans_product else None
+            )
+            results[source_phase] = (
+                tt,
+                ray3d,
+                p_val if need_ray_parameters else None,
+                tstar,
+                spreading,
+                trans,
+            )
+            continue
+
+        base = _trace_one(
+            ma=ma,
+            src=src,
+            rcv=rcv,
+            source_phase=source_phase,
+            refl_list=refl_list,
+            refr_list=refr_list,
+            need_rays=need_rays,
+            need_ray_parameters=need_ray_parameters or need_trans_product,
+            need_tstar=need_tstar,
+            need_spreading=need_spreading,
+            need_trans_product=False if can_share_direct else need_trans_product,
+            transcoef_method=transcoef_method,
+            tol=tol,
+            max_iter=max_iter,
+        )
+
+        if can_share_direct:
+            cache[family] = base
+            tt, ray3d, p_val, tstar, spreading, _ = base
+            trans = (
+                _direct_trans_product(ma, sz, rz, source_phase, p_val, transcoef_method)
+                if need_trans_product else None
+            )
+            results[source_phase] = (
+                tt,
+                ray3d,
+                p_val if need_ray_parameters else None,
+                tstar,
+                spreading,
+                trans,
+            )
+        else:
+            results[source_phase] = base
+
+    return results
+
+
 def _trace_one(
     ma: ModelArrays,
     src: np.ndarray,
@@ -163,6 +348,8 @@ def _trace_one(
     max_iter: int,
 ) -> tuple[float, np.ndarray | None, float | None, float | None, float | None, float | None]:
     """Trace a single source->receiver ray."""
+    source_phase = normalize_phase(source_phase)
+    _validate_sh_coupling(source_phase, refl_list + refr_list)
     sx, sy, sz = float(src[0]), float(src[1]), float(src[2])
     rx, ry, rz = float(rcv[0]), float(rcv[1]), float(rcv[2])
 
@@ -171,7 +358,7 @@ def _trace_one(
 
     if not refl_list and not refr_list:
         stack = build_layer_stack(ma, sz, rz)
-        vel = stack.v("Vp" if source_phase == "P" else "Vs")
+        vel = stack.v(velocity_key(source_phase))
 
         valid = stack.h > 1e-9
         if not np.any(valid):
@@ -277,7 +464,7 @@ def _trace_one(
 
         for sub_z, sub_out_phase in sub_targets:
             stack = build_layer_stack(ma, curr_z, sub_z)
-            vel = stack.v("Vp" if curr_ph == "P" else "Vs")
+            vel = stack.v(velocity_key(curr_ph))
             valid_mask = stack.h > 1e-9
 
             if np.any(valid_mask):
@@ -390,7 +577,11 @@ def _trace_one(
     )
 
 
-def _unpack_results(results: list, requested: frozenset[str]) -> TraceResult:
+def _unpack_results(
+    results: list,
+    requested: frozenset[str],
+    source_phase: str | None = None,
+) -> TraceResult:
     """Unpack a flat list of per-ray result tuples into a TraceResult."""
 
     def _maybe_array(values):
@@ -412,14 +603,27 @@ def _unpack_results(results: list, requested: frozenset[str]) -> TraceResult:
         tstar=tstar,
         spreading=spreading,
         trans_product=trans_product,
+        source_phase=source_phase,
     )
+
+
+def _unpack_multi_results(
+    results: list[dict[str, tuple]],
+    requested: frozenset[str],
+    source_phases: tuple[str, ...],
+) -> dict[str, TraceResult]:
+    """Unpack per-ray multi-phase dictionaries into per-phase TraceResult objects."""
+    return {
+        phase: _unpack_results([ray_result[phase] for ray_result in results], requested, phase)
+        for phase in source_phases
+    }
 
 
 def trace_rays(
     sources: np.ndarray,
     receivers: np.ndarray,
     velocity_df: pd.DataFrame,
-    source_phase: str = "P",
+    source_phase: str | Sequence[str] = "P",
     reflection: Sequence[tuple[float, str]] | None = None,
     refraction: Sequence[tuple[float, str]] | None = None,
     requested: Sequence[str] | None = DEFAULT_REQUESTED,
@@ -431,7 +635,7 @@ def trace_rays(
     tol: float = 1e-4,
     max_iter: int = 10,
     verbose: bool = True,
-) -> TraceResult:
+) -> TraceResult | dict[str, TraceResult]:
     r"""Trace rays for all source-receiver pairs.
 
     Every source is paired with every receiver, producing
@@ -446,8 +650,11 @@ def trace_rays(
     velocity_df : pandas.DataFrame
         Velocity model with columns ``Depth``, ``Vp``, ``Vs`` and
         optionally ``Rho``, ``Qp``, ``Qs``.
-    source_phase : str
-        Initial wave phase at source: ``'P'`` or ``'S'``.
+    source_phase : str or sequence of str
+        Initial wave phase(s) at source: ``'P'``, ``'SV'``, ``'SH'``,
+        or legacy ``'S'`` (alias for ``'SV'``). If a sequence is
+        provided, a dictionary of ``TraceResult`` objects keyed by
+        canonical phase is returned.
     reflection : list of (depth, phase), optional
         Reflection points as ``(depth, out_phase)`` tuples.
     refraction : list of (depth, phase), optional
@@ -477,8 +684,9 @@ def trace_rays(
 
     Returns
     -------
-    TraceResult
+    TraceResult or dict of TraceResult
     """
+    source_phases, return_dict = _normalize_source_phases(source_phase)
     requested_set = _normalize_requested(requested)
     need_rays = "rays" in requested_set
     need_ray_parameters = "ray_parameters" in requested_set
@@ -492,11 +700,8 @@ def trace_rays(
     n_rcv = receivers.shape[0]
     n_rays = n_src * n_rcv
 
-    def _norm_interaction(arg: Sequence[tuple[float, str]] | None) -> list[tuple[float, str]]:
-        return [] if arg is None else list(arg)
-
-    refl_list = _norm_interaction(reflection)
-    refr_list = _norm_interaction(refraction)
+    refl_list = _normalize_interaction_phases(reflection)
+    refr_list = _normalize_interaction_phases(refraction)
 
     model_depths = velocity_df["Depth"].values
     tol_depth = 1e-6
@@ -513,11 +718,12 @@ def trace_rays(
                     "for physical amplitude calculations. Please use a shallow "
                     "internal interface instead."
                 )
-            if ph.upper() not in ("P", "S"):
-                raise ValueError(f"Invalid phase '{ph}' in {name}. Must be 'P' or 'S'.")
+            normalize_phase(ph)
 
     _validate_depths(refl_list, "reflection")
     _validate_depths(refr_list, "refraction")
+    for phase in source_phases:
+        _validate_sh_coupling(phase, refl_list + refr_list)
 
     refl_z = {z for z, _ in refl_list}
     refr_z = {z for z, _ in refr_list}
@@ -529,7 +735,8 @@ def trace_rays(
 
     common_kw = dict(
         ma=ma,
-        source_phase=source_phase,
+        source_phases=source_phases,
+        return_dict=return_dict,
         refl_list=refl_list,
         refr_list=refr_list,
         need_rays=need_rays,
@@ -543,12 +750,50 @@ def trace_rays(
     )
 
     if n_rays <= sequential_limit or n_jobs == 1:
+        if return_dict:
+            results = [
+                _trace_one_many(
+                    src=sources[i],
+                    rcv=receivers[j],
+                    ma=ma,
+                    source_phases=source_phases,
+                    refl_list=refl_list,
+                    refr_list=refr_list,
+                    need_rays=need_rays,
+                    need_ray_parameters=need_ray_parameters,
+                    need_tstar=need_tstar,
+                    need_spreading=need_spreading,
+                    need_trans_product=need_trans_product,
+                    transcoef_method=transcoef_method,
+                    tol=tol,
+                    max_iter=max_iter,
+                )
+                for i in range(n_src)
+                for j in range(n_rcv)
+            ]
+            return _unpack_multi_results(results, requested_set, source_phases)
+
         results = [
-            _trace_one(src=sources[i], rcv=receivers[j], **common_kw)
+            _trace_one(
+                src=sources[i],
+                rcv=receivers[j],
+                ma=ma,
+                source_phase=source_phases[0],
+                refl_list=refl_list,
+                refr_list=refr_list,
+                need_rays=need_rays,
+                need_ray_parameters=need_ray_parameters,
+                need_tstar=need_tstar,
+                need_spreading=need_spreading,
+                need_trans_product=need_trans_product,
+                transcoef_method=transcoef_method,
+                tol=tol,
+                max_iter=max_iter,
+            )
             for i in range(n_src)
             for j in range(n_rcv)
         ]
-        return _unpack_results(results, requested_set)
+        return _unpack_results(results, requested_set, source_phases[0])
 
     if n_jobs == -1:
         n_workers = min(psutil.cpu_count(logical=False) or 4, n_rays)
@@ -588,7 +833,8 @@ def trace_rays(
                 src_arr,
                 rcv_arr,
                 ma,
-                source_phase,
+                source_phases,
+                return_dict,
                 refl_list,
                 refr_list,
                 need_rays,
@@ -612,12 +858,21 @@ def trace_rays(
                 f"({rcv_per_chunk:,} receivers per chunk)..."
             )
 
-        tt_all = np.empty(n_rays, dtype=np.float64)
-        rays_all: list[np.ndarray | None] | None = [None] * n_rays if need_rays else None
-        p_all = np.full(n_rays, np.nan, dtype=np.float64) if need_ray_parameters else None
-        tstar_all = np.full(n_rays, np.nan, dtype=np.float64) if need_tstar else None
-        spread_all = np.full(n_rays, np.nan, dtype=np.float64) if need_spreading else None
-        trans_all = np.full(n_rays, np.nan, dtype=np.float64) if need_trans_product else None
+        def _empty_arrays():
+            return {
+                "tt": np.empty(n_rays, dtype=np.float64),
+                "rays": [None] * n_rays if need_rays else None,
+                "p": np.full(n_rays, np.nan, dtype=np.float64) if need_ray_parameters else None,
+                "tstar": np.full(n_rays, np.nan, dtype=np.float64) if need_tstar else None,
+                "spread": np.full(n_rays, np.nan, dtype=np.float64) if need_spreading else None,
+                "trans": np.full(n_rays, np.nan, dtype=np.float64) if need_trans_product else None,
+            }
+
+        phase_arrays = (
+            {phase: _empty_arrays() for phase in source_phases}
+            if return_dict else None
+        )
+        arrays = _empty_arrays() if not return_dict else None
 
         chunk_times: list[float] = []
         total_start = time.time()
@@ -645,17 +900,33 @@ def trace_rays(
                     global_ircv = rcv_start + local_ircv
                     global_idx = local_isrc * n_rcv + global_ircv
 
-                    tt_all[global_idx] = res[0]
-                    if rays_all is not None:
-                        rays_all[global_idx] = res[1]
-                    if p_all is not None and res[2] is not None:
-                        p_all[global_idx] = res[2]
-                    if tstar_all is not None and res[3] is not None:
-                        tstar_all[global_idx] = res[3]
-                    if spread_all is not None and res[4] is not None:
-                        spread_all[global_idx] = res[4]
-                    if trans_all is not None and res[5] is not None:
-                        trans_all[global_idx] = res[5]
+                    if return_dict:
+                        for phase in source_phases:
+                            phase_res = res[phase]
+                            arr = phase_arrays[phase]
+                            arr["tt"][global_idx] = phase_res[0]
+                            if arr["rays"] is not None:
+                                arr["rays"][global_idx] = phase_res[1]
+                            if arr["p"] is not None and phase_res[2] is not None:
+                                arr["p"][global_idx] = phase_res[2]
+                            if arr["tstar"] is not None and phase_res[3] is not None:
+                                arr["tstar"][global_idx] = phase_res[3]
+                            if arr["spread"] is not None and phase_res[4] is not None:
+                                arr["spread"][global_idx] = phase_res[4]
+                            if arr["trans"] is not None and phase_res[5] is not None:
+                                arr["trans"][global_idx] = phase_res[5]
+                    else:
+                        arrays["tt"][global_idx] = res[0]
+                        if arrays["rays"] is not None:
+                            arrays["rays"][global_idx] = res[1]
+                        if arrays["p"] is not None and res[2] is not None:
+                            arrays["p"][global_idx] = res[2]
+                        if arrays["tstar"] is not None and res[3] is not None:
+                            arrays["tstar"][global_idx] = res[3]
+                        if arrays["spread"] is not None and res[4] is not None:
+                            arrays["spread"][global_idx] = res[4]
+                        if arrays["trans"] is not None and res[5] is not None:
+                            arrays["trans"][global_idx] = res[5]
                     flat_idx += 1
 
             chunk_elapsed = time.time() - chunk_start
@@ -686,13 +957,28 @@ def trace_rays(
                 ts = f"{total:.1f}s"
             print(f"All chunks complete. Total time: {ts}")
 
+        if return_dict:
+            return {
+                phase: TraceResult(
+                    travel_times=arr["tt"],
+                    rays=arr["rays"],
+                    ray_parameters=arr["p"],
+                    tstar=arr["tstar"],
+                    spreading=arr["spread"],
+                    trans_product=arr["trans"],
+                    source_phase=phase,
+                )
+                for phase, arr in phase_arrays.items()
+            }
+
         return TraceResult(
-            travel_times=tt_all,
-            rays=rays_all,
-            ray_parameters=p_all,
-            tstar=tstar_all,
-            spreading=spread_all,
-            trans_product=trans_all,
+            travel_times=arrays["tt"],
+            rays=arrays["rays"],
+            ray_parameters=arrays["p"],
+            tstar=arrays["tstar"],
+            spreading=arrays["spread"],
+            trans_product=arrays["trans"],
+            source_phase=source_phases[0],
         )
 
     all_pairs = [(i, j) for i in range(n_src) for j in range(n_rcv)]
@@ -706,4 +992,7 @@ def trace_rays(
     for br in batch_results:
         results.extend(br)
 
-    return _unpack_results(results, requested_set)
+    if return_dict:
+        return _unpack_multi_results(results, requested_set, source_phases)
+
+    return _unpack_results(results, requested_set, source_phases[0])

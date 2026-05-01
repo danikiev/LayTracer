@@ -27,6 +27,7 @@ Amplitude
 ~~~~~~~~~
 .. autosummary::
    transmission_normal
+   sh_rt_coefficients
    psv_rt_coefficients
    critical_angle
    find_critical_angles
@@ -53,6 +54,7 @@ from .solver import (
 )
 from .amplitude import (
     transmission_normal,
+    sh_rt_coefficients,
     psv_rt_coefficients,
     critical_angle,
     find_critical_angles,
@@ -84,6 +86,7 @@ __all__ = [
     "newton_step",
     # amplitude
     "transmission_normal",
+    "sh_rt_coefficients",
     "psv_rt_coefficients",
     "critical_angle",
     "find_critical_angles",

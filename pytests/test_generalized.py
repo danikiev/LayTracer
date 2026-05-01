@@ -125,6 +125,25 @@ def test_invalid_phase():
             reflection=[(1000.0, "X")]
         )
 
+def test_sh_psv_conversion_disallowed():
+    with pytest.raises(ValueError, match="SH is decoupled"):
+        trace_rays(
+            sources=[0,0,0],
+            receivers=[0,0,0],
+            velocity_df=test_model,
+            source_phase="P",
+            reflection=[(1000.0, "SH")]
+        )
+
+    with pytest.raises(ValueError, match="SH is decoupled"):
+        trace_rays(
+            sources=[0,0,0],
+            receivers=[0,0,0],
+            velocity_df=test_model,
+            source_phase="SH",
+            reflection=[(1000.0, "SV")]
+        )
+
 def test_invalid_depth():
     with pytest.raises(ValueError, match="Invalid reflection depth"):
         trace_rays(

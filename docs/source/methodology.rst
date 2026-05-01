@@ -192,7 +192,7 @@ Reflection and transmission coefficients
 ========================================
 
 In layered media, wave amplitudes are modified at every crossed interface.
-LayTracer computes interface coefficients using the full angle-dependent P-SV Zoeppritz formulation.  Two variants are available via the ``transcoef_method`` parameter:
+LayTracer computes interface coefficients using the full angle-dependent P-SV Zoeppritz formulation for P and SV, and the decoupled SH-SH formulation for SH.  Two variants are available via the ``transcoef_method`` parameter:
 
 - ``"standard"`` — displacement-amplitude coefficients (Zoeppritz); this is the default.
 - ``"normalized"`` — energy-flux-normalized coefficients following :cite:t:`Cerveny2001`, Eq. 5.3.10.
@@ -279,6 +279,32 @@ term of :math:`b`) and :cite:t:`AkiRichards2002` (Equations 5.38–5.40).
 
 For post-critical incidence the coefficients may become complex; for
 amplitude modelling the software uses :math:`|T_l|`.
+
+Angle-dependent SH formulation (welded solid-solid interface)
+-------------------------------------------------------------
+
+In isotropic layered media, SH is decoupled from the P-SV system
+(:cite:t:`AkiRichards2002`, Section 5.2.3; :cite:t:`LayWallace1995`,
+Eq. 3.109).  With vertical slowness
+
+.. math::
+   \eta_i = \sqrt{\frac{1}{v_{Si}^2} - p^2},
+
+the SH displacement coefficients at a welded interface are
+
+.. math::
+   R_{SHSH} =
+   \frac{\rho_1 v_{S1}^2 \eta_1 - \rho_2 v_{S2}^2 \eta_2}
+        {\rho_1 v_{S1}^2 \eta_1 + \rho_2 v_{S2}^2 \eta_2},
+
+.. math::
+   T_{SHSH} =
+   \frac{2\rho_1 v_{S1}^2 \eta_1}
+        {\rho_1 v_{S1}^2 \eta_1 + \rho_2 v_{S2}^2 \eta_2}.
+
+At normal incidence these reduce to the shear-impedance forms with
+:math:`Z_S = \rho v_S`.  Since SH does not couple to P or SV in this
+model class, LayTracer rejects P/SV-to-SH mode conversions.
 
 Energy-flux-normalized coefficients
 -----------------------------------

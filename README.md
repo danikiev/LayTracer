@@ -21,7 +21,7 @@ Documentation: [https://danikiev.github.io/LayTracer](https://danikiev.github.io
 | **Travel time** | Layer-by-layer travel time summation from the solved ray parameter |
 | **Attenuation** | Intrinsic absorption operator *t\** from quality factors *Q* |
 | **Spreading** | Relative geometrical spreading from the analytical ray-tube Jacobian ∂X/∂p |
-| **Reflection/Transmission** | Full angle-dependent Zoeppritz P-SV coefficients (all 8 R/T modes) with optional energy-flux normalization (Červený, 2001) |
+| **Reflection/Transmission** | Full angle-dependent P-SV coefficients and decoupled SH-SH coefficients with optional energy-flux normalization (Červený, 2001) |
 | **Brewster angles** | Automatic detection of Brewster-like zeros in R/T coefficient curves |
 | **Parallel execution** | Multi-ray tracing with `joblib` / `loky` backend for large surveys |
 | **Visualisation** | 2-D ray path plots (matplotlib) and interactive 3-D viewer (Plotly) |
@@ -160,7 +160,7 @@ result = laytracer.trace_rays(
     sources=src,
     receivers=rcvs,
     velocity_df=vel_df,
-    source_phase="P",
+    source_phase="P",  # also accepts "SV", "SH", "S", or a list such as ["P", "SH", "SV"]
     requested={"travel_times", "rays", "ray_parameters", "tstar", "spreading", "trans_product"},
     transcoef_method="standard",  # standard Zoeppritz coefficients without normalization
 )
@@ -216,6 +216,7 @@ fig.show()
 | Symbol | Description |
 | --- | --- |
 | `psv_rt_coefficients(p, vp1, vs1, rho1, vp2, vs2, rho2)` | All 8 P-SV reflection/transmission coefficients (Zoeppritz) |
+| `sh_rt_coefficients(p, vs1, rho1, vs2, rho2)` | Decoupled SH-SH reflection/transmission coefficients |
 | `normalize_rt_coefficient(coeff, p, v_in, rho_in, v_out, rho_out)` | Energy-flux normalization of R/T coefficients (Červený, 2001) |
 | `find_brewster_angles(rt_coefficients, angles, ...)` | Detect Brewster-like zeros in R/T curves |
 
@@ -223,8 +224,8 @@ fig.show()
 
 | Symbol | Description |
 | --- | --- |
-| `trace_rays(sources, receivers, velocity_df, ...)` | Trace all source–receiver pairs with optional parallelism |
-| `TraceResult` | Container: travel times, ray paths, ray parameters, *t\**, spreading, transmission products |
+| `trace_rays(sources, receivers, velocity_df, ...)` | Trace all source–receiver pairs with optional parallelism; multi-phase input returns a phase-keyed result dictionary |
+| `TraceResult` | Container: source phase, travel times, ray paths, ray parameters, *t\**, spreading, transmission products |
 
 ### Visualisation (`laytracer.plot`)
 
@@ -317,7 +318,7 @@ LayTracer implements the method of [Fang & Chen (2019)](https://doi.org/10.1111/
    - Travel time from vertical slowness summation
    - Attenuation *t\** from per-layer *Q*-factors
    - Geometrical spreading from analytic ∂*X*/∂*p*
-   - Full Zoeppritz P-SV R/T coefficients (Lay & Wallace (1995) formulation)
+   - Full P-SV R/T coefficients and decoupled SH-SH coefficients (Lay & Wallace (1995) formulation)
 
 ### Key references
 

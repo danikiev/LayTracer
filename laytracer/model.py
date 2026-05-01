@@ -16,6 +16,26 @@ import numpy as np
 import pandas as pd
 
 
+def normalize_phase(phase: str) -> str:
+    """Return the canonical body-wave phase name."""
+    phase_norm = str(phase).upper()
+    if phase_norm == "S":
+        return "SV"
+    if phase_norm in ("P", "SV", "SH"):
+        return phase_norm
+    raise ValueError(f"Invalid phase '{phase}'. Must be 'P', 'SV', 'SH', or 'S'.")
+
+
+def velocity_key(phase: str) -> str:
+    """Return the velocity column key used by *phase*."""
+    return "Vp" if normalize_phase(phase) == "P" else "Vs"
+
+
+def q_factor_key(phase: str) -> str:
+    """Return the Q-factor key used by *phase*."""
+    return "qp" if normalize_phase(phase) == "P" else "qs"
+
+
 @dataclass
 class LayerStack:
     r"""Layers traversed by a ray between source and receiver depths.
@@ -55,18 +75,26 @@ class LayerStack:
         Parameters
         ----------
         vel_type : str
-            ``'Vp'`` or ``'Vs'``.
+            ``'Vp'``, ``'Vs'``, ``'P'``, ``'SV'``, ``'SH'``, or ``'S'``.
         """
-        if vel_type.lower() in ("vp", "p"):
+        vel_type_norm = str(vel_type).lower()
+        if vel_type_norm in ("vp", "p"):
             return self.vp
-        elif vel_type.lower() in ("vs", "s"):
+        elif vel_type_norm in ("vs", "s", "sv", "sh"):
             return self.vs
-        raise ValueError(f"vel_type must be 'Vp' or 'Vs', got '{vel_type}'")
+        raise ValueError(
+            f"vel_type must be 'Vp', 'Vs', 'P', 'SV', 'SH', or 'S', got '{vel_type}'"
+        )
 
     def q_factor(self, vel_type: str = "Vp") -> np.ndarray | None:
         """Return the Q-factor array for the requested wave type."""
-        if vel_type.lower() in ("vp", "p"):
+        vel_type_norm = str(vel_type).lower()
+        if vel_type_norm in ("vp", "p"):
             return self.qp
+        if vel_type_norm not in ("vs", "s", "sv", "sh"):
+            raise ValueError(
+                f"vel_type must be 'Vp', 'Vs', 'P', 'SV', 'SH', or 'S', got '{vel_type}'"
+            )
         return self.qs
 
 

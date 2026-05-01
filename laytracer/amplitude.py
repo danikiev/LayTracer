@@ -50,6 +50,59 @@ def transmission_normal(
     return 2.0 * Z1 / denom
 
 
+def sh_rt_coefficients(
+    p,
+    vs1: float,
+    rho1: float,
+    vs2: float,
+    rho2: float,
+) -> dict:
+    r"""Compute SH-SH reflection and transmission coefficients.
+
+    The welded solid-solid SH system is decoupled from the P-SV system in
+    isotropic layered media.  With vertical slowness
+    :math:`\eta_i = \sqrt{1/v_{Si}^2 - p^2}`, the displacement
+    coefficients are
+
+    .. math::
+        R_{SHSH} = \frac{\rho_1 v_{S1}^2 \eta_1
+            - \rho_2 v_{S2}^2 \eta_2}
+            {\rho_1 v_{S1}^2 \eta_1 + \rho_2 v_{S2}^2 \eta_2},
+
+    .. math::
+        T_{SHSH} = \frac{2 \rho_1 v_{S1}^2 \eta_1}
+            {\rho_1 v_{S1}^2 \eta_1 + \rho_2 v_{S2}^2 \eta_2}.
+
+    Parameters
+    ----------
+    p : float or array_like
+        Ray parameter (horizontal slowness, s/m).  Scalar or 1-D array.
+    vs1, rho1 : float
+        S-wave velocity and density of the incident medium.
+    vs2, rho2 : float
+        S-wave velocity and density of the transmitted medium.
+
+    Returns
+    -------
+    dict
+        Keys ``'Rshsh'`` and ``'Tshsh'`` with the same shape as *p*.
+    """
+    p = np.asarray(p, dtype=complex)
+    csqrt = np.lib.scimath.sqrt
+
+    eta1 = csqrt(1.0 / (vs1 * vs1) - p * p)
+    eta2 = csqrt(1.0 / (vs2 * vs2) - p * p)
+    zeta1 = rho1 * vs1 * vs1 * eta1
+    zeta2 = rho2 * vs2 * vs2 * eta2
+    denom = zeta1 + zeta2
+
+    with np.errstate(invalid="ignore", divide="ignore"):
+        Rshsh = (zeta1 - zeta2) / denom
+        Tshsh = 2.0 * zeta1 / denom
+
+    return dict(Rshsh=Rshsh, Tshsh=Tshsh)
+
+
 # ═══════════════════════════════════════════════════════════════════════
 #  Full P-SV reflection / transmission matrix
 # ═══════════════════════════════════════════════════════════════════════

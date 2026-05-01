@@ -212,6 +212,18 @@ class TestTransmission:
         assert abs(RTp["Rsp"]) == pytest.approx(0.0, abs=1e-8)
         assert abs(RTp["Tsp"]) == pytest.approx(0.0, abs=1e-8)
 
+    def test_sh_angle_reduces_to_normal_at_p0(self):
+        """SH coefficients at normal incidence match shear impedance theory."""
+        vs1, rho1 = 2000.0, 2500.0
+        vs2, rho2 = 2800.0, 2700.0
+
+        RT = laytracer.sh_rt_coefficients(0.0, vs1, rho1, vs2, rho2)
+        expected_t = laytracer.transmission_normal(vs1, rho1, vs2, rho2)
+        expected_r = (rho1 * vs1 - rho2 * vs2) / (rho1 * vs1 + rho2 * vs2)
+
+        assert abs(RT["Tshsh"]) == pytest.approx(expected_t, rel=1e-10)
+        assert abs(RT["Rshsh"]) == pytest.approx(abs(expected_r), rel=1e-10)
+
 
 # =====================================================================================================================================================================================================================
 #  t* computation
