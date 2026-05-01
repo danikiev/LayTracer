@@ -4,11 +4,15 @@ r"""
 
 Reproduction of the classic P-SV reflection & transmission test case from
 `Charles J. Ammon's MATLAB Exercise L3 (PDF) <http://eqseis.geosc.psu.edu/cammon/HTML/UsingMATLAB/PDF/ML3%20ReflTransmission.pdf>`_ (:cite:t:`LayWallace1995`, Figure 3.28).
+The example also includes the decoupled SH-SH coefficients for the same
+two-layer elastic model.
 
 For an incident P-wave the system unknowns are
 :math:`[R_{PP},\; R_{PS},\; T_{PP},\; T_{PS}]`.
 For an incident SV-wave the unknowns are
 :math:`[R_{SP},\; R_{SS},\; T_{SP},\; T_{SS}]`.
+For an incident SH-wave the unknowns are
+:math:`[R_{SHSH},\; T_{SHSH}]`.
 """
 
 ###############################################################################
@@ -43,7 +47,7 @@ lt.plot.velocity_profile(model_psv, param="Vp", ax=axes[0], ylim=(4000, 0))
 lt.plot.velocity_profile(model_psv, param="Vs", ax=axes[1], color="tab:orange", ylim=(4000, 0))
 lt.plot.velocity_profile(model_psv, param="Rho", ax=axes[2], color="tab:green", ylim=(4000, 0))
 
-fig.suptitle("P-SV Test Model", fontsize=14)
+fig.suptitle("Elastic Test Model", fontsize=14)
 fig.tight_layout()
 plt.show()
 
@@ -257,10 +261,13 @@ plt.show()
 
 
 def plot_ray_situation(angle, wave_type, title, ax):
+    wave_type = "SV" if wave_type == "S" else wave_type
+    shear_phase = wave_type in {"SV", "SH"}
+
     # 1. Setup background (velocity model) and axes
     # We pass empty rays list first just to set up the plot environment
     lt.plot.rays_2d(
-        model_psv, rays=[], ax=ax, vel_type="Vp", 
+        model_psv, rays=[], ax=ax, vel_type="Vs" if shear_phase else "Vp",
         xlim=(-100, 6000), ylim=(4000, 0),
         plot_model=True,
         add_colorbar=True,
@@ -310,7 +317,7 @@ def plot_ray_situation(angle, wave_type, title, ax):
         
         if is_refl:
             # LEG 2: 2000 -> 0 (Up)
-            # Phase determined by reflection arg "P" or "S"
+            # Phase determined by reflection arg.
             ph_up = reflection_arg[0][1]
             v1 = mi_vp * 1000 if ph_up == "P" else mi_vs * 1000
             if p_target * v1 >= 1.0: return # Evanescent reflection
@@ -318,7 +325,7 @@ def plot_ray_situation(angle, wave_type, title, ax):
             z_end = 0.0
         else:
             # LEG 2: 2000 -> 4000 (Down)
-            # Phase determined by refraction arg "P" or "S" (or default P/S if None?)
+            # Phase determined by refraction arg, or by same-mode transmission.
             # trace_rays defaults transmission to same phase if not specified.
             # But here we want to test conversions explicitly.
             # If refraction_arg is set, use it.
@@ -359,23 +366,19 @@ def plot_ray_situation(angle, wave_type, title, ax):
         except Exception:
             pass # Solver might fail if we messed up bounds, ignore for plot
 
-    # 1. Reflected P
-    run_trace(0.0, reflection_arg=[(2000.0, "P")], label="Refl P", color="r", style="--")
-    
-    # 2. Reflected S
-    run_trace(0.0, reflection_arg=[(2000.0, "S")], label="Refl S", color="tab:orange", style=":")
-    
-    # 3. Transmitted P
-    # Note: refraction arg is only needed if MODE CONSTANT changes.
-    # P->P is default transmission.
-    # But to be explicit we can convert.
-    if wave_type == "P":
+    if wave_type == "SH":
+        run_trace(0.0, reflection_arg=[(2000.0, "SH")], label="Refl SH", color="tab:purple", style="--")
+        run_trace(4000.0, refraction_arg=None, label="Trans SH", color="tab:green", style="-")
+    elif wave_type == "P":
+        run_trace(0.0, reflection_arg=[(2000.0, "P")], label="Refl P", color="r", style="--")
+        run_trace(0.0, reflection_arg=[(2000.0, "SV")], label="Refl SV", color="tab:orange", style=":")
         run_trace(4000.0, refraction_arg=None, label="Trans P", color="b", style="-")
-        run_trace(4000.0, refraction_arg=[(2000.0, "S")], label="Trans S", color="tab:green", style="-.")
+        run_trace(4000.0, refraction_arg=[(2000.0, "SV")], label="Trans SV", color="tab:green", style="-.")
     else:
-        # Incident S
+        run_trace(0.0, reflection_arg=[(2000.0, "P")], label="Refl P", color="r", style="--")
+        run_trace(0.0, reflection_arg=[(2000.0, "SV")], label="Refl SV", color="tab:orange", style=":")
         run_trace(4000.0, refraction_arg=[(2000.0, "P")], label="Trans P", color="b", style="-")
-        run_trace(4000.0, refraction_arg=None, label="Trans S", color="tab:green", style="-.") # S->S
+        run_trace(4000.0, refraction_arg=None, label="Trans SV", color="tab:green", style="-.")
 
     # Incident ray is not plotted separately because trace_rays returns the FULL path.
     # The previous manual code overlaid legs.
@@ -555,6 +558,126 @@ fig, axes = lt.plot.coefficient_panels(
 )
 plt.show()
 
+###############################################################################
+# Incident SH-wave coefficients
+# -----------------------------
+#
+# SH motion is decoupled from P-SV motion in an isotropic 1-D model, so the
+# interface response contains only same-mode reflection and transmission:
+# :math:`R_{SHSH}` and :math:`T_{SHSH}`.  The ray-parameter sweep uses the
+# same incident S-wave slowness range as the SV case.
+#
+# **Critical angle** (green dash-dot line):
+#
+# * :math:`\theta_c^{T(SH)} = \arcsin(V_S^{(1)}/V_S^{(2)}) \approx 39.1^{\circ}`.
+#   Beyond this angle the transmitted SH wave is evanescent.
+
+p_vec_sh = np.linspace(0, 1.0 / mi_vs, n_p + 1)
+
+RT_sh = lt.sh_rt_coefficients(
+    p=p_vec_sh,
+    vs1=mi_vs, rho1=mi_rho,
+    vs2=mt_vs, rho2=mt_rho,
+)
+
+angle_SH = np.rad2deg(np.arcsin(np.clip(p_vec_sh * mi_vs, -1, 1)))
+crit_SH = lt.find_critical_angles(mi_vs, {"T(SH)": mt_vs})
+
+labels_sh = [
+    ("Rshsh", r"$|R_{SHSH}|$", "Reflected SH"),
+    ("Tshsh", r"$|T_{SHSH}|$", "Transmitted SH"),
+]
+sh_keys = ["Rshsh", "Tshsh"]
+ymax_SH = max(np.nanmax(np.abs(RT_sh[k])) for k in sh_keys) * 1.1
+ymax_SH = max(ymax_SH, 0.5)
+
+common_markers_SH = [
+    _marker_spec(
+        crit_SH.get("T(SH)"),
+        f"T(SH) crit. {crit_SH['T(SH)']:.1f} deg",
+        "tab:green",
+        "-.",
+    )
+]
+panels = _coefficient_panels(
+    labels_sh,
+    curve_defs=[{"data": RT_sh, "plot_kwargs": {"color": "k", "lw": 1.5}}],
+    common_markers=common_markers_SH,
+    panel_markers={},
+    ylim=(-0.05, ymax_SH),
+)
+fig, axes = lt.plot.coefficient_panels(
+    panels,
+    shape=(1, 2),
+    figsize=(10, 4),
+    default_x=angle_SH,
+    default_xlim=(0.0, 90.0),
+    default_xlabel="Incidence angle (deg)",
+    suptitle=(
+        "Incident SH-wave\n"
+        f"Inc: Vs={mi_vs}, rho={mi_rho}  ->  "
+        f"Trans: Vs={mt_vs}, rho={mt_rho}"
+    ),
+)
+plt.show()
+
+###############################################################################
+# Normalized SH-wave coefficients (Cerveny, 2001)
+# ------------------------------------------------
+#
+# The same energy-flux normalization applies to SH coefficients.  For reflected
+# SH the incoming and outgoing media are identical; for transmitted SH the
+# outgoing velocity and density are taken from the transmitted layer.
+
+norm_map_SH = {
+    "Rshsh": (mi_vs, mi_rho, mi_vs, mi_rho),
+    "Tshsh": (mi_vs, mi_rho, mt_vs, mt_rho),
+}
+
+RT_norm_SH = {}
+for key, (vi, ri, vo, ro) in norm_map_SH.items():
+    RT_norm_SH[key] = lt.normalize_rt_coefficient(
+        RT_sh[key], p_vec_sh, vi, ri, vo, ro,
+    )
+
+ymax_SHn = max(
+    np.nanmax(np.abs(RT_norm_SH[k])) for k in sh_keys
+) * 1.1
+ymax_SHn = max(ymax_SHn, 0.5)
+
+panels = _coefficient_panels(
+    labels_sh,
+    curve_defs=[
+        {
+            "data": RT_sh,
+            "label": "standard",
+            "plot_kwargs": {"color": "k", "lw": 0.8, "alpha": 0.4},
+        },
+        {
+            "data": RT_norm_SH,
+            "label": "normalized",
+            "plot_kwargs": {"color": "tab:blue", "lw": 1.5},
+        },
+    ],
+    common_markers=common_markers_SH,
+    panel_markers={},
+    ylim=(-0.05, max(ymax_SH, ymax_SHn)),
+)
+fig, axes = lt.plot.coefficient_panels(
+    panels,
+    shape=(1, 2),
+    figsize=(10, 4),
+    default_x=angle_SH,
+    default_xlim=(0.0, 90.0),
+    default_xlabel="Incidence angle (deg)",
+    suptitle=(
+        "Incident SH-wave - normalized (Cerveny, 2001)\n"
+        f"Inc: Vs={mi_vs}, rho={mi_rho}  ->  "
+        f"Trans: Vs={mt_vs}, rho={mt_rho}"
+    ),
+)
+plt.show()
+
 # %%
 # Ray diagrams (SV-incidence)
 # ---------------------------
@@ -571,9 +694,27 @@ fig, axes = plt.subplots(2, 2, figsize=(10, 8), sharey=True, sharex=True)
 axes = axes.flatten()
 
 for i, (ang, name) in enumerate(scenarios_sv):
-    plot_ray_situation(ang, "S", name, axes[i])
+    plot_ray_situation(ang, "SV", name, axes[i])
 
 fig.suptitle("Ray paths: Incident SV-wave", fontsize=14)
+fig.tight_layout()
+plt.show()
+
+# %%
+# Ray diagrams (SH-incidence)
+# ---------------------------
+
+scenarios_sh = [
+    (15, "Pre-critical"),
+    (45, "Trans SH evanescent (Total Reflection)"),
+]
+
+fig, axes = plt.subplots(1, 2, figsize=(10, 5), sharey=True, sharex=True)
+
+for i, (ang, name) in enumerate(scenarios_sh):
+    plot_ray_situation(ang, "SH", name, axes[i])
+
+fig.suptitle("Ray paths: Incident SH-wave", fontsize=14)
 fig.tight_layout()
 plt.show()
 
