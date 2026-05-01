@@ -245,7 +245,7 @@ fig, axes = lt.plot.coefficient_panels(
     default_xlim=(0.0, 90.0),
     default_xlabel="Incidence angle (deg)",
     suptitle=(
-        "Incident P-wave - normalized (Cerveny, 2001)\n"
+        "Incident P-wave - normalized\n"
         f"Inc: Vp={mi_vp}, Vs={mi_vs}, rho={mi_rho}  ->  "
         f"Trans: Vp={mt_vp}, Vs={mt_vs}, rho={mt_rho}"
     ),
@@ -500,8 +500,8 @@ fig, axes = lt.plot.coefficient_panels(
 plt.show()
 
 ###############################################################################
-# Normalized SV-wave coefficients (Červený, 2001)
-# ------------------------------------------------
+# Normalized SV-wave coefficients
+# -------------------------------
 #
 # Same energy-flux normalization applied to the SV-incident
 # coefficients.  The three critical-angle markers are preserved.
@@ -551,7 +551,7 @@ fig, axes = lt.plot.coefficient_panels(
     default_xlim=(0.0, 90.0),
     default_xlabel="Incidence angle (deg)",
     suptitle=(
-        "Incident SV-wave - normalized (Cerveny, 2001)\n"
+        "Incident SV-wave - normalized\n"
         f"Inc: Vp={mi_vp}, Vs={mi_vs}, rho={mi_rho}  ->  "
         f"Trans: Vp={mt_vp}, Vs={mt_vs}, rho={mt_rho}"
     ),
@@ -622,8 +622,8 @@ fig, axes = lt.plot.coefficient_panels(
 plt.show()
 
 ###############################################################################
-# Normalized SH-wave coefficients (Cerveny, 2001)
-# ------------------------------------------------
+# Normalized SH-wave coefficients
+# -------------------------------
 #
 # The same energy-flux normalization applies to SH coefficients.  For reflected
 # SH the incoming and outgoing media are identical; for transmitted SH the
@@ -671,7 +671,7 @@ fig, axes = lt.plot.coefficient_panels(
     default_xlim=(0.0, 90.0),
     default_xlabel="Incidence angle (deg)",
     suptitle=(
-        "Incident SH-wave - normalized (Cerveny, 2001)\n"
+        "Incident SH-wave - normalized\n"
         f"Inc: Vs={mi_vs}, rho={mi_rho}  ->  "
         f"Trans: Vs={mt_vs}, rho={mt_rho}"
     ),
