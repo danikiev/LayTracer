@@ -41,7 +41,14 @@ def coefficient_panels(
             *default_x* is used.
         ``curves`` : list of dict, optional
             Curve specifications. Each curve dict must contain ``y`` and
-            may contain ``label`` plus ``plot_kwargs``.
+            may contain ``label`` plus ``plot_kwargs``. To style complex-valued
+            coefficient regions, provide ``complex_from`` as the complex
+            coefficient array used for detection. Samples satisfying
+            ``abs(imag(C)) > complex_tol * max(1, abs(C))`` are plotted with
+            ``complex_plot_kwargs`` (default ``{'ls': '--'}``). To style
+            regions where the outgoing branch itself is evanescent, provide
+            ``evanescent_mask``; those samples are plotted with
+            ``evanescent_plot_kwargs`` (default ``{'ls': '-.'}``).
         ``markers`` : list of dict, optional
             Vertical-line marker specifications. Each marker dict must
             contain ``angle`` and may contain ``label`` plus
@@ -92,6 +99,18 @@ def coefficient_panels(
     if len(panels) != nrows * ncols:
         raise ValueError("Number of panels must match shape[0] * shape[1].")
 
+    def _complex_mask(values, tol):
+        values = np.asarray(values)
+        scale = np.maximum(1.0, np.abs(values))
+        return np.isfinite(values) & (np.abs(np.imag(values)) > tol * scale)
+
+    def _connect_segment_starts(mask):
+        mask = np.asarray(mask, dtype=bool).copy()
+        starts = np.flatnonzero(mask & ~np.r_[False, mask[:-1]])
+        starts = starts[starts > 0]
+        mask[starts - 1] = True
+        return mask
+
     fig, axes = plt.subplots(
         nrows,
         ncols,
@@ -116,7 +135,71 @@ def coefficient_panels(
             if label is not None:
                 plot_kwargs.setdefault("label", label)
                 has_labeled_artist = True
-            ax.plot(x, curve["y"], **plot_kwargs)
+
+            complex_from = curve.get("complex_from")
+            evanescent_mask = curve.get("evanescent_mask")
+            if complex_from is None and evanescent_mask is None:
+                ax.plot(x, curve["y"], **plot_kwargs)
+                continue
+
+            x_arr = np.asarray(x)
+            y_arr = np.asarray(curve["y"])
+            if x_arr.shape != y_arr.shape:
+                raise ValueError(
+                    "x, y, complex_from, and evanescent_mask must have the same shape."
+                )
+
+            if complex_from is None:
+                complex_state = np.zeros_like(y_arr, dtype=bool)
+            else:
+                complex_arr = np.asarray(complex_from)
+                if complex_arr.shape != y_arr.shape:
+                    raise ValueError(
+                        "x, y, complex_from, and evanescent_mask must have the same shape."
+                    )
+                tol = curve.get("complex_tol", 1e-10)
+                complex_state = _complex_mask(complex_arr, tol)
+
+            if evanescent_mask is None:
+                evanescent_state = np.zeros_like(y_arr, dtype=bool)
+            else:
+                evanescent_state = np.asarray(evanescent_mask, dtype=bool)
+                if evanescent_state.shape != y_arr.shape:
+                    raise ValueError(
+                        "x, y, complex_from, and evanescent_mask must have the same shape."
+                    )
+
+            states = [
+                (~complex_state) & (~evanescent_state),
+                complex_state & (~evanescent_state),
+                evanescent_state,
+            ]
+            styles = [
+                {},
+                {"ls": "--", **curve.get("complex_plot_kwargs", {})},
+                {"ls": "-.", **curve.get("evanescent_plot_kwargs", {})},
+            ]
+
+            base_plot_kwargs = dict(plot_kwargs)
+            base_plot_kwargs.pop("label", None)
+            label_pending = label is not None
+
+            for state, style in zip(states, styles):
+                if not np.any(state):
+                    continue
+
+                segment_mask = _connect_segment_starts(state)
+                segment_kwargs = dict(base_plot_kwargs)
+                segment_kwargs.update(style)
+                if label_pending:
+                    segment_kwargs["label"] = label
+                    label_pending = False
+
+                ax.plot(
+                    x_arr,
+                    np.where(segment_mask, y_arr, np.nan),
+                    **segment_kwargs,
+                )
 
         for marker in markers:
             angle = marker.get("angle")

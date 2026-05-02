@@ -456,6 +456,36 @@ class TestBrewsterAngles:
         assert result["Rsp"][0] == pytest.approx(21.0, abs=1.0)
         assert result["Rsp"][1] == pytest.approx(40.0, abs=1.0)
 
+    def test_sh_reflection_zero_matches_oblique_impedance(self):
+        """For Ammon model, |Rshsh| vanishes where oblique SH impedances match."""
+        vs1, rho1 = 2.9e3, 2667.0
+        vs2, rho2 = 4.6e3, 3380.0
+        z1 = rho1 * vs1
+        z2 = rho2 * vs2
+        p_zero = np.sqrt(
+            (z2**2 - z1**2) / (z2**2 * vs2**2 - z1**2 * vs1**2)
+        )
+        angle_zero = np.rad2deg(np.arcsin(p_zero * vs1))
+
+        RT = laytracer.sh_rt_coefficients(p_zero, vs1, rho1, vs2, rho2)
+
+        assert angle_zero == pytest.approx(35.17, abs=0.01)
+        assert abs(RT["Rshsh"]) == pytest.approx(0.0, abs=1e-12)
+
+    def test_sh_reflection_brewster_detected(self):
+        """For Ammon model, |Rshsh| has a Brewster-like zero near 35.17??."""
+        vs1, rho1 = 2.9e3, 2667.0
+        vs2, rho2 = 4.6e3, 3380.0
+        p = np.linspace(0, 1.0 / vs1, 5000 + 1)
+        RT = laytracer.sh_rt_coefficients(p, vs1, rho1, vs2, rho2)
+        angles = np.rad2deg(np.arcsin(np.clip(p * vs1, -1, 1)))
+
+        result = laytracer.find_brewster_angles(RT, angles, keys=["Rshsh"])
+
+        assert "Rshsh" in result
+        assert len(result["Rshsh"]) == 1
+        assert result["Rshsh"][0] == pytest.approx(35.17, abs=0.2)
+
     def test_keys_filter(self):
         """Only requested keys appear in the output."""
         RT_P, angle_P, _, _ = _ammon_model_rt()

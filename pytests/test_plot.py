@@ -91,3 +91,72 @@ def test_coefficient_panels_creates_expected_layout():
 def test_coefficient_panels_validates_panel_count():
     with pytest.raises(ValueError):
         laytracer.plot.coefficient_panels([], shape=(1, 1))
+
+
+def test_coefficient_panels_styles_complex_and_evanescent_segments():
+    angles = np.linspace(0.0, 40.0, 5)
+    coeff = np.array([
+        1.0 + 0.0j,
+        0.8 + 0.0j,
+        0.7 + 1e-6j,
+        0.6 + 1e-6j,
+        0.5 + 1e-6j,
+    ])
+    evanescent = np.array([False, False, False, True, True])
+    panels = [
+        {
+            "curves": [
+                {
+                    "y": np.abs(coeff),
+                    "complex_from": coeff,
+                    "evanescent_mask": evanescent,
+                    "plot_kwargs": {"color": "k", "lw": 1.0},
+                }
+            ],
+        }
+    ]
+
+    fig, axes = laytracer.plot.coefficient_panels(
+        panels,
+        shape=(1, 1),
+        default_x=angles,
+    )
+
+    assert len(axes[0, 0].lines) == 3
+    assert axes[0, 0].lines[0].get_linestyle() == "-"
+    assert axes[0, 0].lines[1].get_linestyle() == "--"
+    assert axes[0, 0].lines[2].get_linestyle() == "-."
+    np.testing.assert_array_equal(
+        np.isnan(axes[0, 0].lines[0].get_ydata()),
+        np.array([False, False, True, True, True]),
+    )
+    np.testing.assert_array_equal(
+        np.isnan(axes[0, 0].lines[1].get_ydata()),
+        np.array([True, False, False, True, True]),
+    )
+    np.testing.assert_array_equal(
+        np.isnan(axes[0, 0].lines[2].get_ydata()),
+        np.array([True, True, False, False, False]),
+    )
+
+    plt.close(fig)
+
+
+def test_coefficient_panels_validates_segment_shape():
+    panels = [
+        {
+            "curves": [
+                {
+                    "y": np.ones(3),
+                    "complex_from": np.ones(2, dtype=complex),
+                }
+            ],
+        }
+    ]
+
+    with pytest.raises(ValueError, match="same shape"):
+        laytracer.plot.coefficient_panels(
+            panels,
+            shape=(1, 1),
+            default_x=np.arange(3),
+        )

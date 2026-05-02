@@ -64,18 +64,36 @@ def _marker_spec(angle, label, color, linestyle, linewidth=0.8):
     }
 
 
-def _coefficient_panels(panel_defs, curve_defs, common_markers, panel_markers, ylim):
+def _outgoing_evanescent_masks(p, velocities):
+    p = np.asarray(p)
+    return {
+        key: p * velocity > 1.0
+        for key, velocity in velocities.items()
+    }
+
+
+def _coefficient_panels(
+    panel_defs,
+    curve_defs,
+    common_markers,
+    panel_markers,
+    ylim,
+    evanescent_masks=None,
+):
     panels = []
     for key, ylabel, title in panel_defs:
         curves = []
         for curve_def in curve_defs:
-            curves.append(
-                {
-                    "y": np.abs(curve_def["data"][key]),
-                    "label": curve_def.get("label"),
-                    "plot_kwargs": dict(curve_def["plot_kwargs"]),
-                }
-            )
+            coefficient = curve_def["data"][key]
+            curve = {
+                "y": np.abs(coefficient),
+                "complex_from": coefficient,
+                "label": curve_def.get("label"),
+                "plot_kwargs": dict(curve_def["plot_kwargs"]),
+            }
+            if evanescent_masks is not None:
+                curve["evanescent_mask"] = evanescent_masks.get(key)
+            curves.append(curve)
 
         markers = [dict(marker) for marker in common_markers]
         markers.extend(panel_markers.get(key, []))
@@ -94,8 +112,17 @@ def _coefficient_panels(panel_defs, curve_defs, common_markers, panel_markers, y
     return panels
 
 # Ray-parameter sweep: p from 0 to 1/Vp_incident
-n_p = 200
+n_p = 1000
 p_vec = np.linspace(0, 1.0 / mi_vp, n_p + 1)
+evanescent_masks_P = _outgoing_evanescent_masks(
+    p_vec,
+    {
+        "Rpp": mi_vp,
+        "Rps": mi_vs,
+        "Tpp": mt_vp,
+        "Tps": mt_vs,
+    },
+)
 
 # Compute all 8 R/T coefficients
 RT = lt.psv_rt_coefficients(
@@ -103,6 +130,11 @@ RT = lt.psv_rt_coefficients(
     vp1=mi_vp, vs1=mi_vs, rho1=mi_rho,
     vp2=mt_vp, vs2=mt_vs, rho2=mt_rho,
 )
+
+# In the coefficient panels below, dashed curve segments mark coefficients
+# that have become complex while the plotted outgoing branch still propagates.
+# Dash-dot curve segments mark the stronger condition where that outgoing
+# branch itself has imaginary vertical slowness and is evanescent.
 
 ###############################################################################
 # Incident P-wave coefficients
@@ -115,7 +147,9 @@ RT = lt.psv_rt_coefficients(
 #
 # * Transmitted P becomes evanescent at
 #   :math:`\theta_c^{T(P)} = \arcsin(V_P^{(1)}/V_P^{(2)}) \approx 38.5^{\circ}`.
-#   Beyond this angle :math:`|R_{PP}| \to 1` (total reflection).
+#   Beyond this angle the transmitted-P vertical slowness is imaginary,
+#   the affected displacement coefficients become complex, and
+#   :math:`|R_{PP}| \to 1` (total reflection).
 #   There is no transmitted-SV critical angle because
 #   :math:`V_P^{(1)} > V_S^{(2)}` for this model.
 #
@@ -165,6 +199,7 @@ panels = _coefficient_panels(
     common_markers=common_markers_P,
     panel_markers=panel_markers_P,
     ylim=(-0.05, ymax_P),
+    evanescent_masks=evanescent_masks_P,
 )
 fig, axes = lt.plot.coefficient_panels(
     panels,
@@ -236,6 +271,7 @@ panels = _coefficient_panels(
     common_markers=common_markers_P,
     panel_markers=panel_markers_P,
     ylim=(-0.05, max(ymax_P, ymax_Pn)),
+    evanescent_masks=evanescent_masks_P,
 )
 fig, axes = lt.plot.coefficient_panels(
     panels,
@@ -424,7 +460,11 @@ plt.show()
 #   beyond this angle all energy is reflected as SV
 #   (:math:`|R_{SS}| = 1`).
 #
-# The reflected SV wave is always real (same medium, same velocity).
+# Once one of these P-SV branches is post-critical, its vertical slowness
+# is imaginary and the coupled Zoeppritz coefficients can become complex.
+# The reflected SV wave remains propagating (same medium, same velocity),
+# but its coefficient can still carry a complex phase from the coupled
+# boundary conditions.
 #
 # **Brewster angles** (purple dotted lines) - the near-zeros of
 # :math:`|R_{SP}|` near 21° and 40°, and of :math:`|R_{SS}|` near
@@ -432,6 +472,15 @@ plt.show()
 # contrast.
 
 p_vec_sv = np.linspace(0, 1.0 / mi_vs, n_p + 1)
+evanescent_masks_SV = _outgoing_evanescent_masks(
+    p_vec_sv,
+    {
+        "Rsp": mi_vp,
+        "Rss": mi_vs,
+        "Tsp": mt_vp,
+        "Tss": mt_vs,
+    },
+)
 
 RT_sv = lt.psv_rt_coefficients(
     p=p_vec_sv,
@@ -483,6 +532,7 @@ panels = _coefficient_panels(
     common_markers=common_markers_SV,
     panel_markers=panel_markers_SV,
     ylim=(-0.05, ymax_SV),
+    evanescent_masks=evanescent_masks_SV,
 )
 fig, axes = lt.plot.coefficient_panels(
     panels,
@@ -542,6 +592,7 @@ panels = _coefficient_panels(
     common_markers=common_markers_SV,
     panel_markers=panel_markers_SV,
     ylim=(-0.05, max(ymax_SV, ymax_SVn)),
+    evanescent_masks=evanescent_masks_SV,
 )
 fig, axes = lt.plot.coefficient_panels(
     panels,
@@ -570,9 +621,25 @@ plt.show()
 # **Critical angle** (green dash-dot line):
 #
 # * :math:`\theta_c^{T(SH)} = \arcsin(V_S^{(1)}/V_S^{(2)}) \approx 39.1^{\circ}`.
-#   Beyond this angle the transmitted SH wave is evanescent.
+#   Beyond this angle the transmitted-SH vertical slowness is imaginary,
+#   so the SH reflection and transmission coefficients are complex while
+#   the reflected-SH magnitude stays at total reflection.
+#
+# **SH Brewster/null angle** (purple dotted line):
+#
+# * :math:`|R_{SHSH}|` vanishes near :math:`35.2^{\circ}` where the
+#   oblique SH impedances on both sides match,
+#   :math:`\zeta_1 = \zeta_2` with
+#   :math:`\zeta_i = \rho_i V_{Si}^2 \eta_i`.
 
 p_vec_sh = np.linspace(0, 1.0 / mi_vs, n_p + 1)
+evanescent_masks_SH = _outgoing_evanescent_masks(
+    p_vec_sh,
+    {
+        "Rshsh": mi_vs,
+        "Tshsh": mt_vs,
+    },
+)
 
 RT_sh = lt.sh_rt_coefficients(
     p=p_vec_sh,
@@ -582,6 +649,7 @@ RT_sh = lt.sh_rt_coefficients(
 
 angle_SH = np.rad2deg(np.arcsin(np.clip(p_vec_sh * mi_vs, -1, 1)))
 crit_SH = lt.find_critical_angles(mi_vs, {"T(SH)": mt_vs})
+brew_SH = lt.find_brewster_angles(RT_sh, angle_SH, keys=["Rshsh"])
 
 labels_sh = [
     ("Rshsh", r"$|R_{SHSH}|$", "Reflected SH"),
@@ -599,12 +667,19 @@ common_markers_SH = [
         "-.",
     )
 ]
+panel_markers_SH = {
+    "Rshsh": [
+        _marker_spec(ba, f"Brewster {ba:.1f} deg", "tab:purple", ":")
+        for ba in brew_SH.get("Rshsh", [])
+    ]
+}
 panels = _coefficient_panels(
     labels_sh,
     curve_defs=[{"data": RT_sh, "plot_kwargs": {"color": "k", "lw": 1.5}}],
     common_markers=common_markers_SH,
-    panel_markers={},
+    panel_markers=panel_markers_SH,
     ylim=(-0.05, ymax_SH),
+    evanescent_masks=evanescent_masks_SH,
 )
 fig, axes = lt.plot.coefficient_panels(
     panels,
@@ -660,8 +735,9 @@ panels = _coefficient_panels(
         },
     ],
     common_markers=common_markers_SH,
-    panel_markers={},
+    panel_markers=panel_markers_SH,
     ylim=(-0.05, max(ymax_SH, ymax_SHn)),
+    evanescent_masks=evanescent_masks_SH,
 )
 fig, axes = lt.plot.coefficient_panels(
     panels,
