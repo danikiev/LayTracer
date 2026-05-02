@@ -195,6 +195,54 @@ fig.tight_layout()
 plt.show()
 
 # %%
+# SV versus SH amplitude attributes
+# ---------------------------------
+#
+# In an isotropic 1-D layered model, SV and SH use the same S-wave velocity
+# for ray tracing. Their ray paths, ray parameters, travel times,
+# attenuation, and geometrical spreading therefore match. Their cumulative
+# transmission products differ because SV uses the coupled P-SV Zoeppritz
+# coefficients, while SH uses the decoupled SH-SH coefficients.
+
+shear_results = lt.trace_rays(
+    sources=src,
+    receivers=rcvs,
+    velocity_df=vel_df,
+    source_phase=["SV", "SH"],
+    requested={"travel_times", "rays", "ray_parameters", "tstar", "spreading", "trans_product"},
+    transcoef_method="standard",
+)
+
+sv_result = shear_results["SV"]
+sh_result = shear_results["SH"]
+
+np.testing.assert_allclose(sv_result.travel_times, sh_result.travel_times)
+np.testing.assert_allclose(sv_result.ray_parameters, sh_result.ray_parameters)
+np.testing.assert_allclose(sv_result.tstar, sh_result.tstar)
+np.testing.assert_allclose(sv_result.spreading, sh_result.spreading)
+for ray_sv, ray_sh in zip(sv_result.rays, sh_result.rays):
+    np.testing.assert_allclose(ray_sv, ray_sh)
+
+trans_diff = np.max(np.abs(sv_result.trans_product - sh_result.trans_product))
+assert trans_diff > 0.0
+print(
+    "SV and SH share kinematics and path-dependent scalar attributes; "
+    f"their transmission products remain phase-specific "
+    f"(max difference {trans_diff:.3g})."
+)
+
+fig, ax = plt.subplots(figsize=(8, 4))
+ax.plot(offsets / 1000, sv_result.trans_product, "o-", label="SV", markersize=3)
+ax.plot(offsets / 1000, sh_result.trans_product, "s-", label="SH", markersize=3)
+ax.set_xlabel("Offset (km)")
+ax.set_ylabel(r"$\prod |T_k|$")
+ax.set_title("SV and SH: shared kinematics, different interface coefficients")
+ax.legend()
+ax.grid(True, alpha=0.3)
+fig.tight_layout()
+plt.show()
+
+# %%
 # Advanced Spreading Analysis
 # ---------------------------
 # 

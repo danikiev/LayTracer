@@ -25,6 +25,24 @@ is the ray angle from vertical in layer :math:`k`.
 
 ----
 
+Phase and polarization convention
+=================================
+
+For each source-receiver pair, LayTracer uses a local ray coordinate
+system. The radial axis lies in the horizontal source-receiver direction,
+the vertical axis is normal to the horizontal interfaces, and the
+transverse axis is perpendicular to this radial-vertical plane.
+
+The scalar ray-tracing equations are phase agnostic once the appropriate
+layer velocity is selected: :math:`v_P` for P waves and :math:`v_S` for
+both SV and SH waves. Thus SV and SH share the same ray path, ray
+parameter, travel time, geometrical spreading, and :math:`t^*` in
+isotropic layered media. They differ only in polarization and interface
+coefficients: SV belongs to the coupled P-SV system, whereas SH is the
+transverse, decoupled shear mode.
+
+----
+
 Dimensionless ray parameter
 ============================
 
@@ -329,22 +347,27 @@ For subcritical incidence at a lossless interface, the normalized coefficients e
 Critical angles
 ---------------
 
-A **critical angle** occurs when the transmitted wave in a faster medium
-becomes evanescent.  For an incident P-wave crossing into a layer where
-:math:`v_{P2} > v_{P1}`, the P-critical angle is
+A **critical angle** occurs when a reflected or transmitted wave mode in a
+faster medium becomes evanescent, meaning it no longer propagates away from
+the interface but decays normal to it. For any incident mode :math:`m` and
+outgoing mode :math:`n`, the critical angle is
 
 .. math::
-   \theta_c^{P} = \arcsin\!\left(\frac{v_{P1}}{v_{P2}}\right).
+   \theta_c^{m \to n} =
+   \arcsin\!\left(\frac{v_{m,\mathrm{in}}}{v_{n,\mathrm{out}}}\right),
 
-Similarly, when :math:`v_{S2} > v_{P1}` an S-to-P critical angle exists:
+provided :math:`v_{n,\mathrm{out}} > v_{m,\mathrm{in}}`. For P-SV
+scattering, :math:`v_m` and :math:`v_n` are selected from the P or SV
+wave speeds on the incident and outgoing sides. For SH-SH transmission, the
+same rule applies with :math:`v_S` on both sides:
 
 .. math::
-   \theta_c^{S} = \arcsin\!\left(\frac{v_{P1}}{v_{S2}}\right).
+   \theta_c^{SH \to SH} =
+   \arcsin\!\left(\frac{v_{S,\mathrm{in}}}{v_{S,\mathrm{out}}}\right).
 
-For an incident SV-wave the same logic applies with :math:`v_{S1}` in the
-numerator.  Beyond the critical angle the corresponding vertical slowness
-becomes imaginary, the coefficient becomes complex, and total reflection
-occurs for that mode.
+Beyond the critical angle the corresponding vertical slowness becomes
+imaginary, the coefficient becomes complex, and the outgoing wave mode carries
+no propagating normal energy flux.
 
 Brewster angles
 ---------------
@@ -357,18 +380,34 @@ elastodynamics, the same phenomenon occurs: certain combinations of elastic
 parameters produce incidence angles where one of the P-SV scattering
 coefficients vanishes.
 
-Unlike critical angles, which depend only on velocity ratios, Brewster angles
-depend on *all six* elastic parameters (:math:`v_{P1}`, :math:`v_{S1}`,
-:math:`\rho_1`, :math:`v_{P2}`, :math:`v_{S2}`, :math:`\rho_2`).
-Physically, they arise from destructive interference between the P and SV
-displacement potentials at the welded interface: the two potential
-contributions to a particular scattered mode cancel exactly, driving that
-coefficient to zero.
+Unlike critical angles, which depend only on velocity ratios, P-SV Brewster
+angles depend on *all six* elastic parameters (:math:`v_{P1}`,
+:math:`v_{S1}`, :math:`\rho_1`, :math:`v_{P2}`, :math:`v_{S2}`,
+:math:`\rho_2`). Physically, they arise from destructive interference
+between the P and SV displacement potentials at the welded interface: the
+two potential contributions to a particular scattered mode cancel exactly,
+driving that coefficient to zero.
 
 For example, the reflected P coefficient :math:`R_{PP}` may vanish at an
 angle well below the critical angle.  At this Brewster angle the incident
 energy is partitioned entirely into the transmitted P-wave and the
 mode-converted waves, with no same-mode reflection.
+
+For SH, the analogous zero has a simpler interpretation because SH is
+decoupled from the P-SV potentials. The reflected SH coefficient vanishes
+when the oblique shear impedances match across the interface:
+
+.. math::
+   \rho_1 v_{S1}^2 \eta_1 = \rho_2 v_{S2}^2 \eta_2,
+
+or equivalently
+
+.. math::
+   \rho_1 v_{S1}\cos\theta_1 =
+   \rho_2 v_{S2}\cos\theta_2.
+
+This SH null depends only on shear velocities, densities, and incidence
+angle.
 
 LayTracer provides the function :func:`~laytracer.amplitude.find_brewster_angles`
 which numerically detects these minima in the computed coefficient curves by
@@ -380,13 +419,20 @@ user-specified threshold.
 Extension to 3-D layered media
 ===============================
 
-All the formulae above are derived in a **2-D vertical plane**
-containing both the source and the receiver.  Because horizontally
-layered media possess *cylindrical symmetry* about the vertical axis
-through the source, any source–receiver pair in three-dimensional space
-can be **reduced to an equivalent 2-D problem** without loss of
-generality (:cite:t:`Cerveny2001`, Ch. 3;
-:cite:t:`AkiRichards2002`, Ch. 4).
+The formulae above are written in a local incidence coordinate system. The
+ray geometry is two-dimensional because the velocity model varies only with
+depth, so the horizontal slowness direction is fixed along the path. P and
+SV particle motions are in the radial-vertical incidence plane; SH motion is
+polarized along the transverse axis perpendicular to that plane.
+
+The 2-D reduction is therefore a reduction of geometry and material
+dependence, not a statement that every displacement vector lies in the
+incidence plane. Because horizontally layered media possess *cylindrical
+symmetry* about the vertical axis through the source, any source-receiver
+pair in three-dimensional space can be **reduced to an equivalent 2-D
+problem** without loss of generality (:cite:t:`Cerveny2001`, Ch. 3;
+:cite:t:`AkiRichards2002`, Ch. 4). The local incidence plane is obtained
+by rotating the 2-D problem into the source-receiver azimuth.
 
 Coordinate projection
 ---------------------
@@ -445,11 +491,16 @@ computed from the 2-D ray remains valid in 3-D:
   epicentral distance :math:`X` to capture the 3-D cylindrical
   divergence of the ray-tube out of the incidence plane
   (:cite:t:`Cerveny2001`, §4.10).
-- **Transmission coefficients** — depend on ray parameter and layer
-  impedances, not on azimuth.
+- **Interface coefficients** - scalar reflection/transmission
+  coefficients depend on ray parameter and layer elastic properties, not
+  on absolute azimuth. P and SV use the coupled P-SV coefficients; SH uses
+  the decoupled SH-SH coefficients. The SH polarization direction itself
+  rotates with the source-receiver azimuth.
 
-Thus, the layered-media solver need only operate in the 2-D ray plane;
-the full 3-D solution is recovered by geometry alone.
+Thus, the layered-media solver operates in the 2-D incidence plane; the
+3-D ray geometry and scalar amplitude attributes are recovered by rotation.
+Full vector receiver components or source radiation patterns require an
+additional polarization/projection step.
 
 ----
 
