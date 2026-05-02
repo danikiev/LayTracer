@@ -25,6 +25,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - cleaned up and refactored example 03
 - API and methodology documentation now describe SH support, multi-phase tracing, and the decoupled SH behavior in isotropic 1-D media
 
+### Fixed
+
+- Removed unnecessary `plt.show()` call from 3D ray plot in example 01 to enable 3D plot in docs pages
+
 ## [v0.3.1] - 2026-04-20
 
 ### Added
