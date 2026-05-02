@@ -72,6 +72,21 @@ def _outgoing_evanescent_masks(p, velocities):
     }
 
 
+ACCENT6 = ("#7fc97f", "#beaed4", "#fdc086", "#ffff99", "#386cb0", "#f0027f")
+LAYER_COLORS = ACCENT6[3:1:-1]
+RAY_COLORS = {
+    "Refl P": ACCENT6[0],
+    "Refl SV": ACCENT6[1],
+    "Trans P": ACCENT6[4],
+    "Trans SV": ACCENT6[5],
+    "Refl SH": ACCENT6[1],
+    "Trans SH": ACCENT6[5],
+}
+RAY_LINEWIDTH = 1.5
+RAY_XLIM = (0, 6000)
+RAY_YLIM = (4000, 0)
+
+
 def _coefficient_panels(
     panel_defs,
     curve_defs,
@@ -302,17 +317,17 @@ def plot_ray_situation(angle, wave_type, title, ax):
 
     lt.plot.rays_2d(
         model_psv, rays=[], ax=ax, vel_type="Vs" if shear_phase else "Vp",
-        xlim=(-100, 6000), ylim=(4000, 0),
+        xlim=RAY_XLIM, ylim=RAY_YLIM,
         plot_model=True,
         add_colorbar=True,
-        model_alpha=0.5,
         discrete_colorbar=True,
+        layer_colors=LAYER_COLORS,
     )
     
     v_inc = mi_vp * 1000 if wave_type == "P" else mi_vs * 1000
     p_target = np.sin(np.deg2rad(angle)) / v_inc
     
-    source = np.array([0.0, 0.0, 0.0])
+    source = np.array([[0.0, 0.0, 0.0]])
     z_int = 2000.0
     z_bot = 4000.0
 
@@ -327,7 +342,7 @@ def plot_ray_situation(angle, wave_type, title, ax):
             return None
         return thickness * pv / np.sqrt(1.0 - pv**2)
 
-    def run_trace(reflection_arg=None, refraction_arg=None, label="", color="", style=""):
+    def run_trace(reflection_arg=None, refraction_arg=None, label="", color=""):
         dx0 = leg_offset(z_int, phase_velocity(wave_type))
         if dx0 is None:
             return
@@ -347,7 +362,7 @@ def plot_ray_situation(angle, wave_type, title, ax):
         if dx1 is None:
             return
 
-        receiver = np.array([dx0 + dx1, 0.0, z_end])
+        receiver = np.array([[dx0 + dx1, 0.0, z_end]])
         res = lt.trace_rays(
             sources=source,
             receivers=receiver,
@@ -359,15 +374,20 @@ def plot_ray_situation(angle, wave_type, title, ax):
         )
 
         if res.rays and res.rays[0] is not None:
+            ray = res.rays[0].copy()
+            ray[:, 0] -= ray[0, 0]
+            ray[:, 2] -= ray[0, 2]
             lt.plot.rays_2d(
                 model_psv,
-                rays=res.rays,
+                rays=[ray],
                 ax=ax,
                 ray_color=color,
+                ray_alpha=1.0,
+                ray_linewidth=RAY_LINEWIDTH,
                 plot_model=False,
-                linestyle=style,
+                linestyle="-",
                 label=label,
-                xlim=(-100, 6000), ylim=(4000, 0),
+                xlim=RAY_XLIM, ylim=RAY_YLIM,
             )
 
     if wave_type == "SH":
@@ -375,31 +395,27 @@ def plot_ray_situation(angle, wave_type, title, ax):
             dict(
                 reflection_arg=[(z_int, "SH")],
                 label="Refl SH",
-                color="tab:purple",
-                style="--",
+                color=RAY_COLORS["Refl SH"],
             ),
-            dict(refraction_arg=None, label="Trans SH", color="tab:green", style="-"),
+            dict(refraction_arg=None, label="Trans SH", color=RAY_COLORS["Trans SH"]),
         ]
     elif wave_type == "P":
         ray_variants = [
             dict(
                 reflection_arg=[(z_int, "P")],
                 label="Refl P",
-                color="r",
-                style="--",
+                color=RAY_COLORS["Refl P"],
             ),
             dict(
                 reflection_arg=[(z_int, "SV")],
                 label="Refl SV",
-                color="tab:orange",
-                style=":",
+                color=RAY_COLORS["Refl SV"],
             ),
-            dict(refraction_arg=None, label="Trans P", color="b", style="-"),
+            dict(refraction_arg=None, label="Trans P", color=RAY_COLORS["Trans P"]),
             dict(
                 refraction_arg=[(z_int, "SV")],
                 label="Trans SV",
-                color="tab:green",
-                style="-.",
+                color=RAY_COLORS["Trans SV"],
             ),
         ]
     else:
@@ -407,24 +423,29 @@ def plot_ray_situation(angle, wave_type, title, ax):
             dict(
                 reflection_arg=[(z_int, "P")],
                 label="Refl P",
-                color="r",
-                style="--",
+                color=RAY_COLORS["Refl P"],
             ),
             dict(
                 reflection_arg=[(z_int, "SV")],
                 label="Refl SV",
-                color="tab:orange",
-                style=":",
+                color=RAY_COLORS["Refl SV"],
             ),
-            dict(refraction_arg=[(z_int, "P")], label="Trans P", color="b", style="-"),
-            dict(refraction_arg=None, label="Trans SV", color="tab:green", style="-."),
+            dict(refraction_arg=[(z_int, "P")], label="Trans P", color=RAY_COLORS["Trans P"]),
+            dict(refraction_arg=None, label="Trans SV", color=RAY_COLORS["Trans SV"]),
         ]
 
     for variant in ray_variants:
         run_trace(**variant)
     
-    ax.legend(loc="lower left", fontsize="small")
+    ax.legend(loc="upper right", fontsize="small")
     ax.set_title(f"{title}\n(Angle {angle:g} deg)")
+
+
+def show_ray_subplot_labels(axes):
+    for ax in np.ravel(axes):
+        ax.tick_params(labelbottom=True, labelleft=True)
+        ax.set_xlabel("Horizontal distance (m)")
+        ax.set_ylabel("Depth (m)")
 
 
 # P-incidence scenarios
@@ -437,6 +458,7 @@ fig, axes = plt.subplots(1, 2, figsize=(10, 5), sharey=True)
 for i, (ang, name) in enumerate(scenarios_p):
     plot_ray_situation(ang, "P", name, axes[i])
 
+show_ray_subplot_labels(axes)
 fig.suptitle("Ray paths: Incident P-wave", fontsize=14)
 fig.tight_layout()
 plt.show()
@@ -610,6 +632,29 @@ fig, axes = lt.plot.coefficient_panels(
 )
 plt.show()
 
+# %%
+# Ray diagrams (SV-incidence)
+# ---------------------------
+
+# SV-incidence scenarios
+scenarios_sv = [
+    (15, "Pre-critical"),
+    (25, "Trans P evanescent"),
+    (37, "Refl P evanescent"),
+    (45, "Trans SV evanescent (Total Reflection)"),
+]
+
+fig, axes = plt.subplots(2, 2, figsize=(10, 8), sharey=True, sharex=True)
+axes = axes.flatten()
+
+for i, (ang, name) in enumerate(scenarios_sv):
+    plot_ray_situation(ang, "SV", name, axes[i])
+
+show_ray_subplot_labels(axes)
+fig.suptitle("Ray paths: Incident SV-wave", fontsize=14)
+fig.tight_layout()
+plt.show()
+
 ###############################################################################
 # Incident SH-wave coefficients
 # -----------------------------
@@ -756,28 +801,6 @@ fig, axes = lt.plot.coefficient_panels(
 plt.show()
 
 # %%
-# Ray diagrams (SV-incidence)
-# ---------------------------
-
-# SV-incidence scenarios
-scenarios_sv = [
-    (15, "Pre-critical"),
-    (25, "Trans P evanescent"),
-    (37, "Refl P evanescent"),
-    (45, "Trans SV evanescent (Total Reflection)"),
-]
-
-fig, axes = plt.subplots(2, 2, figsize=(10, 8), sharey=True, sharex=True)
-axes = axes.flatten()
-
-for i, (ang, name) in enumerate(scenarios_sv):
-    plot_ray_situation(ang, "SV", name, axes[i])
-
-fig.suptitle("Ray paths: Incident SV-wave", fontsize=14)
-fig.tight_layout()
-plt.show()
-
-# %%
 # Ray diagrams (SH-incidence)
 # ---------------------------
 
@@ -791,6 +814,7 @@ fig, axes = plt.subplots(1, 2, figsize=(10, 5), sharey=True, sharex=True)
 for i, (ang, name) in enumerate(scenarios_sh):
     plot_ray_situation(ang, "SH", name, axes[i])
 
+show_ray_subplot_labels(axes)
 fig.suptitle("Ray paths: Incident SH-wave", fontsize=14)
 fig.tight_layout()
 plt.show()

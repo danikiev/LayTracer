@@ -3,6 +3,7 @@ matplotlib.use("Agg")
 
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
 import pytest
 
 import laytracer
@@ -160,3 +161,51 @@ def test_coefficient_panels_validates_segment_shape():
             shape=(1, 1),
             default_x=np.arange(3),
         )
+
+
+def test_rays_2d_accepts_custom_layer_colors_and_linewidth():
+    vel_df = pd.DataFrame({
+        "Depth": [0.0, 1000.0],
+        "Vp": [2000.0, 3000.0],
+    })
+    ray = np.array([[0.0, 0.0], [1000.0, 1000.0]])
+    layer_colors = ["#fdc086", "#ffff99"]
+
+    fig, ax = plt.subplots()
+    laytracer.plot.rays_2d(
+        vel_df,
+        rays=[ray],
+        ax=ax,
+        xlim=(0.0, 1000.0),
+        ylim=(1200.0, 0.0),
+        discrete_colorbar=True,
+        layer_colors=layer_colors,
+        ray_linewidth=2.2,
+    )
+
+    facecolors = ax.collections[0].get_facecolors()
+    expected = np.array([matplotlib.colors.to_rgba(color) for color in layer_colors])
+    np.testing.assert_allclose(facecolors[:2], expected)
+    assert ax.lines[0].get_linewidth() == 2.2
+
+    plt.close(fig)
+
+
+def test_rays_2d_uses_ray_extent_without_x_padding():
+    vel_df = pd.DataFrame({
+        "Depth": [0.0, 1000.0],
+        "Vp": [2000.0, 3000.0],
+    })
+    ray = np.array([[0.0, 0.0], [1000.0, 1000.0]])
+
+    fig, ax = plt.subplots()
+    laytracer.plot.rays_2d(
+        vel_df,
+        rays=[ray],
+        ax=ax,
+        ylim=(1200.0, 0.0),
+    )
+
+    assert ax.get_xlim() == (0.0, 1000.0)
+
+    plt.close(fig)
