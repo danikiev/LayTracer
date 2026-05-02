@@ -677,7 +677,9 @@ plt.show()
 # SH motion is decoupled from P-SV motion in an isotropic 1-D model, so the
 # interface response contains only same-mode reflection and transmission:
 # :math:`R_{SHSH}` and :math:`T_{SHSH}`.  The ray-parameter sweep uses the
-# same incident S-wave slowness range as the SV case.
+# same incident S-wave slowness range as the SV case. The ray diagrams below
+# show the radial-vertical incidence-plane geometry; SH particle motion is
+# polarized perpendicular to that plane.
 #
 # **Critical angle** (green dash-dot line):
 #
