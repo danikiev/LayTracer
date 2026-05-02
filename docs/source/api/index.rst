@@ -53,6 +53,8 @@ Amplitude
 
 .. autofunction:: laytracer.transmission_normal
 
+.. autofunction:: laytracer.sh_rt_coefficients
+
 .. autofunction:: laytracer.psv_rt_coefficients
 
 .. autofunction:: laytracer.critical_angle

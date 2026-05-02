@@ -55,5 +55,7 @@ docs/source/tutorials
 
 .codegpt
 
-# Agentic AI
+# Agents
 .agent/
+.codex*
+AGENTS.md

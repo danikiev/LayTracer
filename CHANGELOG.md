@@ -5,6 +5,30 @@ All notable changes to Laytracer will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [v0.4.0] - 2026-05-02
+
+### Added
+
+- `trace_rays(..., source_phase=...)` now accepts a list of phases, for example `["P", "SH", "SV"]`, and returns a `dict[str, TraceResult]` for multi-phase requests (#7)
+- explicit SH-wave ray tracing support, including SH-SH reflection/transmission coefficients for welded isotropic interfaces (#7)
+- `TraceResult.source_phase` to record the canonical traced phase (#7)
+- regression tests for multi-phase API behavior, S/SV aliasing, SV/SH shared kinematics, SH energy conservation, SH post-critical behavior, and upward-path SV/SH equality for `tstar` and spreading (#7)
+- coefficient-panel styling for complex-valued coefficient segments and truly evanescent outgoing branches, with regression tests for the plot helper and SH reflected-coefficient null
+- optional `layer_colors` and `ray_linewidth` arguments for `laytracer.plot.rays_2d()`, with regression tests for custom layer palettes, ray widths, and unpadded x limits
+
+### Changed
+
+- canonicalized phase handling so legacy `S` maps to `SV`, while `P`, `SV`, and `SH` are available as explicit source phases (#7)
+- multi-phase tracing reuses kinematic solves across phases when possible; SV and SH share ray paths, travel times, ray parameters, `tstar`, and geometrical spreading, while retaining phase-specific transmission/reflection products (#7)
+- example 03 now includes SH reflection/transmission cases, distinguishes complex coefficient phase shifts from evanescent outgoing branches, and annotates the SH oblique impedance-match null (#7)
+- example 03 ray-path diagrams now use a seven-color ColorBrewer Accent palette, explicit incident-ray paths, solid ray lines, and clearer layer/ray contrast
+- cleaned up and refactored example 03
+- API and methodology documentation now describe SH support, multi-phase tracing, and the decoupled SH behavior in isotropic 1-D media (#7)
+
+### Fixed
+
+- Removed unnecessary `plt.show()` call from 3D ray plot in example 01 to enable 3D plot in docs pages
+
 ## [v0.3.1] - 2026-04-20
 
 ### Added

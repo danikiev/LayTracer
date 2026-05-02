@@ -31,6 +31,104 @@ class TestTraceRays:
         assert result.travel_times[0] > 0
         assert len(result.rays) == 1
         assert result.rays[0].shape[1] == 3
+        assert result.source_phase == "P"
+
+    def test_s_alias_matches_sv(self):
+        """Legacy S phase is treated as SV."""
+        df = _simple_model()
+        src = np.array([0.0, 0.0, 500.0])
+        rcv = np.array([5000.0, 0.0, 2500.0])
+        requested = {"travel_times", "rays", "ray_parameters", "tstar", "spreading", "trans_product"}
+
+        result_s = laytracer.trace_rays(src, rcv, df, source_phase="S", requested=requested)
+        result_sv = laytracer.trace_rays(src, rcv, df, source_phase="SV", requested=requested)
+
+        assert result_s.source_phase == "SV"
+        np.testing.assert_allclose(result_s.travel_times, result_sv.travel_times)
+        np.testing.assert_allclose(result_s.ray_parameters, result_sv.ray_parameters)
+        np.testing.assert_allclose(result_s.tstar, result_sv.tstar)
+        np.testing.assert_allclose(result_s.spreading, result_sv.spreading)
+        np.testing.assert_allclose(result_s.trans_product, result_sv.trans_product)
+
+    def test_multi_phase_returns_phase_results(self):
+        """A phase list returns one TraceResult per canonical source phase."""
+        df = _simple_model()
+        src = np.array([0.0, 0.0, 500.0])
+        rcv = np.array([5000.0, 0.0, 2500.0])
+        requested = {"travel_times", "rays", "ray_parameters", "tstar", "spreading", "trans_product"}
+
+        multi = laytracer.trace_rays(
+            src,
+            rcv,
+            df,
+            source_phase=["P", "SH", "SV", "S"],
+            requested=requested,
+        )
+
+        assert set(multi) == {"P", "SH", "SV"}
+        assert multi["P"].source_phase == "P"
+        assert multi["SH"].source_phase == "SH"
+        assert multi["SV"].source_phase == "SV"
+
+        single_sv = laytracer.trace_rays(
+            src, rcv, df, source_phase="SV", requested=requested
+        )
+        np.testing.assert_allclose(multi["SV"].travel_times, single_sv.travel_times)
+        np.testing.assert_allclose(multi["SV"].ray_parameters, single_sv.ray_parameters)
+        np.testing.assert_allclose(multi["SV"].trans_product, single_sv.trans_product)
+
+    def test_sv_and_sh_share_kinematics_but_not_coefficients(self):
+        """SV and SH share Vs kinematics but use different coefficient families."""
+        df = _simple_model()
+        src = np.array([0.0, 0.0, 500.0])
+        rcv = np.array([5000.0, 0.0, 2500.0])
+        requested = {"travel_times", "rays", "ray_parameters", "tstar", "spreading", "trans_product"}
+
+        result = laytracer.trace_rays(
+            src, rcv, df, source_phase=["SV", "SH"], requested=requested
+        )
+
+        np.testing.assert_allclose(result["SV"].travel_times, result["SH"].travel_times)
+        np.testing.assert_allclose(result["SV"].ray_parameters, result["SH"].ray_parameters)
+        np.testing.assert_allclose(result["SV"].tstar, result["SH"].tstar)
+        np.testing.assert_allclose(result["SV"].spreading, result["SH"].spreading)
+        np.testing.assert_allclose(result["SV"].rays[0], result["SH"].rays[0])
+        assert not np.isclose(result["SV"].trans_product[0], result["SH"].trans_product[0])
+
+    def test_upward_sv_and_sh_share_tstar_and_spreading(self):
+        """Upward SV and SH direct rays share Vs/Qs attenuation and spreading."""
+        df = _simple_model()
+        src = np.array([0.0, 0.0, 2500.0])
+        rcv = np.array([5000.0, 0.0, 500.0])
+        requested = {"travel_times", "rays", "ray_parameters", "tstar", "spreading"}
+
+        result = laytracer.trace_rays(
+            src, rcv, df, source_phase=["SV", "SH"], requested=requested
+        )
+
+        np.testing.assert_allclose(result["SV"].travel_times, result["SH"].travel_times)
+        np.testing.assert_allclose(result["SV"].ray_parameters, result["SH"].ray_parameters)
+        np.testing.assert_allclose(result["SV"].tstar, result["SH"].tstar)
+        np.testing.assert_allclose(result["SV"].spreading, result["SH"].spreading)
+        np.testing.assert_allclose(result["SV"].rays[0], result["SH"].rays[0])
+
+    def test_multi_phase_duplicate_alias_returns_one_entry(self):
+        """Duplicate canonical phases are de-duplicated."""
+        df = _simple_model()
+        src = np.array([0.0, 0.0, 500.0])
+        rcv = np.array([5000.0, 0.0, 2500.0])
+        result = laytracer.trace_rays(src, rcv, df, source_phase=["S", "SV"])
+
+        assert set(result) == {"SV"}
+        assert result["SV"].source_phase == "SV"
+
+    def test_invalid_source_phase(self):
+        """Invalid source phases fail explicitly."""
+        df = _simple_model()
+        src = np.array([0.0, 0.0, 500.0])
+        rcv = np.array([5000.0, 0.0, 2500.0])
+        with pytest.raises(ValueError, match="Invalid phase"):
+            laytracer.trace_rays(src, rcv, df, source_phase="X")
 
     def test_multiple_receivers(self):
         """One source ??? multiple receivers."""

@@ -4,11 +4,15 @@ r"""
 
 Reproduction of the classic P-SV reflection & transmission test case from
 `Charles J. Ammon's MATLAB Exercise L3 (PDF) <http://eqseis.geosc.psu.edu/cammon/HTML/UsingMATLAB/PDF/ML3%20ReflTransmission.pdf>`_ (:cite:t:`LayWallace1995`, Figure 3.28).
+The example also includes the decoupled SH-SH coefficients for the same
+two-layer elastic model.
 
 For an incident P-wave the system unknowns are
 :math:`[R_{PP},\; R_{PS},\; T_{PP},\; T_{PS}]`.
 For an incident SV-wave the unknowns are
 :math:`[R_{SP},\; R_{SS},\; T_{SP},\; T_{SS}]`.
+For an incident SH-wave the unknowns are
+:math:`[R_{SHSH},\; T_{SHSH}]`.
 """
 
 ###############################################################################
@@ -43,7 +47,7 @@ lt.plot.velocity_profile(model_psv, param="Vp", ax=axes[0], ylim=(4000, 0))
 lt.plot.velocity_profile(model_psv, param="Vs", ax=axes[1], color="tab:orange", ylim=(4000, 0))
 lt.plot.velocity_profile(model_psv, param="Rho", ax=axes[2], color="tab:green", ylim=(4000, 0))
 
-fig.suptitle("P-SV Test Model", fontsize=14)
+fig.suptitle("Elastic Test Model", fontsize=14)
 fig.tight_layout()
 plt.show()
 
@@ -60,18 +64,54 @@ def _marker_spec(angle, label, color, linestyle, linewidth=0.8):
     }
 
 
-def _coefficient_panels(panel_defs, curve_defs, common_markers, panel_markers, ylim):
+def _outgoing_evanescent_masks(p, velocities):
+    p = np.asarray(p)
+    return {
+        key: p * velocity > 1.0
+        for key, velocity in velocities.items()
+    }
+
+
+ACCENT7 = ("#7fc97f", "#beaed4", "#fdc086", "#ffff99", "#386cb0", "#f0027f", "#bf5b17")
+LAYER_COLORS = ACCENT7[3:1:-1]
+RAY_COLORS = {
+    "Refl P": ACCENT7[4],
+    "Refl SV": ACCENT7[1],
+    "Trans P": ACCENT7[6],
+    "Trans SV": ACCENT7[5],
+    "Refl SH": ACCENT7[1],
+    "Trans SH": ACCENT7[5],
+    "Inc P": ACCENT7[0],
+    "Inc SV": ACCENT7[0],
+    "Inc SH": ACCENT7[0],
+}
+RAY_LINEWIDTH = 1.5
+RAY_XLIM = (0, 6000)
+RAY_YLIM = (4000, 0)
+
+
+def _coefficient_panels(
+    panel_defs,
+    curve_defs,
+    common_markers,
+    panel_markers,
+    ylim,
+    evanescent_masks=None,
+):
     panels = []
     for key, ylabel, title in panel_defs:
         curves = []
         for curve_def in curve_defs:
-            curves.append(
-                {
-                    "y": np.abs(curve_def["data"][key]),
-                    "label": curve_def.get("label"),
-                    "plot_kwargs": dict(curve_def["plot_kwargs"]),
-                }
-            )
+            coefficient = curve_def["data"][key]
+            curve = {
+                "y": np.abs(coefficient),
+                "complex_from": coefficient,
+                "label": curve_def.get("label"),
+                "plot_kwargs": dict(curve_def["plot_kwargs"]),
+            }
+            if evanescent_masks is not None:
+                curve["evanescent_mask"] = evanescent_masks.get(key)
+            curves.append(curve)
 
         markers = [dict(marker) for marker in common_markers]
         markers.extend(panel_markers.get(key, []))
@@ -90,8 +130,17 @@ def _coefficient_panels(panel_defs, curve_defs, common_markers, panel_markers, y
     return panels
 
 # Ray-parameter sweep: p from 0 to 1/Vp_incident
-n_p = 200
+n_p = 1000
 p_vec = np.linspace(0, 1.0 / mi_vp, n_p + 1)
+evanescent_masks_P = _outgoing_evanescent_masks(
+    p_vec,
+    {
+        "Rpp": mi_vp,
+        "Rps": mi_vs,
+        "Tpp": mt_vp,
+        "Tps": mt_vs,
+    },
+)
 
 # Compute all 8 R/T coefficients
 RT = lt.psv_rt_coefficients(
@@ -99,6 +148,11 @@ RT = lt.psv_rt_coefficients(
     vp1=mi_vp, vs1=mi_vs, rho1=mi_rho,
     vp2=mt_vp, vs2=mt_vs, rho2=mt_rho,
 )
+
+# In the coefficient panels below, dashed curve segments mark coefficients
+# that have become complex while the plotted outgoing branch still propagates.
+# Dash-dot curve segments mark the stronger condition where that outgoing
+# branch itself has imaginary vertical slowness and is evanescent.
 
 ###############################################################################
 # Incident P-wave coefficients
@@ -111,7 +165,9 @@ RT = lt.psv_rt_coefficients(
 #
 # * Transmitted P becomes evanescent at
 #   :math:`\theta_c^{T(P)} = \arcsin(V_P^{(1)}/V_P^{(2)}) \approx 38.5^{\circ}`.
-#   Beyond this angle :math:`|R_{PP}| \to 1` (total reflection).
+#   Beyond this angle the transmitted-P vertical slowness is imaginary,
+#   the affected displacement coefficients become complex, and
+#   :math:`|R_{PP}| \to 1` (total reflection).
 #   There is no transmitted-SV critical angle because
 #   :math:`V_P^{(1)} > V_S^{(2)}` for this model.
 #
@@ -161,6 +217,7 @@ panels = _coefficient_panels(
     common_markers=common_markers_P,
     panel_markers=panel_markers_P,
     ylim=(-0.05, ymax_P),
+    evanescent_masks=evanescent_masks_P,
 )
 fig, axes = lt.plot.coefficient_panels(
     panels,
@@ -232,6 +289,7 @@ panels = _coefficient_panels(
     common_markers=common_markers_P,
     panel_markers=panel_markers_P,
     ylim=(-0.05, max(ymax_P, ymax_Pn)),
+    evanescent_masks=evanescent_masks_P,
 )
 fig, axes = lt.plot.coefficient_panels(
     panels,
@@ -241,7 +299,7 @@ fig, axes = lt.plot.coefficient_panels(
     default_xlim=(0.0, 90.0),
     default_xlabel="Incidence angle (deg)",
     suptitle=(
-        "Incident P-wave - normalized (Cerveny, 2001)\n"
+        "Incident P-wave - normalized\n"
         f"Inc: Vp={mi_vp}, Vs={mi_vs}, rho={mi_rho}  ->  "
         f"Trans: Vp={mt_vp}, Vs={mt_vs}, rho={mt_rho}"
     ),
@@ -257,134 +315,152 @@ plt.show()
 
 
 def plot_ray_situation(angle, wave_type, title, ax):
-    # 1. Setup background (velocity model) and axes
-    # We pass empty rays list first just to set up the plot environment
+    wave_type = "SV" if wave_type == "S" else wave_type
+    shear_phase = wave_type in {"SV", "SH"}
+
     lt.plot.rays_2d(
-        model_psv, rays=[], ax=ax, vel_type="Vp", 
-        xlim=(-100, 6000), ylim=(4000, 0),
+        model_psv, rays=[], ax=ax, vel_type="Vs" if shear_phase else "Vp",
+        xlim=RAY_XLIM, ylim=RAY_YLIM,
         plot_model=True,
         add_colorbar=True,
-        model_alpha=0.5,
         discrete_colorbar=True,
+        layer_colors=LAYER_COLORS,
     )
     
-    # 2. Compute Offset for the given angle to define receiver position
-    # The example wants to visualize SPECIFIC angles.
-    # trace_rays solves the Two-Point problem (Fixed Receiver).
-    # To plot a ray for a specific angle, we first find where it lands.
-    # Or we can keep using manual shooting logic?
-    # No, the goal is to demonstrate the NEW engine.
-    
-    # We calculate geometric offset for the flat layers given angle
     v_inc = mi_vp * 1000 if wave_type == "P" else mi_vs * 1000
     p_target = np.sin(np.deg2rad(angle)) / v_inc
     
-    # Check critical angles before tracing
-    # If p > 1/V_layer, it's evanescent.
-    # LayTracer solver handles non-evanescent rays.
-    # We manually check evanescence for the legs we want to plot.
-    
-    source = np.array([0.0, 0.0, 0.0])
+    source = np.array([[0.0, 0.0, 0.0]])
     z_int = 2000.0
     z_bot = 4000.0
-    
-    # Helper to trace and plot one ray variant
-    def run_trace(rcv_z, reflection_arg=None, refraction_arg=None, label="", color="", style=""):
-        # Calculate theoretical horizontal offset for this p
-        # We assume simplified straight rays for this calc (constant layer blocks)
-        
-        # We need the path legs to calculate X(p_target).
-        # We can use lt.offset() if we build the stack manually, 
-        # OR just simple trig since model is constant layers.
-        
-        # Legs depend on reflection/refraction.
-        dx = 0.0
-        
-        # LEG 1: 0 -> 2000
-        # Check P-wave layer 0
-        v0 = mi_vp * 1000 if wave_type == "P" else mi_vs * 1000
-        if p_target * v0 >= 1.0: return # Evanescent at start
-        dx += 2000.0 * p_target * v0 / np.sqrt(1.0 - (p_target*v0)**2)
-        
-        is_refl = (reflection_arg is not None)
-        
-        if is_refl:
-            # LEG 2: 2000 -> 0 (Up)
-            # Phase determined by reflection arg "P" or "S"
-            ph_up = reflection_arg[0][1]
-            v1 = mi_vp * 1000 if ph_up == "P" else mi_vs * 1000
-            if p_target * v1 >= 1.0: return # Evanescent reflection
-            dx += 2000.0 * p_target * v1 / np.sqrt(1.0 - (p_target*v1)**2)
+
+    def phase_velocity(phase, transmitted=False):
+        if phase == "P":
+            return (mt_vp if transmitted else mi_vp) * 1000
+        return (mt_vs if transmitted else mi_vs) * 1000
+
+    def leg_offset(thickness, velocity):
+        pv = p_target * velocity
+        if pv >= 1.0:
+            return None
+        return thickness * pv / np.sqrt(1.0 - pv**2)
+
+    def plot_ray_path(ray, label, color):
+        lt.plot.rays_2d(
+            model_psv,
+            rays=[ray],
+            ax=ax,
+            ray_color=color,
+            ray_alpha=1.0,
+            ray_linewidth=RAY_LINEWIDTH,
+            plot_model=False,
+            linestyle="-",
+            label=label,
+            xlim=RAY_XLIM, ylim=RAY_YLIM,
+        )
+
+    dx0 = leg_offset(z_int, phase_velocity(wave_type))
+    if dx0 is None:
+        ax.set_title(f"{title}\n(Angle {angle:g} deg)")
+        return
+
+    incident_ray = np.array([
+        [0.0, 0.0, 0.0],
+        [dx0, 0.0, z_int],
+    ])
+    plot_ray_path(incident_ray, f"Inc {wave_type}", RAY_COLORS[f"Inc {wave_type}"])
+
+    def run_trace(reflection_arg=None, refraction_arg=None, label="", color=""):
+        if reflection_arg is not None:
+            outgoing_phase = reflection_arg[0][1]
+            dx1 = leg_offset(z_int, phase_velocity(outgoing_phase))
             z_end = 0.0
         else:
-            # LEG 2: 2000 -> 4000 (Down)
-            # Phase determined by refraction arg "P" or "S" (or default P/S if None?)
-            # trace_rays defaults transmission to same phase if not specified.
-            # But here we want to test conversions explicitly.
-            # If refraction_arg is set, use it.
-            ph_down = refraction_arg[0][1] if refraction_arg else wave_type
-            v1 = mt_vp * 1000 if ph_down == "P" else mt_vs * 1000
-            
-            # Check critical angle for transmission
-            if p_target * v1 >= 1.0: return # Critical/Evanescent
-            
-            dx += (z_bot - z_int) * p_target * v1 / np.sqrt(1.0 - (p_target*v1)**2)
-            z_end = z_bot
-            
-        receiver = np.array([dx, 0.0, z_end])
-        
-        # RUN THE SOLVER
-        try:
-            res = lt.trace_rays(
-                sources=source,
-                receivers=receiver,
-                velocity_df=model_psv,
-                source_phase=wave_type,
-                reflection=reflection_arg,
-                refraction=refraction_arg,
-                requested={"travel_times", "rays", "ray_parameters"}
+            outgoing_phase = refraction_arg[0][1] if refraction_arg else wave_type
+            dx1 = leg_offset(
+                z_bot - z_int,
+                phase_velocity(outgoing_phase, transmitted=True),
             )
-            
-            if res.rays and len(res.rays) > 0 and res.rays[0] is not None:
-                lt.plot.rays_2d(
-                    model_psv,
-                    rays=res.rays,
-                    ax=ax,
-                    ray_color=color,
-                    plot_model=False,
-                    linestyle=style,
-                    label=label,
-                    xlim=(-100, 6000), ylim=(4000, 0)
-                )
-        except Exception:
-            pass # Solver might fail if we messed up bounds, ignore for plot
+            z_end = z_bot
 
-    # 1. Reflected P
-    run_trace(0.0, reflection_arg=[(2000.0, "P")], label="Refl P", color="r", style="--")
-    
-    # 2. Reflected S
-    run_trace(0.0, reflection_arg=[(2000.0, "S")], label="Refl S", color="tab:orange", style=":")
-    
-    # 3. Transmitted P
-    # Note: refraction arg is only needed if MODE CONSTANT changes.
-    # P->P is default transmission.
-    # But to be explicit we can convert.
-    if wave_type == "P":
-        run_trace(4000.0, refraction_arg=None, label="Trans P", color="b", style="-")
-        run_trace(4000.0, refraction_arg=[(2000.0, "S")], label="Trans S", color="tab:green", style="-.")
+        if dx1 is None:
+            return
+
+        receiver = np.array([[dx0 + dx1, 0.0, z_end]])
+        res = lt.trace_rays(
+            sources=source,
+            receivers=receiver,
+            velocity_df=model_psv,
+            source_phase=wave_type,
+            reflection=reflection_arg,
+            refraction=refraction_arg,
+            requested={"travel_times", "rays", "ray_parameters"},
+        )
+
+        if res.rays and res.rays[0] is not None:
+            ray = res.rays[0].copy()
+            ray[:, 0] -= ray[0, 0]
+            ray[:, 2] -= ray[0, 2]
+            outgoing_ray = ray[1:]
+            if len(outgoing_ray) >= 2:
+                plot_ray_path(outgoing_ray, label, color)
+
+    if wave_type == "SH":
+        ray_variants = [
+            dict(
+                reflection_arg=[(z_int, "SH")],
+                label="Refl SH",
+                color=RAY_COLORS["Refl SH"],
+            ),
+            dict(refraction_arg=None, label="Trans SH", color=RAY_COLORS["Trans SH"]),
+        ]
+    elif wave_type == "P":
+        ray_variants = [
+            dict(
+                reflection_arg=[(z_int, "P")],
+                label="Refl P",
+                color=RAY_COLORS["Refl P"],
+            ),
+            dict(
+                reflection_arg=[(z_int, "SV")],
+                label="Refl SV",
+                color=RAY_COLORS["Refl SV"],
+            ),
+            dict(refraction_arg=None, label="Trans P", color=RAY_COLORS["Trans P"]),
+            dict(
+                refraction_arg=[(z_int, "SV")],
+                label="Trans SV",
+                color=RAY_COLORS["Trans SV"],
+            ),
+        ]
     else:
-        # Incident S
-        run_trace(4000.0, refraction_arg=[(2000.0, "P")], label="Trans P", color="b", style="-")
-        run_trace(4000.0, refraction_arg=None, label="Trans S", color="tab:green", style="-.") # S->S
+        ray_variants = [
+            dict(
+                reflection_arg=[(z_int, "P")],
+                label="Refl P",
+                color=RAY_COLORS["Refl P"],
+            ),
+            dict(
+                reflection_arg=[(z_int, "SV")],
+                label="Refl SV",
+                color=RAY_COLORS["Refl SV"],
+            ),
+            dict(refraction_arg=[(z_int, "P")], label="Trans P", color=RAY_COLORS["Trans P"]),
+            dict(refraction_arg=None, label="Trans SV", color=RAY_COLORS["Trans SV"]),
+        ]
 
-    # Incident ray is not plotted separately because trace_rays returns the FULL path.
-    # The previous manual code overlaid legs.
-    # The new code plots full V-shapes.
-    # This might look slightly different (lines overlapping on the incident leg).
-    # That is acceptable and actually more physically correct (showing the full ray).
+    for variant in ray_variants:
+        run_trace(**variant)
     
-    ax.legend(loc="lower left", fontsize="small")
-    ax.set_title(f"{title}\n(Angle {angle}°)")
+    ax.legend(loc="upper right", fontsize="small")
+    ax.set_title(f"{title}\n(Angle {angle:g} deg)")
+
+
+def show_ray_subplot_labels(axes):
+    for ax in np.ravel(axes):
+        ax.tick_params(labelbottom=True, labelleft=True)
+        ax.set_xlabel("Horizontal distance (m)")
+        ax.set_ylabel("Depth (m)")
 
 
 # P-incidence scenarios
@@ -397,6 +473,7 @@ fig, axes = plt.subplots(1, 2, figsize=(10, 5), sharey=True)
 for i, (ang, name) in enumerate(scenarios_p):
     plot_ray_situation(ang, "P", name, axes[i])
 
+show_ray_subplot_labels(axes)
 fig.suptitle("Ray paths: Incident P-wave", fontsize=14)
 fig.tight_layout()
 plt.show()
@@ -421,7 +498,11 @@ plt.show()
 #   beyond this angle all energy is reflected as SV
 #   (:math:`|R_{SS}| = 1`).
 #
-# The reflected SV wave is always real (same medium, same velocity).
+# Once one of these P-SV branches is post-critical, its vertical slowness
+# is imaginary and the coupled Zoeppritz coefficients can become complex.
+# The reflected SV wave remains propagating (same medium, same velocity),
+# but its coefficient can still carry a complex phase from the coupled
+# boundary conditions.
 #
 # **Brewster angles** (purple dotted lines) - the near-zeros of
 # :math:`|R_{SP}|` near 21° and 40°, and of :math:`|R_{SS}|` near
@@ -429,6 +510,15 @@ plt.show()
 # contrast.
 
 p_vec_sv = np.linspace(0, 1.0 / mi_vs, n_p + 1)
+evanescent_masks_SV = _outgoing_evanescent_masks(
+    p_vec_sv,
+    {
+        "Rsp": mi_vp,
+        "Rss": mi_vs,
+        "Tsp": mt_vp,
+        "Tss": mt_vs,
+    },
+)
 
 RT_sv = lt.psv_rt_coefficients(
     p=p_vec_sv,
@@ -480,6 +570,7 @@ panels = _coefficient_panels(
     common_markers=common_markers_SV,
     panel_markers=panel_markers_SV,
     ylim=(-0.05, ymax_SV),
+    evanescent_masks=evanescent_masks_SV,
 )
 fig, axes = lt.plot.coefficient_panels(
     panels,
@@ -497,8 +588,8 @@ fig, axes = lt.plot.coefficient_panels(
 plt.show()
 
 ###############################################################################
-# Normalized SV-wave coefficients (Červený, 2001)
-# ------------------------------------------------
+# Normalized SV-wave coefficients
+# -------------------------------
 #
 # Same energy-flux normalization applied to the SV-incident
 # coefficients.  The three critical-angle markers are preserved.
@@ -539,6 +630,7 @@ panels = _coefficient_panels(
     common_markers=common_markers_SV,
     panel_markers=panel_markers_SV,
     ylim=(-0.05, max(ymax_SV, ymax_SVn)),
+    evanescent_masks=evanescent_masks_SV,
 )
 fig, axes = lt.plot.coefficient_panels(
     panels,
@@ -548,7 +640,7 @@ fig, axes = lt.plot.coefficient_panels(
     default_xlim=(0.0, 90.0),
     default_xlabel="Incidence angle (deg)",
     suptitle=(
-        "Incident SV-wave - normalized (Cerveny, 2001)\n"
+        "Incident SV-wave - normalized\n"
         f"Inc: Vp={mi_vp}, Vs={mi_vs}, rho={mi_rho}  ->  "
         f"Trans: Vp={mt_vp}, Vs={mt_vs}, rho={mt_rho}"
     ),
@@ -571,9 +663,174 @@ fig, axes = plt.subplots(2, 2, figsize=(10, 8), sharey=True, sharex=True)
 axes = axes.flatten()
 
 for i, (ang, name) in enumerate(scenarios_sv):
-    plot_ray_situation(ang, "S", name, axes[i])
+    plot_ray_situation(ang, "SV", name, axes[i])
 
+show_ray_subplot_labels(axes)
 fig.suptitle("Ray paths: Incident SV-wave", fontsize=14)
+fig.tight_layout()
+plt.show()
+
+###############################################################################
+# Incident SH-wave coefficients
+# -----------------------------
+#
+# SH motion is decoupled from P-SV motion in an isotropic 1-D model, so the
+# interface response contains only same-mode reflection and transmission:
+# :math:`R_{SHSH}` and :math:`T_{SHSH}`.  The ray-parameter sweep uses the
+# same incident S-wave slowness range as the SV case.
+#
+# **Critical angle** (green dash-dot line):
+#
+# * :math:`\theta_c^{T(SH)} = \arcsin(V_S^{(1)}/V_S^{(2)}) \approx 39.1^{\circ}`.
+#   Beyond this angle the transmitted-SH vertical slowness is imaginary,
+#   so the SH reflection and transmission coefficients are complex while
+#   the reflected-SH magnitude stays at total reflection.
+#
+# **SH Brewster/null angle** (purple dotted line):
+#
+# * :math:`|R_{SHSH}|` vanishes near :math:`35.2^{\circ}` where the
+#   oblique SH impedances on both sides match,
+#   :math:`\zeta_1 = \zeta_2` with
+#   :math:`\zeta_i = \rho_i V_{Si}^2 \eta_i`.
+
+p_vec_sh = np.linspace(0, 1.0 / mi_vs, n_p + 1)
+evanescent_masks_SH = _outgoing_evanescent_masks(
+    p_vec_sh,
+    {
+        "Rshsh": mi_vs,
+        "Tshsh": mt_vs,
+    },
+)
+
+RT_sh = lt.sh_rt_coefficients(
+    p=p_vec_sh,
+    vs1=mi_vs, rho1=mi_rho,
+    vs2=mt_vs, rho2=mt_rho,
+)
+
+angle_SH = np.rad2deg(np.arcsin(np.clip(p_vec_sh * mi_vs, -1, 1)))
+crit_SH = lt.find_critical_angles(mi_vs, {"T(SH)": mt_vs})
+brew_SH = lt.find_brewster_angles(RT_sh, angle_SH, keys=["Rshsh"])
+
+labels_sh = [
+    ("Rshsh", r"$|R_{SHSH}|$", "Reflected SH"),
+    ("Tshsh", r"$|T_{SHSH}|$", "Transmitted SH"),
+]
+sh_keys = ["Rshsh", "Tshsh"]
+ymax_SH = max(np.nanmax(np.abs(RT_sh[k])) for k in sh_keys) * 1.1
+ymax_SH = max(ymax_SH, 0.5)
+
+common_markers_SH = [
+    _marker_spec(
+        crit_SH.get("T(SH)"),
+        f"T(SH) crit. {crit_SH['T(SH)']:.1f} deg",
+        "tab:green",
+        "-.",
+    )
+]
+panel_markers_SH = {
+    "Rshsh": [
+        _marker_spec(ba, f"Brewster {ba:.1f} deg", "tab:purple", ":")
+        for ba in brew_SH.get("Rshsh", [])
+    ]
+}
+panels = _coefficient_panels(
+    labels_sh,
+    curve_defs=[{"data": RT_sh, "plot_kwargs": {"color": "k", "lw": 1.5}}],
+    common_markers=common_markers_SH,
+    panel_markers=panel_markers_SH,
+    ylim=(-0.05, ymax_SH),
+    evanescent_masks=evanescent_masks_SH,
+)
+fig, axes = lt.plot.coefficient_panels(
+    panels,
+    shape=(1, 2),
+    figsize=(10, 4),
+    default_x=angle_SH,
+    default_xlim=(0.0, 90.0),
+    default_xlabel="Incidence angle (deg)",
+    suptitle=(
+        "Incident SH-wave\n"
+        f"Inc: Vs={mi_vs}, rho={mi_rho}  ->  "
+        f"Trans: Vs={mt_vs}, rho={mt_rho}"
+    ),
+)
+plt.show()
+
+###############################################################################
+# Normalized SH-wave coefficients
+# -------------------------------
+#
+# The same energy-flux normalization applies to SH coefficients.  For reflected
+# SH the incoming and outgoing media are identical; for transmitted SH the
+# outgoing velocity and density are taken from the transmitted layer.
+
+norm_map_SH = {
+    "Rshsh": (mi_vs, mi_rho, mi_vs, mi_rho),
+    "Tshsh": (mi_vs, mi_rho, mt_vs, mt_rho),
+}
+
+RT_norm_SH = {}
+for key, (vi, ri, vo, ro) in norm_map_SH.items():
+    RT_norm_SH[key] = lt.normalize_rt_coefficient(
+        RT_sh[key], p_vec_sh, vi, ri, vo, ro,
+    )
+
+ymax_SHn = max(
+    np.nanmax(np.abs(RT_norm_SH[k])) for k in sh_keys
+) * 1.1
+ymax_SHn = max(ymax_SHn, 0.5)
+
+panels = _coefficient_panels(
+    labels_sh,
+    curve_defs=[
+        {
+            "data": RT_sh,
+            "label": "standard",
+            "plot_kwargs": {"color": "k", "lw": 0.8, "alpha": 0.4},
+        },
+        {
+            "data": RT_norm_SH,
+            "label": "normalized",
+            "plot_kwargs": {"color": "tab:blue", "lw": 1.5},
+        },
+    ],
+    common_markers=common_markers_SH,
+    panel_markers=panel_markers_SH,
+    ylim=(-0.05, max(ymax_SH, ymax_SHn)),
+    evanescent_masks=evanescent_masks_SH,
+)
+fig, axes = lt.plot.coefficient_panels(
+    panels,
+    shape=(1, 2),
+    figsize=(10, 4),
+    default_x=angle_SH,
+    default_xlim=(0.0, 90.0),
+    default_xlabel="Incidence angle (deg)",
+    suptitle=(
+        "Incident SH-wave - normalized\n"
+        f"Inc: Vs={mi_vs}, rho={mi_rho}  ->  "
+        f"Trans: Vs={mt_vs}, rho={mt_rho}"
+    ),
+)
+plt.show()
+
+# %%
+# Ray diagrams (SH-incidence)
+# ---------------------------
+
+scenarios_sh = [
+    (15, "Pre-critical"),
+    (45, "Trans SH evanescent (Total Reflection)"),
+]
+
+fig, axes = plt.subplots(1, 2, figsize=(10, 5), sharey=True, sharex=True)
+
+for i, (ang, name) in enumerate(scenarios_sh):
+    plot_ray_situation(ang, "SH", name, axes[i])
+
+show_ray_subplot_labels(axes)
+fig.suptitle("Ray paths: Incident SH-wave", fontsize=14)
 fig.tight_layout()
 plt.show()
 

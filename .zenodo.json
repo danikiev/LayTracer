@@ -1,9 +1,9 @@
 {
     "title": "LayTracer: Fast two-point seismic ray tracing in layered media",
-    "version": "0.3.1",
+    "version": "0.4.0",
     "license": "MIT",
     "upload_type": "software",
-    "description": "LayTracer is an open-source Python package for computing ray paths, travel times, and path-dependent scalar quantities in horizontally layered (1D) velocity models. Version 0.3.1 adds reusable critical-angle detection helpers in laytracer.amplitude and laytracer.plot.coefficient_panels() for multi-panel reflection and transmission coefficient plots. The release refactors example 3 to use the new shared helpers, adds regression tests for the critical-angle and plotting utilities, and refreshes the citation, credits, and API-reference documentation.",
+    "description": "LayTracer is an open-source Python package for computing ray paths, travel times, and path-dependent scalar quantities in horizontally layered (1D) velocity models. Version 0.4.0 adds explicit SH-wave ray tracing and multi-phase trace_rays(..., source_phase=[...]) requests that return per-phase TraceResult objects. The release canonicalizes legacy S as SV, reuses shared kinematic solves for SV and SH where applicable, records TraceResult.source_phase, improves reflection/transmission coefficient plotting for complex-valued and evanescent branches, adds layer color and ray linewidth controls to rays_2d(), and updates examples, documentation, and regression tests for the expanded phase behavior.",
     "keywords": [
         "Geophysics",
         "Seismology",

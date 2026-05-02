@@ -16,7 +16,7 @@ from dataclasses import dataclass, field
 import numpy as np
 import scipy.optimize as opt
 
-from .model import LayerStack
+from .model import LayerStack, normalize_phase, q_factor_key
 
 SOLVE_OUTPUTS = frozenset({
     "travel_times",
@@ -43,6 +43,11 @@ def _normalize_requested(requested):
         raise ValueError("requested must include 'travel_times'")
 
     return normalized
+
+
+def _psv_key_phase(phase: str) -> str:
+    """Return the one-letter key used by P-SV coefficient dictionaries."""
+    return "p" if normalize_phase(phase) == "P" else "s"
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -361,7 +366,7 @@ def solve(
                                    
             for seg_i, seg in enumerate(segments):
                 ph = seg["phase"]
-                q_key = "qp" if ph == "P" else "qs"
+                q_key = q_factor_key(ph)
                 # Handle missing Q
                 if need_tstar and seg[q_key] is not None:
                      tstar_val += np.sum(seg["h"] / seg["v"] / seg[q_key])
@@ -415,7 +420,7 @@ def solve(
         spreading = None
         if need_tstar or need_spreading or need_trans_product:
              seg = segments[0]
-             q_key = "qp" if seg["phase"] == "P" else "qs"
+             q_key = q_factor_key(seg["phase"])
              if need_tstar and seg[q_key] is not None:
                  tstar = tt / seg[q_key][0]
              if need_spreading:
@@ -477,7 +482,7 @@ def solve(
         seg_v = seg["v"]
         
         # Amplitude stuff for this segment
-        seg_q = seg["qp"] if seg["phase"] == "P" else seg["qs"]
+        seg_q = seg[q_factor_key(seg["phase"])]
         # Determine direction for Z update
         start_z = seg["start_z"]
         end_z = seg["end_z"]
@@ -577,8 +582,42 @@ def solve(
         trans_product=trans_prod_val,
     )
 
+
+def transmission_product(
+    p: float,
+    segments: list[dict],
+    interactions: list[dict],
+    transcoef_method: str = "standard",
+) -> float:
+    """Return the product of interface coefficients for a solved path."""
+    trans_prod_val = 1.0
+
+    for seg_i, seg in enumerate(segments):
+        n_lay = len(seg["h"])
+        z_start = seg["start_z"]
+        z_end = seg["end_z"]
+        going_down = z_end >= z_start
+        range_k = range(n_lay) if going_down else range(n_lay - 1, -1, -1)
+
+        for k in range_k:
+            has_next_layer = (k < n_lay - 1) if going_down else (k > 0)
+            if has_next_layer:
+                k_next = (k + 1) if going_down else (k - 1)
+                if seg["rho"] is not None:
+                    trans_prod_val *= _calc_intra_transmission(
+                        p, k, k_next, seg, transcoef_method
+                    )
+
+        for inter in interactions:
+            if inter["seg_idx"] == seg_i:
+                trans_prod_val *= _calc_interaction_coeff(
+                    p, inter, segments, seg_i, transcoef_method
+                )
+
+    return float(trans_prod_val)
+
 def _calc_interaction_coeff(p, inter, segments, seg_idx, method):
-    from .amplitude import psv_rt_coefficients, normalize_rt_coefficient
+    from .amplitude import psv_rt_coefficients, sh_rt_coefficients, normalize_rt_coefficient
 
     # Current segment (incident side)
     seg_in = segments[seg_idx]
@@ -605,19 +644,22 @@ def _calc_interaction_coeff(p, inter, segments, seg_idx, method):
     if rho1 <= 0 or rho2 <= 0:
         return 1.0 # Density missing, cannot compute dynamic amplitude
     
-    in_phase = inter["in_phase"]
-    out_phase = inter["out_phase"]
+    in_phase = normalize_phase(inter["in_phase"])
+    out_phase = normalize_phase(inter["out_phase"])
     itype = inter["type"]
-    
-    # Construct Key for psv_rt_coefficients
-    # "Rpp", "Rps", "Tpp", "Tps" etc.
-    
-    prefix = "R" if itype == "reflection" else "T"
-    key = f"{prefix}{in_phase.lower()}{out_phase.lower()}"
 
-    RT = psv_rt_coefficients(p, vp1, vs1, rho1, vp2, vs2, rho2)
-    
-    R_bar = RT.get(key, 0.0)
+    if "SH" in (in_phase, out_phase) and in_phase != out_phase:
+        raise ValueError("SH is decoupled from P-SV in isotropic 1-D media.")
+
+    prefix = "R" if itype == "reflection" else "T"
+    if in_phase == "SH":
+        RT = sh_rt_coefficients(p, vs1, rho1, vs2, rho2)
+        key = f"{prefix}shsh"
+        R_bar = RT.get(key, 0.0)
+    else:
+        key = f"{prefix}{_psv_key_phase(in_phase)}{_psv_key_phase(out_phase)}"
+        RT = psv_rt_coefficients(p, vp1, vs1, rho1, vp2, vs2, rho2)
+        R_bar = RT.get(key, 0.0)
     
     if method == "normalized":
         v_in = vp1 if in_phase == "P" else vs1
@@ -638,7 +680,7 @@ def _calc_intra_transmission(
     method: str,
 ) -> float:
     """Calculate transmission coefficient between two adjacent layers within a monotonic segment."""
-    from .amplitude import psv_rt_coefficients, normalize_rt_coefficient
+    from .amplitude import psv_rt_coefficients, sh_rt_coefficients, normalize_rt_coefficient
 
     # Material properties
     vp1 = float(seg["vp"][k_curr])
@@ -649,12 +691,14 @@ def _calc_intra_transmission(
     vs2 = float(seg["vs"][k_next])
     rho2 = float(seg["rho"][k_next])
     
-    # Phase
-    ph = seg["phase"]
-    key = "Tpp" if ph == "P" else "Tss"
-
-    RT = psv_rt_coefficients(p, vp1, vs1, rho1, vp2, vs2, rho2)
-    R_bar = RT.get(key, 0.0)
+    ph = normalize_phase(seg["phase"])
+    if ph == "SH":
+        RT = sh_rt_coefficients(p, vs1, rho1, vs2, rho2)
+        R_bar = RT.get("Tshsh", 0.0)
+    else:
+        key = "Tpp" if ph == "P" else "Tss"
+        RT = psv_rt_coefficients(p, vp1, vs1, rho1, vp2, vs2, rho2)
+        R_bar = RT.get(key, 0.0)
     
     if method == "normalized":
         v_in = vp1 if ph == "P" else vs1
@@ -676,7 +720,7 @@ def _interface_transmission(
     method: str,
 ) -> float:
     """Transmission coefficient at the interface between layers *k_above* and *k_below*."""
-    from .amplitude import psv_rt_coefficients, normalize_rt_coefficient
+    from .amplitude import psv_rt_coefficients, sh_rt_coefficients, normalize_rt_coefficient
 
     v_above = stack.v(vel_type)[k_above]
     v_below = stack.v(vel_type)[k_below]
@@ -687,12 +731,20 @@ def _interface_transmission(
     rho_above = stack.rho[k_above]
     rho_below = stack.rho[k_below]
 
-    # Full Zoeppritz
+    vel_type_norm = str(vel_type).lower()
+    if vel_type_norm in ("vp", "vs"):
+        ph = "P" if vel_type_norm == "vp" else "SV"
+    else:
+        ph = normalize_phase(vel_type)
     vp_a, vs_a = stack.vp[k_above], stack.vs[k_above]
     vp_b, vs_b = stack.vp[k_below], stack.vs[k_below]
-    RT = psv_rt_coefficients(p, vp_a, vs_a, rho_above, vp_b, vs_b, rho_below)
-    key = "Tpp" if vel_type.lower() in ("vp", "p") else "Tss"
-    R_bar = RT[key]
+    if ph == "SH":
+        RT = sh_rt_coefficients(p, vs_a, rho_above, vs_b, rho_below)
+        R_bar = RT["Tshsh"]
+    else:
+        RT = psv_rt_coefficients(p, vp_a, vs_a, rho_above, vp_b, vs_b, rho_below)
+        key = "Tpp" if ph == "P" else "Tss"
+        R_bar = RT[key]
 
     if method == "normalized":
         v_in = float(v_above)
