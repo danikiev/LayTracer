@@ -72,15 +72,18 @@ def _outgoing_evanescent_masks(p, velocities):
     }
 
 
-ACCENT6 = ("#7fc97f", "#beaed4", "#fdc086", "#ffff99", "#386cb0", "#f0027f")
-LAYER_COLORS = ACCENT6[3:1:-1]
+ACCENT7 = ("#7fc97f", "#beaed4", "#fdc086", "#ffff99", "#386cb0", "#f0027f", "#bf5b17")
+LAYER_COLORS = ACCENT7[3:1:-1]
 RAY_COLORS = {
-    "Refl P": ACCENT6[0],
-    "Refl SV": ACCENT6[1],
-    "Trans P": ACCENT6[4],
-    "Trans SV": ACCENT6[5],
-    "Refl SH": ACCENT6[1],
-    "Trans SH": ACCENT6[5],
+    "Refl P": ACCENT7[4],
+    "Refl SV": ACCENT7[1],
+    "Trans P": ACCENT7[6],
+    "Trans SV": ACCENT7[5],
+    "Refl SH": ACCENT7[1],
+    "Trans SH": ACCENT7[5],
+    "Inc P": ACCENT7[0],
+    "Inc SV": ACCENT7[0],
+    "Inc SH": ACCENT7[0],
 }
 RAY_LINEWIDTH = 1.5
 RAY_XLIM = (0, 6000)
@@ -342,11 +345,32 @@ def plot_ray_situation(angle, wave_type, title, ax):
             return None
         return thickness * pv / np.sqrt(1.0 - pv**2)
 
-    def run_trace(reflection_arg=None, refraction_arg=None, label="", color=""):
-        dx0 = leg_offset(z_int, phase_velocity(wave_type))
-        if dx0 is None:
-            return
+    def plot_ray_path(ray, label, color):
+        lt.plot.rays_2d(
+            model_psv,
+            rays=[ray],
+            ax=ax,
+            ray_color=color,
+            ray_alpha=1.0,
+            ray_linewidth=RAY_LINEWIDTH,
+            plot_model=False,
+            linestyle="-",
+            label=label,
+            xlim=RAY_XLIM, ylim=RAY_YLIM,
+        )
 
+    dx0 = leg_offset(z_int, phase_velocity(wave_type))
+    if dx0 is None:
+        ax.set_title(f"{title}\n(Angle {angle:g} deg)")
+        return
+
+    incident_ray = np.array([
+        [0.0, 0.0, 0.0],
+        [dx0, 0.0, z_int],
+    ])
+    plot_ray_path(incident_ray, f"Inc {wave_type}", RAY_COLORS[f"Inc {wave_type}"])
+
+    def run_trace(reflection_arg=None, refraction_arg=None, label="", color=""):
         if reflection_arg is not None:
             outgoing_phase = reflection_arg[0][1]
             dx1 = leg_offset(z_int, phase_velocity(outgoing_phase))
@@ -377,18 +401,9 @@ def plot_ray_situation(angle, wave_type, title, ax):
             ray = res.rays[0].copy()
             ray[:, 0] -= ray[0, 0]
             ray[:, 2] -= ray[0, 2]
-            lt.plot.rays_2d(
-                model_psv,
-                rays=[ray],
-                ax=ax,
-                ray_color=color,
-                ray_alpha=1.0,
-                ray_linewidth=RAY_LINEWIDTH,
-                plot_model=False,
-                linestyle="-",
-                label=label,
-                xlim=RAY_XLIM, ylim=RAY_YLIM,
-            )
+            outgoing_ray = ray[1:]
+            if len(outgoing_ray) >= 2:
+                plot_ray_path(outgoing_ray, label, color)
 
     if wave_type == "SH":
         ray_variants = [
