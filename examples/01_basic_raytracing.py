@@ -118,4 +118,3 @@ fig = lt.plot.rays_3d(
     receivers=rcvs,
 )
 fig
-plt.show()
