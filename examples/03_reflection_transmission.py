@@ -300,8 +300,6 @@ def plot_ray_situation(angle, wave_type, title, ax):
     wave_type = "SV" if wave_type == "S" else wave_type
     shear_phase = wave_type in {"SV", "SH"}
 
-    # 1. Setup background (velocity model) and axes
-    # We pass empty rays list first just to set up the plot environment
     lt.plot.rays_2d(
         model_psv, rays=[], ax=ax, vel_type="Vs" if shear_phase else "Vp",
         xlim=(-100, 6000), ylim=(4000, 0),
@@ -311,119 +309,122 @@ def plot_ray_situation(angle, wave_type, title, ax):
         discrete_colorbar=True,
     )
     
-    # 2. Compute Offset for the given angle to define receiver position
-    # The example wants to visualize SPECIFIC angles.
-    # trace_rays solves the Two-Point problem (Fixed Receiver).
-    # To plot a ray for a specific angle, we first find where it lands.
-    # Or we can keep using manual shooting logic?
-    # No, the goal is to demonstrate the NEW engine.
-    
-    # We calculate geometric offset for the flat layers given angle
     v_inc = mi_vp * 1000 if wave_type == "P" else mi_vs * 1000
     p_target = np.sin(np.deg2rad(angle)) / v_inc
-    
-    # Check critical angles before tracing
-    # If p > 1/V_layer, it's evanescent.
-    # LayTracer solver handles non-evanescent rays.
-    # We manually check evanescence for the legs we want to plot.
     
     source = np.array([0.0, 0.0, 0.0])
     z_int = 2000.0
     z_bot = 4000.0
-    
-    # Helper to trace and plot one ray variant
-    def run_trace(rcv_z, reflection_arg=None, refraction_arg=None, label="", color="", style=""):
-        # Calculate theoretical horizontal offset for this p
-        # We assume simplified straight rays for this calc (constant layer blocks)
-        
-        # We need the path legs to calculate X(p_target).
-        # We can use lt.offset() if we build the stack manually, 
-        # OR just simple trig since model is constant layers.
-        
-        # Legs depend on reflection/refraction.
-        dx = 0.0
-        
-        # LEG 1: 0 -> 2000
-        # Check P-wave layer 0
-        v0 = mi_vp * 1000 if wave_type == "P" else mi_vs * 1000
-        if p_target * v0 >= 1.0: return # Evanescent at start
-        dx += 2000.0 * p_target * v0 / np.sqrt(1.0 - (p_target*v0)**2)
-        
-        is_refl = (reflection_arg is not None)
-        
-        if is_refl:
-            # LEG 2: 2000 -> 0 (Up)
-            # Phase determined by reflection arg.
-            ph_up = reflection_arg[0][1]
-            v1 = mi_vp * 1000 if ph_up == "P" else mi_vs * 1000
-            if p_target * v1 >= 1.0: return # Evanescent reflection
-            dx += 2000.0 * p_target * v1 / np.sqrt(1.0 - (p_target*v1)**2)
+
+    def phase_velocity(phase, transmitted=False):
+        if phase == "P":
+            return (mt_vp if transmitted else mi_vp) * 1000
+        return (mt_vs if transmitted else mi_vs) * 1000
+
+    def leg_offset(thickness, velocity):
+        pv = p_target * velocity
+        if pv >= 1.0:
+            return None
+        return thickness * pv / np.sqrt(1.0 - pv**2)
+
+    def run_trace(reflection_arg=None, refraction_arg=None, label="", color="", style=""):
+        dx0 = leg_offset(z_int, phase_velocity(wave_type))
+        if dx0 is None:
+            return
+
+        if reflection_arg is not None:
+            outgoing_phase = reflection_arg[0][1]
+            dx1 = leg_offset(z_int, phase_velocity(outgoing_phase))
             z_end = 0.0
         else:
-            # LEG 2: 2000 -> 4000 (Down)
-            # Phase determined by refraction arg, or by same-mode transmission.
-            # trace_rays defaults transmission to same phase if not specified.
-            # But here we want to test conversions explicitly.
-            # If refraction_arg is set, use it.
-            ph_down = refraction_arg[0][1] if refraction_arg else wave_type
-            v1 = mt_vp * 1000 if ph_down == "P" else mt_vs * 1000
-            
-            # Check critical angle for transmission
-            if p_target * v1 >= 1.0: return # Critical/Evanescent
-            
-            dx += (z_bot - z_int) * p_target * v1 / np.sqrt(1.0 - (p_target*v1)**2)
-            z_end = z_bot
-            
-        receiver = np.array([dx, 0.0, z_end])
-        
-        # RUN THE SOLVER
-        try:
-            res = lt.trace_rays(
-                sources=source,
-                receivers=receiver,
-                velocity_df=model_psv,
-                source_phase=wave_type,
-                reflection=reflection_arg,
-                refraction=refraction_arg,
-                requested={"travel_times", "rays", "ray_parameters"}
+            outgoing_phase = refraction_arg[0][1] if refraction_arg else wave_type
+            dx1 = leg_offset(
+                z_bot - z_int,
+                phase_velocity(outgoing_phase, transmitted=True),
             )
-            
-            if res.rays and len(res.rays) > 0 and res.rays[0] is not None:
-                lt.plot.rays_2d(
-                    model_psv,
-                    rays=res.rays,
-                    ax=ax,
-                    ray_color=color,
-                    plot_model=False,
-                    linestyle=style,
-                    label=label,
-                    xlim=(-100, 6000), ylim=(4000, 0)
-                )
-        except Exception:
-            pass # Solver might fail if we messed up bounds, ignore for plot
+            z_end = z_bot
+
+        if dx1 is None:
+            return
+
+        receiver = np.array([dx0 + dx1, 0.0, z_end])
+        res = lt.trace_rays(
+            sources=source,
+            receivers=receiver,
+            velocity_df=model_psv,
+            source_phase=wave_type,
+            reflection=reflection_arg,
+            refraction=refraction_arg,
+            requested={"travel_times", "rays", "ray_parameters"},
+        )
+
+        if res.rays and res.rays[0] is not None:
+            lt.plot.rays_2d(
+                model_psv,
+                rays=res.rays,
+                ax=ax,
+                ray_color=color,
+                plot_model=False,
+                linestyle=style,
+                label=label,
+                xlim=(-100, 6000), ylim=(4000, 0),
+            )
 
     if wave_type == "SH":
-        run_trace(0.0, reflection_arg=[(2000.0, "SH")], label="Refl SH", color="tab:purple", style="--")
-        run_trace(4000.0, refraction_arg=None, label="Trans SH", color="tab:green", style="-")
+        ray_variants = [
+            dict(
+                reflection_arg=[(z_int, "SH")],
+                label="Refl SH",
+                color="tab:purple",
+                style="--",
+            ),
+            dict(refraction_arg=None, label="Trans SH", color="tab:green", style="-"),
+        ]
     elif wave_type == "P":
-        run_trace(0.0, reflection_arg=[(2000.0, "P")], label="Refl P", color="r", style="--")
-        run_trace(0.0, reflection_arg=[(2000.0, "SV")], label="Refl SV", color="tab:orange", style=":")
-        run_trace(4000.0, refraction_arg=None, label="Trans P", color="b", style="-")
-        run_trace(4000.0, refraction_arg=[(2000.0, "SV")], label="Trans SV", color="tab:green", style="-.")
+        ray_variants = [
+            dict(
+                reflection_arg=[(z_int, "P")],
+                label="Refl P",
+                color="r",
+                style="--",
+            ),
+            dict(
+                reflection_arg=[(z_int, "SV")],
+                label="Refl SV",
+                color="tab:orange",
+                style=":",
+            ),
+            dict(refraction_arg=None, label="Trans P", color="b", style="-"),
+            dict(
+                refraction_arg=[(z_int, "SV")],
+                label="Trans SV",
+                color="tab:green",
+                style="-.",
+            ),
+        ]
     else:
-        run_trace(0.0, reflection_arg=[(2000.0, "P")], label="Refl P", color="r", style="--")
-        run_trace(0.0, reflection_arg=[(2000.0, "SV")], label="Refl SV", color="tab:orange", style=":")
-        run_trace(4000.0, refraction_arg=[(2000.0, "P")], label="Trans P", color="b", style="-")
-        run_trace(4000.0, refraction_arg=None, label="Trans SV", color="tab:green", style="-.")
+        ray_variants = [
+            dict(
+                reflection_arg=[(z_int, "P")],
+                label="Refl P",
+                color="r",
+                style="--",
+            ),
+            dict(
+                reflection_arg=[(z_int, "SV")],
+                label="Refl SV",
+                color="tab:orange",
+                style=":",
+            ),
+            dict(refraction_arg=[(z_int, "P")], label="Trans P", color="b", style="-"),
+            dict(refraction_arg=None, label="Trans SV", color="tab:green", style="-."),
+        ]
 
-    # Incident ray is not plotted separately because trace_rays returns the FULL path.
-    # The previous manual code overlaid legs.
-    # The new code plots full V-shapes.
-    # This might look slightly different (lines overlapping on the incident leg).
-    # That is acceptable and actually more physically correct (showing the full ray).
+    for variant in ray_variants:
+        run_trace(**variant)
     
     ax.legend(loc="lower left", fontsize="small")
-    ax.set_title(f"{title}\n(Angle {angle}°)")
+    ax.set_title(f"{title}\n(Angle {angle:g} deg)")
 
 
 # P-incidence scenarios

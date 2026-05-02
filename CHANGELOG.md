@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - canonicalized phase handling so legacy `S` maps to `SV`, while `P`, `SV`, and `SH` are available as explicit source phases
 - multi-phase tracing reuses kinematic solves across phases when possible; SV and SH share ray paths, travel times, ray parameters, `tstar`, and geometrical spreading, while retaining phase-specific transmission/reflection products
 - example 03 now includes SH reflection/transmission cases, distinguishes complex coefficient phase shifts from evanescent outgoing branches, and annotates the SH oblique impedance-match null
+- cleaned up and refactored example 03
 - API and methodology documentation now describe SH support, multi-phase tracing, and the decoupled SH behavior in isotropic 1-D media
 
 ## [v0.3.1] - 2026-04-20
