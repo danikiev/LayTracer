@@ -107,27 +107,22 @@ python -m twine upload -r pypi dist/*
 - `File already exists`: this version is already uploaded; bump tag/version and rebuild.
 - Unexpected dev version: release tag missing or not fetched in current Git checkout.
 
-## 5. GitHub Actions automation (`release.yml`)
+## 5. Tag-push docs automation (`push-tag.yml`)
 
-This repository includes `.github/workflows/release.yml`.
+This repository includes `.github/workflows/push-tag.yml`.
 
 Behavior:
 
-- Push `v*` tag -> build package -> upload to TestPyPI -> wait for approval -> upload same artifacts to PyPI.
-- `workflow_dispatch` is also available for manual runs.
+- Push `v*` tag -> validate tag -> build and deploy the documentation for that tag.
+- Package publishing is intentionally not done here; it is handled by `release-on-published.yml`.
+- Tag validation is shared through `.github/workflows/validate-tag.yml`.
 
 Required GitHub setup:
 
-1. Add repository secrets:
-    - `TEST_PYPI_API_TOKEN` = token from TestPyPI
-    - `PYPI_API_TOKEN` = token from PyPI
-
-2. Create repository environments:
-    - `testpypi` (optional protection rules)
-    - `pypi` (recommended: require reviewers for manual approval gate)
+1. Create repository environments:
     - `github-pages`: in **Settings → Environments → github-pages → Deployment branches and tags**, add a tag rule with pattern `v*` so that tag-triggered releases can deploy docs with the correct version.
 
-3. Trigger a release by tag:
+2. Trigger a docs deployment by tag:
 
 ```powershell
 git checkout main
@@ -138,11 +133,10 @@ git push origin v0.1.2
 
 Notes:
 
-- The workflow uses `fetch-depth: 0` so `setuptools_scm` can resolve the tag correctly.
+- The workflow fetches tags so `setuptools_scm` can resolve the release version correctly.
 - Release tags must point to a commit contained in `main`; tags created from `dev` or any other branch are rejected by the workflow.
-- If PyPI publish fails with "File already exists", bump to a new tag and rerun.
-- Publishing is guarded: only strict semver tags in the form `vMAJOR.MINOR.PATCH` are accepted (example: `v1.2.3`).
-- Upload steps use `skip-existing: true`, so reruns with the same version do not fail if files are already present.
+- Only strict semver tags in the form `vMAJOR.MINOR.PATCH` are accepted (example: `v1.2.3`).
+- To manually rebuild docs for an existing tag, run the `Docs` workflow and set `ref` to `refs/tags/vX.Y.Z`.
 
 ## 6. Release-event automation (`release-on-published.yml`)
 
@@ -150,15 +144,27 @@ This repository also includes `.github/workflows/release-on-published.yml`.
 
 Behavior:
 
-- Trigger: GitHub Release event `published` (plus optional `workflow_dispatch`).
+- Trigger: GitHub Release event `published` (plus optional `workflow_dispatch` with a tag input).
 - Flow: build package -> publish to TestPyPI -> wait for approval -> publish same artifacts to PyPI.
 - The published release tag must point to a commit contained in `main`; releases created from tags on other branches are rejected during validation.
+- Zenodo metadata validation must pass before package build/publish starts.
+- Tag validation is shared through `.github/workflows/validate-tag.yml`.
 
-When to use which workflow:
+Required GitHub setup:
 
-- Use `release.yml` if you want publishing to start immediately on tag push (`git push origin vX.Y.Z`).
-- Use `release-on-published.yml` if you want publishing only after explicitly creating/publishing a GitHub Release in the UI.
-- Both workflows enforce strict semver tags (`vMAJOR.MINOR.PATCH`) before build/publish jobs run.
+1. Add repository secrets:
+    - `TEST_PYPI_API_TOKEN` = token from TestPyPI
+    - `PYPI_API_TOKEN` = token from PyPI
+
+2. Create repository environments:
+    - `testpypi` (optional protection rules)
+    - `pypi` (recommended: require reviewers for manual approval gate)
+
+Release order:
+
+- Push the `vX.Y.Z` tag first to deploy versioned docs.
+- Publish the GitHub Release for that tag when you are ready to publish to TestPyPI/PyPI.
+- Both workflows enforce strict semver tags (`vMAJOR.MINOR.PATCH`) before doing release work.
 
 ## 7. Zenodo release plan (recommended order)
 
