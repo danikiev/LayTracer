@@ -576,7 +576,7 @@ def _wordmark(font: FontProperties, *, include_tagline: bool) -> str:
     boundary_width = 10.0
     font_size = 128.0
     tracking = 7.0
-    y_gap = 24.0
+    y_gap = 16.0
 
     elements: list[str] = []
     la_elements, la_box = _tracked_text_elements(
@@ -679,7 +679,7 @@ def _wordmark_pdf(font: FontProperties) -> bytes:
     boundary_width = 10.0
     font_size = 128.0
     tracking = 7.0
-    y_gap = 24.0
+    y_gap = 16.0
 
     fig, ax = _pdf_canvas(width, height)
     la_box = _pdf_tracked_text_elements(
