@@ -4,8 +4,8 @@
   <desc id="desc">LayTracer wordmark with a layer boundary, dashed reflected rays, and colored y endpoint dots.</desc>
   <line x1="16.918" y1="120" x2="163.082" y2="120" stroke="#9AA7B2" stroke-width="10" stroke-linecap="round"/>
   <path fill="#255699" d="M 128.02 47.08 L 84.1 151.54 L 65.04 151.54 L 80.4 116.2 L 51.98 47.08 L 72.08 47.08 L 90.38 96.62 L 108.94 47.08 L 128.02 47.08 Z"/>
-  <line x1="56.523" y1="35.08" x2="89.975" y2="120" stroke="#9AA7B2" stroke-width="4" stroke-linecap="round" opacity="0.95" stroke-dasharray="9 7"/>
-  <line x1="89.975" y1="120" x2="123.426" y2="35.08" stroke="#9AA7B2" stroke-width="4" stroke-linecap="round" opacity="0.95" stroke-dasharray="9 7"/>
+  <line x1="56.523" y1="35.08" x2="89.975" y2="120" stroke="#9AA7B2" stroke-width="4" stroke-linecap="round" opacity="0.95" stroke-dasharray="20 18"/>
+  <line x1="89.975" y1="120" x2="123.426" y2="35.08" stroke="#9AA7B2" stroke-width="4" stroke-linecap="round" opacity="0.95" stroke-dasharray="20 18"/>
   <circle cx="56.523" cy="35.08" r="9" fill="#255699"/>
   <circle cx="123.426" cy="35.08" r="9" fill="#FF6A1A"/>
 </svg>

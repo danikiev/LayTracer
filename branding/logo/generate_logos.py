@@ -429,7 +429,7 @@ def _branch_rays(
             color=LIGHT_GRAY_BLUE,
             width=width,
             opacity=0.95,
-            dasharray="9 7",
+            dasharray="20 18",
         ),
         _line(
             reflection_point[0],
@@ -439,7 +439,7 @@ def _branch_rays(
             color=LIGHT_GRAY_BLUE,
             width=width,
             opacity=0.95,
-            dasharray="9 7",
+            dasharray="20 18",
         ),
     ]
 
@@ -534,7 +534,7 @@ def _pdf_y_overlays(
         color=LIGHT_GRAY_BLUE,
         width=ray_width,
         opacity=0.95,
-        dasharray="9 7",
+        dasharray="20 18",
     )
     _pdf_line(
         ax,
@@ -545,7 +545,7 @@ def _pdf_y_overlays(
         color=LIGHT_GRAY_BLUE,
         width=ray_width,
         opacity=0.95,
-        dasharray="9 7",
+        dasharray="20 18",
     )
     _pdf_circle(ax, navy_dot[0], navy_dot[1], dot_radius, LIGHT_NAVY)
     _pdf_circle(ax, orange_dot[0], orange_dot[1], dot_radius, ACCENT_ORANGE)
