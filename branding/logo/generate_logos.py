@@ -31,7 +31,8 @@ FULL_LOGO = STATIC_DIR / "laytracer-logo-full.svg"
 MEDIUM_LOGO = STATIC_DIR / "laytracer-logo-medium.svg"
 ICON_LOGO = STATIC_DIR / "laytracer-icon.svg"
 
-TAGLINE = "TWO-POINT RAY TRACING IN LAYERED MEDIA"
+TAGLINE_FAST = "FAST TWO-POINT"
+TAGLINE_REST = "SEISMIC RAY TRACING IN LAYERED MEDIA"
 
 
 @dataclass(frozen=True)
@@ -238,6 +239,7 @@ def _y_ray_geometry(
     right_slope_local, _ = _fit_x_over_y(right_points)
     left_slope_svg = -left_slope_local
     right_slope_svg = -right_slope_local
+    ray_slope = 0.5 * (abs(left_slope_svg) + abs(right_slope_svg))
 
     boundary_local_y = baseline_y - boundary_y
     boundary_intervals = _scanline_intervals(polygon, boundary_local_y)
@@ -249,9 +251,29 @@ def _y_ray_geometry(
 
     dot_y = baseline_y - bbox.y1 - radius - 2.0
     reflection_point = (reflection_x, boundary_y)
-    navy_dot = (reflection_x + left_slope_svg * (dot_y - boundary_y), dot_y)
-    orange_dot = (reflection_x + right_slope_svg * (dot_y - boundary_y), dot_y)
+    ray_dx = ray_slope * (boundary_y - dot_y)
+    navy_dot = (reflection_x - ray_dx, dot_y)
+    orange_dot = (reflection_x + ray_dx, dot_y)
     return navy_dot, orange_dot, reflection_point
+
+
+def _y_center_at_svg_y(
+    *,
+    left: float,
+    baseline_y: float,
+    size: float,
+    font: FontProperties,
+    svg_y: float,
+) -> float:
+    path = _text_path("y", size, font)
+    bbox = path.get_extents()
+    polygon = path.to_polygons()[0]
+    local_y = baseline_y - svg_y
+    intervals = _scanline_intervals(polygon, local_y)
+    if not intervals:
+        return left + 0.5 * bbox.width
+    interval = intervals[len(intervals) // 2]
+    return left - bbox.x0 + 0.5 * (interval[0] + interval[1])
 
 
 def _branch_rays(
@@ -285,7 +307,7 @@ def _branch_rays(
 
 def _wordmark(font: FontProperties, *, include_tagline: bool) -> str:
     width = 800.0
-    height = 224.0 if include_tagline else 168.0
+    height = 180.0 if include_tagline else 168.0
     left = 56.0
     baseline_y = 104.0
     y_shift = 14.0
@@ -350,24 +372,42 @@ def _wordmark(font: FontProperties, *, include_tagline: bool) -> str:
     elements.append(_circle(orange_dot[0], orange_dot[1], 9.0, ACCENT_ORANGE))
 
     if include_tagline:
-        tagline, tagline_box = _text_element(
-            TAGLINE,
-            left=0,
-            baseline_y=188.0,
-            size=22.0,
+        tagline_size = 17.0
+        tagline_baseline_y = boundary_y + 27.0
+        descender_x = _y_center_at_svg_y(
+            left=y_left,
+            baseline_y=baseline_y + y_shift,
+            size=font_size,
+            font=font,
+            svg_y=tagline_baseline_y - 0.5 * tagline_size,
+        )
+        text_gap = 24.0
+        fast, fast_box = _text_element(
+            TAGLINE_FAST,
+            left=0.0,
+            baseline_y=tagline_baseline_y,
+            size=tagline_size,
+            color=ACCENT_ORANGE,
+            font=font,
+        )
+        fast_width = fast_box.right - fast_box.left
+        fast, _ = _text_element(
+            TAGLINE_FAST,
+            left=descender_x - text_gap - fast_width,
+            baseline_y=tagline_baseline_y,
+            size=tagline_size,
+            color=ACCENT_ORANGE,
+            font=font,
+        )
+        rest, _ = _text_element(
+            TAGLINE_REST,
+            left=descender_x + text_gap,
+            baseline_y=tagline_baseline_y,
+            size=tagline_size,
             color=DARK_NAVY,
             font=font,
         )
-        tagline_width = tagline_box.right - tagline_box.left
-        tagline, _ = _text_element(
-            TAGLINE,
-            left=(width - tagline_width) / 2.0,
-            baseline_y=188.0,
-            size=22.0,
-            color=DARK_NAVY,
-            font=font,
-        )
-        elements.append(tagline)
+        elements.extend([fast, rest])
 
     return _svg(width, height, elements)
 

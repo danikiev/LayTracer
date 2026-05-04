@@ -4,8 +4,8 @@
   <desc id="desc">LayTracer wordmark with a layer boundary, dashed reflected rays, and colored y endpoint dots.</desc>
   <line x1="22" y1="100" x2="158" y2="100" stroke="#9AA7B2" stroke-width="10" stroke-linecap="round"/>
   <path fill="#0B1F3B" d="M 132.81 33.539 L 85.459 146.16 L 64.91 146.16 L 81.47 108.059 L 50.829 33.539 L 72.5 33.539 L 92.229 86.95 L 112.239 33.539 L 132.81 33.539 Z"/>
-  <line x1="61.28" y1="22.539" x2="91.511" y2="100" stroke="#9AA7B2" stroke-width="4" stroke-linecap="round" opacity="0.95" stroke-dasharray="9 7"/>
-  <line x1="91.511" y1="100" x2="122.306" y2="22.539" stroke="#9AA7B2" stroke-width="4" stroke-linecap="round" opacity="0.95" stroke-dasharray="9 7"/>
-  <circle cx="61.28" cy="22.539" r="9" fill="#0B1F3B"/>
-  <circle cx="122.306" cy="22.539" r="9" fill="#FF6A1A"/>
+  <line x1="60.999" y1="22.539" x2="91.511" y2="100" stroke="#9AA7B2" stroke-width="4" stroke-linecap="round" opacity="0.95" stroke-dasharray="9 7"/>
+  <line x1="91.511" y1="100" x2="122.024" y2="22.539" stroke="#9AA7B2" stroke-width="4" stroke-linecap="round" opacity="0.95" stroke-dasharray="9 7"/>
+  <circle cx="60.999" cy="22.539" r="9" fill="#0B1F3B"/>
+  <circle cx="122.024" cy="22.539" r="9" fill="#FF6A1A"/>
 </svg>
