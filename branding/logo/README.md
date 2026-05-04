@@ -21,11 +21,15 @@ The generator writes:
 - `docs/source/_static/laytracer-logo-full.svg`
 - `docs/source/_static/laytracer-logo-medium.svg`
 - `docs/source/_static/laytracer-icon.svg`
+- `docs/source/_static/laytracer-icon-circle.svg`
 
 ## Usage
 
 - `laytracer-logo-full.svg` is shown near the top of the repository `README.md`.
 - `laytracer-logo-medium.svg` is used as the Sphinx/pydata theme header logo in `docs/source/conf.py`.
 - `laytracer-icon.svg` is used as the Sphinx favicon in `docs/source/conf.py`.
+- `laytracer-icon-circle.svg` is an alternate icon with a white circular background for contexts that need a self-contained mark.
+
+Both icon variants use the same generated `y` motif geometry as the full and medium logos. The interface line length is shared between the plain and circular icons; in the circular variant it is computed as a chord inside the circle.
 
 The Poppins font is licensed under the SIL Open Font License 1.1; see `fonts/OFL.txt`.

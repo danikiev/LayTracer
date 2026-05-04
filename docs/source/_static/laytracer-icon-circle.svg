@@ -2,6 +2,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="180" height="180" viewBox="0 0 180 180" role="img" aria-labelledby="title desc">
   <title id="title">LayTracer logo</title>
   <desc id="desc">LayTracer wordmark with a layer boundary, dashed reflected rays, and colored y endpoint dots.</desc>
+  <circle cx="90" cy="90" r="84" fill="#FFFFFF"/>
   <line x1="16.918" y1="120" x2="163.082" y2="120" stroke="#9AA7B2" stroke-width="10" stroke-linecap="round"/>
   <path fill="#0B1F3B" d="M 128.02 47.08 L 84.1 151.54 L 65.04 151.54 L 80.4 116.2 L 51.98 47.08 L 72.08 47.08 L 90.38 96.62 L 108.94 47.08 L 128.02 47.08 Z"/>
   <line x1="56.523" y1="35.08" x2="89.975" y2="120" stroke="#9AA7B2" stroke-width="4" stroke-linecap="round" opacity="0.95" stroke-dasharray="9 7"/>

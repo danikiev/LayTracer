@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 import sys
 from dataclasses import dataclass
+from math import sqrt
 from pathlib import Path
 
 from matplotlib.font_manager import FontProperties
@@ -22,6 +23,7 @@ from matplotlib.textpath import TextPath
 DARK_NAVY = "#0B1F3B"
 ACCENT_ORANGE = "#FF6A1A"
 LIGHT_GRAY_BLUE = "#9AA7B2"
+WHITE = "#FFFFFF"
 
 ROOT = Path(__file__).resolve().parents[2]
 FONT_PATH = Path(__file__).resolve().parent / "fonts" / "Poppins-SemiBold.ttf"
@@ -30,6 +32,7 @@ STATIC_DIR = ROOT / "docs" / "source" / "_static"
 FULL_LOGO = STATIC_DIR / "laytracer-logo-full.svg"
 MEDIUM_LOGO = STATIC_DIR / "laytracer-logo-medium.svg"
 ICON_LOGO = STATIC_DIR / "laytracer-icon.svg"
+ICON_CIRCLE_LOGO = STATIC_DIR / "laytracer-icon-circle.svg"
 
 TAGLINE_FAST = "FAST TWO-POINT"
 TAGLINE_REST = "SEISMIC RAY TRACING IN LAYERED MEDIA"
@@ -41,6 +44,14 @@ class TextBox:
     right: float
     top: float
     bottom: float
+
+
+@dataclass(frozen=True)
+class YMotif:
+    letter: str
+    box: TextBox
+    rays: list[str]
+    dots: list[str]
 
 
 def _fmt(value: float) -> str:
@@ -281,6 +292,8 @@ def _branch_rays(
     navy_dot: tuple[float, float],
     orange_dot: tuple[float, float],
     reflection_point: tuple[float, float],
+    *,
+    width: float = 4.0,
 ) -> list[str]:
     return [
         _line(
@@ -289,7 +302,7 @@ def _branch_rays(
             reflection_point[0],
             reflection_point[1],
             color=LIGHT_GRAY_BLUE,
-            width=4.0,
+            width=width,
             opacity=0.95,
             dasharray="9 7",
         ),
@@ -299,11 +312,69 @@ def _branch_rays(
             orange_dot[0],
             orange_dot[1],
             color=LIGHT_GRAY_BLUE,
-            width=4.0,
+            width=width,
             opacity=0.95,
             dasharray="9 7",
         ),
     ]
+
+
+def _y_motif(
+    *,
+    left: float,
+    baseline_y: float,
+    size: float,
+    font: FontProperties,
+    boundary_y: float,
+    dot_radius: float = 9.0,
+    ray_width: float = 4.0,
+) -> YMotif:
+    letter, box = _text_element(
+        "y",
+        left=left,
+        baseline_y=baseline_y,
+        size=size,
+        color=DARK_NAVY,
+        font=font,
+    )
+    navy_dot, orange_dot, reflection_point = _y_ray_geometry(
+        left=left,
+        baseline_y=baseline_y,
+        size=size,
+        font=font,
+        boundary_y=boundary_y,
+        radius=dot_radius,
+    )
+    return YMotif(
+        letter=letter,
+        box=box,
+        rays=_branch_rays(
+            navy_dot,
+            orange_dot,
+            reflection_point,
+            width=ray_width,
+        ),
+        dots=[
+            _circle(navy_dot[0], navy_dot[1], dot_radius, DARK_NAVY),
+            _circle(orange_dot[0], orange_dot[1], dot_radius, ACCENT_ORANGE),
+        ],
+    )
+
+
+def _chord_x_range(
+    *,
+    center_x: float,
+    center_y: float,
+    radius: float,
+    y: float,
+    stroke_width: float,
+) -> tuple[float, float]:
+    inner_radius = radius - 0.5 * stroke_width
+    dy = y - center_y
+    if abs(dy) >= inner_radius:
+        raise ValueError("Chord y-position is outside the circle.")
+    half_width = sqrt(inner_radius**2 - dy**2)
+    return center_x - half_width, center_x + half_width
 
 
 def _wordmark(font: FontProperties, *, include_tagline: bool) -> str:
@@ -328,14 +399,14 @@ def _wordmark(font: FontProperties, *, include_tagline: bool) -> str:
         tracking=tracking,
     )
     y_left = la_box.right + y_gap
-    y, y_box = _text_element(
-        "y",
+    y_motif = _y_motif(
         left=y_left,
         baseline_y=baseline_y + y_shift,
         size=font_size,
-        color=DARK_NAVY,
         font=font,
+        boundary_y=boundary_y,
     )
+    y_box = y_motif.box
     tracer_elements, tracer_box = _tracked_text_elements(
         "Tracer",
         left=y_box.right + y_gap,
@@ -344,15 +415,6 @@ def _wordmark(font: FontProperties, *, include_tagline: bool) -> str:
         color=ACCENT_ORANGE,
         font=font,
         tracking=tracking,
-    )
-
-    navy_dot, orange_dot, reflection_point = _y_ray_geometry(
-        left=y_left,
-        baseline_y=baseline_y + y_shift,
-        size=font_size,
-        font=font,
-        boundary_y=boundary_y,
-        radius=9.0,
     )
 
     elements.append(
@@ -366,11 +428,10 @@ def _wordmark(font: FontProperties, *, include_tagline: bool) -> str:
         )
     )
     elements.extend(la_elements)
-    elements.append(y)
+    elements.append(y_motif.letter)
     elements.extend(tracer_elements)
-    elements.extend(_branch_rays(navy_dot, orange_dot, reflection_point))
-    elements.append(_circle(navy_dot[0], navy_dot[1], 9.0, DARK_NAVY))
-    elements.append(_circle(orange_dot[0], orange_dot[1], 9.0, ACCENT_ORANGE))
+    elements.extend(y_motif.rays)
+    elements.extend(y_motif.dots)
 
     if include_tagline:
         tagline_size = 17.0
@@ -413,40 +474,63 @@ def _wordmark(font: FontProperties, *, include_tagline: bool) -> str:
     return _svg(width, height, elements)
 
 
-def _icon(font: FontProperties) -> str:
+def _icon(font: FontProperties, *, include_circle: bool = False) -> str:
     width = 180.0
     height = 180.0
-    boundary_y = 100.0
-    reflection_x = 91.0
+    center_x = 90.0
+    center_y = 90.0
+    circle_radius = 84.0
+    boundary_y = 120.0
+    boundary_width = 10.0
+    font_size = 128.0
+    baseline_y = 118.0
 
-    y_path = _text_path("y", 138.0, font)
+    y_path = _text_path("y", font_size, font)
     y_bbox = y_path.get_extents()
-    y_left = reflection_x - 0.49 * y_bbox.width
+    y_left = 0.5 * (width - y_bbox.width)
 
-    y, y_box = _text_element(
-        "y",
-        left=y_left,
-        baseline_y=110.0,
-        size=138.0,
-        color=DARK_NAVY,
-        font=font,
+    boundary_x1, boundary_x2 = _chord_x_range(
+        center_x=center_x,
+        center_y=center_y,
+        radius=circle_radius,
+        y=boundary_y,
+        stroke_width=boundary_width,
     )
-    navy_dot, orange_dot, reflection_point = _y_ray_geometry(
+    y_motif = _y_motif(
         left=y_left,
-        baseline_y=110.0,
-        size=138.0,
+        baseline_y=baseline_y,
+        size=font_size,
         font=font,
         boundary_y=boundary_y,
-        radius=9.0,
     )
-    elements = [
-        _line(22.0, boundary_y, 158.0, boundary_y, color=LIGHT_GRAY_BLUE, width=10.0),
-        y,
-        *_branch_rays(navy_dot, orange_dot, reflection_point),
-        _circle(navy_dot[0], navy_dot[1], 9.0, DARK_NAVY),
-        _circle(orange_dot[0], orange_dot[1], 9.0, ACCENT_ORANGE),
+
+    elements: list[str] = []
+    if include_circle:
+        elements.append(_circle(center_x, center_y, circle_radius, WHITE))
+
+    elements.extend([
+        _line(
+            boundary_x1,
+            boundary_y,
+            boundary_x2,
+            boundary_y,
+            color=LIGHT_GRAY_BLUE,
+            width=boundary_width,
+        ),
+        y_motif.letter,
+        *y_motif.rays,
+        *y_motif.dots,
     ]
+    )
     return _svg(width, height, elements)
+
+
+def _icon_plain(font: FontProperties) -> str:
+    return _icon(font, include_circle=False)
+
+
+def _icon_circle(font: FontProperties) -> str:
+    return _icon(font, include_circle=True)
 
 
 def _render_assets() -> dict[Path, str]:
@@ -456,7 +540,8 @@ def _render_assets() -> dict[Path, str]:
     return {
         FULL_LOGO: _wordmark(font, include_tagline=True),
         MEDIUM_LOGO: _wordmark(font, include_tagline=False),
-        ICON_LOGO: _icon(font),
+        ICON_LOGO: _icon_plain(font),
+        ICON_CIRCLE_LOGO: _icon_circle(font),
     }
 
 
