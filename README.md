@@ -349,6 +349,7 @@ Test modules:
 - `test_api.py` — multi-ray tracing interface
 - `test_generalized.py` — generalized layered-media validation cases
 - `test_homogeneous_equivalence.py` — homogeneous-medium equivalence checks
+- `test_plot.py` — plotting helpers and visualisation options
 - `test_symmetry.py` — reciprocity and physical consistency checks
 
 ---
@@ -371,12 +372,15 @@ LayTracer/
 │   ├── 04_amplitude_analysis.py
 │   ├── 05_homogeneous_equivalence.py
 │   └── README.txt
+├── branding/                # Branding assets and logo source
+│   └── logo/                # Logo generator, vendored Poppins font, and usage docs
 ├── pytests/                 # Test suite
 │   ├── test_solver.py
 │   ├── test_amplitude.py
 │   ├── test_api.py
 │   ├── test_generalized.py
 │   ├── test_homogeneous_equivalence.py
+│   ├── test_plot.py
 │   └── test_symmetry.py
 ├── docs/                    # Sphinx documentation
 │   └── source/
