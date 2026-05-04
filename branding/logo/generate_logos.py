@@ -139,6 +139,7 @@ def _pdf_text_element(
     size: float,
     color: str,
     font: FontProperties,
+    zorder: float = 2.0,
 ) -> TextBox:
     path = _text_path(text, size, font)
     bbox = path.get_extents()
@@ -150,6 +151,7 @@ def _pdf_text_element(
         edgecolor="none",
         linewidth=0,
         transform=transform + ax.transData,
+        zorder=zorder,
     )
     ax.add_patch(patch)
     return TextBox(
@@ -232,6 +234,7 @@ def _pdf_line(
     width: float,
     opacity: float | None = None,
     dasharray: str | None = None,
+    zorder: float = 3.0,
 ) -> None:
     line = Line2D(
         [x1, x2],
@@ -241,14 +244,26 @@ def _pdf_line(
         alpha=opacity,
         solid_capstyle="round",
         dash_capstyle="round",
+        zorder=zorder,
     )
     if dasharray:
-        line.set_dashes([float(value) for value in dasharray.split()])
+        # Matplotlib scales dash lengths by line width; SVG does not.
+        line.set_dashes([float(value) / width for value in dasharray.split()])
     ax.add_line(line)
 
 
-def _pdf_circle(ax, cx: float, cy: float, radius: float, color: str) -> None:
-    ax.add_patch(MplCircle((cx, cy), radius, facecolor=color, edgecolor="none"))
+def _pdf_circle(
+    ax,
+    cx: float,
+    cy: float,
+    radius: float,
+    color: str,
+    *,
+    zorder: float = 4.0,
+) -> None:
+    ax.add_patch(
+        MplCircle((cx, cy), radius, facecolor=color, edgecolor="none", zorder=zorder)
+    )
 
 
 def _svg(width: float, height: float, elements: list[str]) -> str:
@@ -553,12 +568,12 @@ def _chord_x_range(
 
 
 def _wordmark(font: FontProperties, *, include_tagline: bool) -> str:
-    width = 800.0
     height = 180.0 if include_tagline else 168.0
     left = 56.0
     baseline_y = 104.0
     y_shift = 14.0
     boundary_y = 120.0
+    boundary_width = 10.0
     font_size = 128.0
     tracking = 7.0
     y_gap = 24.0
@@ -591,15 +606,18 @@ def _wordmark(font: FontProperties, *, include_tagline: bool) -> str:
         font=font,
         tracking=tracking,
     )
+    boundary_left = la_box.left - 14.0
+    boundary_right = tracer_box.right + 16.0
+    left_padding = max(0.0, boundary_left - 0.5 * boundary_width)
 
     elements.append(
         _line(
-            la_box.left - 14.0,
+            boundary_left,
             boundary_y,
-            tracer_box.right + 16.0,
+            boundary_right,
             boundary_y,
             color=LIGHT_GRAY_BLUE,
-            width=10.0,
+            width=boundary_width,
         )
     )
     elements.extend(la_elements)
@@ -607,6 +625,7 @@ def _wordmark(font: FontProperties, *, include_tagline: bool) -> str:
     elements.extend(tracer_elements)
     elements.extend(y_motif.rays)
     elements.extend(y_motif.dots)
+    right_edge = boundary_right + 0.5 * boundary_width
 
     if include_tagline:
         tagline_size = 17.0
@@ -636,7 +655,7 @@ def _wordmark(font: FontProperties, *, include_tagline: bool) -> str:
             color=ACCENT_ORANGE,
             font=font,
         )
-        rest, _ = _text_element(
+        rest, rest_box = _text_element(
             TAGLINE_REST,
             left=descender_x + text_gap,
             baseline_y=tagline_baseline_y,
@@ -645,8 +664,9 @@ def _wordmark(font: FontProperties, *, include_tagline: bool) -> str:
             font=font,
         )
         elements.extend([fast, rest])
+        right_edge = max(right_edge, rest_box.right)
 
-    return _svg(width, height, elements)
+    return _svg(right_edge + left_padding, height, elements)
 
 
 def _wordmark_pdf(font: FontProperties) -> bytes:
@@ -656,6 +676,7 @@ def _wordmark_pdf(font: FontProperties) -> bytes:
     baseline_y = 104.0
     y_shift = 14.0
     boundary_y = 120.0
+    boundary_width = 10.0
     font_size = 128.0
     tracking = 7.0
     y_gap = 24.0
@@ -690,19 +711,22 @@ def _wordmark_pdf(font: FontProperties) -> bytes:
         font=font,
         tracking=tracking,
     )
+    boundary_left = la_box.left - 14.0
+    boundary_right = tracer_box.right + 16.0
+    left_padding = max(0.0, boundary_left - 0.5 * boundary_width)
 
     _pdf_line(
         ax,
-        la_box.left - 14.0,
+        boundary_left,
         boundary_y,
-        tracer_box.right + 16.0,
+        boundary_right,
         boundary_y,
         color=LIGHT_GRAY_BLUE,
-        width=10.0,
+        width=boundary_width,
+        zorder=0.0,
     )
-    # Move the boundary behind the wordmark while preserving the exact geometry.
-    ax.lines[-1].set_zorder(-1)
     _pdf_y_overlays(ax, navy_dot, orange_dot, reflection_point)
+    right_edge = boundary_right + 0.5 * boundary_width
 
     tagline_size = 17.0
     tagline_baseline_y = boundary_y + 27.0
@@ -732,7 +756,7 @@ def _wordmark_pdf(font: FontProperties) -> bytes:
         color=ACCENT_ORANGE,
         font=font,
     )
-    _pdf_text_element(
+    rest_box = _pdf_text_element(
         ax,
         TAGLINE_REST,
         left=descender_x + text_gap,
@@ -741,6 +765,10 @@ def _wordmark_pdf(font: FontProperties) -> bytes:
         color=LIGHT_NAVY,
         font=font,
     )
+    right_edge = max(right_edge, rest_box.right)
+    width = right_edge + left_padding
+    fig.set_size_inches(width / 72.0, height / 72.0, forward=True)
+    ax.set_xlim(0, width)
 
     output = BytesIO()
     fig.savefig(
