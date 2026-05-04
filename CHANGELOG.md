@@ -5,6 +5,15 @@ All notable changes to Laytracer will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- LayTracer logo and branding assets, including full, medium, icon, circular icon, and PDF-compatible logo variants (#12)
+- deterministic logo generation script under `branding/logo/` with vendored Poppins font assets and staleness checking (#12)
+- logo integration in the repository README, HTML documentation overview, Sphinx header, favicon, and LaTeX/PDF title page (#12)
+- branding documentation describing the logo design concept, color palette, generated outputs, usage locations, and regeneration commands (#12)
+
 ## [v0.4.0] - 2026-05-02
 
 ### Added
