@@ -16,15 +16,15 @@ conda run -n laytracer python branding/logo/generate_logos.py --check
 
 ## Design Idea
 
-The LayTracer logo is a compact visual summary of two-point ray tracing in layered media. The Poppins wordmark keeps the brand clean and technical: `Lay` is set in dark navy to suggest the stable layered model, while `Tracer` is set in accent orange to emphasize the active tracing operation.
+The LayTracer logo is a compact visual summary of two-point ray tracing in layered media. The Poppins wordmark keeps the brand clean and technical: `Lay` is set in light navy to suggest the stable layered model, while `Tracer` is set in accent orange to emphasize the active tracing operation.
 
 The thick light gray-blue underline represents a layer boundary or interface. The lowered `y` in `Lay` turns the word itself into part of the ray diagram: its two upper branches act as the incident and reflected ray paths, meeting at the interface. The dashed light gray-blue overlays follow those branches to make the ray interpretation explicit without replacing the original glyph shape.
 
-The orange point marks the source-side ray branch, and the dark navy point marks the receiver/reflected branch. In the full logo, the tagline is split around the descending branch of the `y`: `FAST TWO-POINT` is orange, while `SEISMIC RAY TRACING IN LAYERED MEDIA` remains navy, matching the wordmark color logic.
+The orange point marks the source-side ray branch, and the navy point marks the receiver/reflected branch. In the full logo, the tagline is split around the descending branch of the `y`: `FAST TWO-POINT` is orange, while `SEISMIC RAY TRACING IN LAYERED MEDIA` remains navy, matching the wordmark color logic.
 
 ## Colors
 
-- Dark navy `#0B1F3B`: `Lay`, receiver/reflected point, and navy tagline text.
+- Light navy `#255699`: `Lay`, receiver/reflected point, and navy tagline text.
 - Accent orange `#FF6A1A`: `Tracer`, source point, and `FAST TWO-POINT` in the full logo tagline.
 - Light gray-blue `#9AA7B2`: layer-boundary interface line and dashed ray overlays.
 - White `#FFFFFF`: background fill for the circular icon variant.

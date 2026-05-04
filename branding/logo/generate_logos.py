@@ -26,7 +26,7 @@ from matplotlib.textpath import TextPath
 from matplotlib.transforms import Affine2D
 
 
-DARK_NAVY = "#0B1F3B"
+LIGHT_NAVY = "#255699"
 ACCENT_ORANGE = "#FF6A1A"
 LIGHT_GRAY_BLUE = "#9AA7B2"
 WHITE = "#FFFFFF"
@@ -444,7 +444,7 @@ def _y_motif(
         left=left,
         baseline_y=baseline_y,
         size=size,
-        color=DARK_NAVY,
+        color=LIGHT_NAVY,
         font=font,
     )
     navy_dot, orange_dot, reflection_point = _y_ray_geometry(
@@ -465,7 +465,7 @@ def _y_motif(
             width=ray_width,
         ),
         dots=[
-            _circle(navy_dot[0], navy_dot[1], dot_radius, DARK_NAVY),
+            _circle(navy_dot[0], navy_dot[1], dot_radius, LIGHT_NAVY),
             _circle(orange_dot[0], orange_dot[1], dot_radius, ACCENT_ORANGE),
         ],
     )
@@ -487,7 +487,7 @@ def _pdf_y_letter(
         left=left,
         baseline_y=baseline_y,
         size=size,
-        color=DARK_NAVY,
+        color=LIGHT_NAVY,
         font=font,
     )
     navy_dot, orange_dot, reflection_point = _y_ray_geometry(
@@ -532,7 +532,7 @@ def _pdf_y_overlays(
         opacity=0.95,
         dasharray="9 7",
     )
-    _pdf_circle(ax, navy_dot[0], navy_dot[1], dot_radius, DARK_NAVY)
+    _pdf_circle(ax, navy_dot[0], navy_dot[1], dot_radius, LIGHT_NAVY)
     _pdf_circle(ax, orange_dot[0], orange_dot[1], dot_radius, ACCENT_ORANGE)
 
 
@@ -569,7 +569,7 @@ def _wordmark(font: FontProperties, *, include_tagline: bool) -> str:
         left=left,
         baseline_y=baseline_y,
         size=font_size,
-        color=DARK_NAVY,
+        color=LIGHT_NAVY,
         font=font,
         tracking=tracking,
     )
@@ -641,7 +641,7 @@ def _wordmark(font: FontProperties, *, include_tagline: bool) -> str:
             left=descender_x + text_gap,
             baseline_y=tagline_baseline_y,
             size=tagline_size,
-            color=DARK_NAVY,
+            color=LIGHT_NAVY,
             font=font,
         )
         elements.extend([fast, rest])
@@ -667,7 +667,7 @@ def _wordmark_pdf(font: FontProperties) -> bytes:
         left=left,
         baseline_y=baseline_y,
         size=font_size,
-        color=DARK_NAVY,
+        color=LIGHT_NAVY,
         font=font,
         tracking=tracking,
     )
@@ -738,7 +738,7 @@ def _wordmark_pdf(font: FontProperties) -> bytes:
         left=descender_x + text_gap,
         baseline_y=tagline_baseline_y,
         size=tagline_size,
-        color=DARK_NAVY,
+        color=LIGHT_NAVY,
         font=font,
     )
 
