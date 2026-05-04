@@ -132,8 +132,8 @@ html_static_path = ["_static"]
 html_last_updated_fmt = "%b %d, %Y"
 html_title = "LayTracer"
 html_short_title = "LayTracer"
-#html_logo = "_static/laytracer.png"
-#html_favicon = "_static/favicon.ico"
+html_logo = "_static/laytracer-logo-medium.svg"
+html_favicon = "_static/laytracer-icon.svg"
 html_extra_path = []
 pygments_style = "default"
 add_function_parentheses = False
@@ -154,12 +154,10 @@ else:
 # Theme config
 html_theme = "pydata_sphinx_theme"
 html_theme_options = {
-#     "logo_only": True,
-#     "display_version": True,
-#     "logo": {
-#         "image_light": "logo.png",
-#         "image_dark": "logo.png",
-#     }
+    "logo": {
+        "image_light": "laytracer-logo-medium.svg",
+        "image_dark": "laytracer-logo-medium.svg",
+    },
     "icon_links": [        
         {         
             "name": "GitHub",         
