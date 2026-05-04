@@ -248,8 +248,9 @@ def _y_ray_geometry(
         reflection_x = tx + 0.5 * (interval[0] + interval[1])
     else:
         reflection_x = left + 0.5 * bbox.width
+    reflection_x += 0.015 * size
 
-    dot_y = baseline_y - bbox.y1 - radius - 2.0
+    dot_y = baseline_y - bbox.y1 - radius - 3
     reflection_point = (reflection_x, boundary_y)
     ray_dx = ray_slope * (boundary_y - dot_y)
     navy_dot = (reflection_x - ray_dx, dot_y)
