@@ -36,8 +36,10 @@ FONT_PATH = Path(__file__).resolve().parent / "fonts" / "Poppins-SemiBold.ttf"
 STATIC_DIR = ROOT / "docs" / "source" / "_static"
 
 FULL_LOGO = STATIC_DIR / "laytracer-logo-full.svg"
+FULL_LOGO_WHITE = STATIC_DIR / "laytracer-logo-full-white.svg"
 FULL_LOGO_PDF = STATIC_DIR / "laytracer-logo-full.pdf"
 MEDIUM_LOGO = STATIC_DIR / "laytracer-logo-medium.svg"
+MEDIUM_LOGO_WHITE = STATIC_DIR / "laytracer-logo-medium-white.svg"
 ICON_LOGO = STATIC_DIR / "laytracer-icon.svg"
 ICON_CIRCLE_LOGO = STATIC_DIR / "laytracer-icon-circle.svg"
 
@@ -266,8 +268,23 @@ def _pdf_circle(
     )
 
 
-def _svg(width: float, height: float, elements: list[str]) -> str:
-    body = "\n  ".join(elements)
+def _svg(
+    width: float,
+    height: float,
+    elements: list[str],
+    *,
+    background_color: str | None = None,
+) -> str:
+    body_elements = list(elements)
+    if background_color is not None:
+        body_elements.insert(
+            0,
+            (
+                f'<rect x="0" y="0" width="{_fmt(width)}" '
+                f'height="{_fmt(height)}" fill="{background_color}"/>'
+            ),
+        )
+    body = "\n  ".join(body_elements)
     return (
         '<?xml version="1.0" encoding="UTF-8"?>\n'
         f'<svg xmlns="http://www.w3.org/2000/svg" width="{_fmt(width)}" '
@@ -567,7 +584,12 @@ def _chord_x_range(
     return center_x - half_width, center_x + half_width
 
 
-def _wordmark(font: FontProperties, *, include_tagline: bool) -> str:
+def _wordmark(
+    font: FontProperties,
+    *,
+    include_tagline: bool,
+    background_color: str | None = None,
+) -> str:
     height = 180.0 if include_tagline else 168.0
     left = 56.0
     baseline_y = 104.0
@@ -666,7 +688,12 @@ def _wordmark(font: FontProperties, *, include_tagline: bool) -> str:
         elements.extend([fast, rest])
         right_edge = max(right_edge, rest_box.right)
 
-    return _svg(right_edge + left_padding, height, elements)
+    return _svg(
+        right_edge + left_padding,
+        height,
+        elements,
+        background_color=background_color,
+    )
 
 
 def _wordmark_pdf(font: FontProperties) -> bytes:
@@ -845,7 +872,17 @@ def _render_assets() -> tuple[dict[Path, str], dict[Path, bytes]]:
     font = FontProperties(fname=str(FONT_PATH))
     svg_assets = {
         FULL_LOGO: _wordmark(font, include_tagline=True),
+        FULL_LOGO_WHITE: _wordmark(
+            font,
+            include_tagline=True,
+            background_color=WHITE,
+        ),
         MEDIUM_LOGO: _wordmark(font, include_tagline=False),
+        MEDIUM_LOGO_WHITE: _wordmark(
+            font,
+            include_tagline=False,
+            background_color=WHITE,
+        ),
         ICON_LOGO: _icon_plain(font),
         ICON_CIRCLE_LOGO: _icon_circle(font),
     }

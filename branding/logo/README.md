@@ -27,24 +27,28 @@ The orange point marks the source-side ray branch, and the navy point marks the 
 - Light navy `#255699`: `Lay`, receiver/reflected point, and navy tagline text.
 - Accent orange `#FF6A1A`: `Tracer`, source point, and `FAST TWO-POINT` in the full logo tagline.
 - Light gray-blue `#9AA7B2`: layer-boundary interface line and dashed ray overlays.
-- White `#FFFFFF`: background fill for the circular icon variant.
+- White `#FFFFFF`: background fill for the circular icon and white-background logo variants.
 
 ## Outputs
 
 The generator writes:
 
 - `docs/source/_static/laytracer-logo-full.svg`
+- `docs/source/_static/laytracer-logo-full-white.svg`
 - `docs/source/_static/laytracer-logo-full.pdf`
 - `docs/source/_static/laytracer-logo-medium.svg`
+- `docs/source/_static/laytracer-logo-medium-white.svg`
 - `docs/source/_static/laytracer-icon.svg`
 - `docs/source/_static/laytracer-icon-circle.svg`
 
 ## Usage
 
 - `laytracer-logo-full.svg` is shown near the top of the repository `README.md`.
+- `laytracer-logo-full-white.svg` is the full logo variant for surfaces that require an explicit white background.
 - `laytracer-logo-full.svg` is shown on the HTML documentation index page after the `Overview` heading.
 - `laytracer-logo-full.pdf` is the PDF-compatible full logo used on the LaTeX title page.
 - `laytracer-logo-medium.svg` is used as the Sphinx/pydata theme header logo in `docs/source/conf.py`.
+- `laytracer-logo-medium-white.svg` is the medium logo variant for surfaces that require an explicit white background.
 - `laytracer-icon-circle.svg` is used as the Sphinx favicon in `docs/source/conf.py`.
 - `laytracer-icon.svg` is the plain icon variant for contexts that do not need a circular background.
 
