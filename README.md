@@ -438,9 +438,9 @@ If you use a specific version, please cite that version's DOI (available on the 
   title        = {{LayTracer}: {F}ast two-point seismic ray tracing in layered media},
   year         = {2026},
   publisher    = {Zenodo},
-  version      = {0.3.0},    
+  version      = {0.4.0},    
   license      = {MIT},
-  doi          = {10.5281/zenodo.19020694},
+  doi          = {10.5281/zenodo.19983599},
   url          = {https://github.com/danikiev/LayTracer}
 }
 ```
