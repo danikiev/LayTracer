@@ -6,10 +6,12 @@ Overview
 
 .. only:: html
 
-   .. image:: _static/laytracer-logo-full.svg
-      :alt: LayTracer logo
-      :align: center
-      :width: 520px
+   .. container:: laytracer-index-logo
+
+      .. image:: _static/laytracer-logo-full.svg
+         :alt: LayTracer logo
+         :align: center
+         :width: 520px
 
 **LayTracer** is an open-source Python package for computing ray paths, travel times, and amplitude attributes in horizontally layered (1D) velocity models with constant layer velocities. It is based on the dimensionless ray parameter method of :cite:t:`FangChen2019`, achieving rapid convergence.
 

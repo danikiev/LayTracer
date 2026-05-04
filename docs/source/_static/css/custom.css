@@ -19,3 +19,10 @@ html[data-theme="dark"] .sd-card .sd-card-header {
 html[data-theme="dark"] {
     --sd-color-card-background: #222832;
 }
+
+.laytracer-index-logo,
+.laytracer-index-logo a,
+.laytracer-index-logo img {
+    background: transparent !important;
+    box-shadow: none !important;
+}
