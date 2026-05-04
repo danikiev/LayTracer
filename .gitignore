@@ -25,6 +25,7 @@ laytracer/version.py
 *.png
 *.jpeg
 *.pdf
+!docs/source/_static/laytracer-logo-full.pdf
 
 # Cache
 .cache

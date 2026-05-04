@@ -118,7 +118,7 @@ if version == "unknown":
 author = "Denis Anikiev"
 year = datetime.date.today().year
 project = "LayTracer"
-project_summary = "Fast two-point seismic ray tracing in 1-D layered media"
+project_summary = "Fast two-point seismic ray tracing in layered media"
 copyright = f"{year}, {author}"
 
 
@@ -220,6 +220,8 @@ bibtex_reference_style = "author_year"
 suppress_warnings = ["bibtex.duplicate_label", "bibtex.duplicate_citation", "design.fa-build"]
 
 # Latex Setup for conversion to PDF
+latex_logo = "_static/laytracer-logo-full.pdf"
+
 latex_elements = {
     'releasename': 'version',
     'preamble': r'''
@@ -241,10 +243,14 @@ latex_elements = {
     'maketitle': rf'''
 \begin{{titlepage}}
 \centering
-\vspace*{{4cm}}
-{{\Huge {project} \par}}
+\vspace*{{2.2cm}}
+\begin{{center}}
+\sphinxincludegraphics[width=\textwidth]{{laytracer-logo-full.pdf}}\par
+\end{{center}}
+%\vspace{{1.2cm}}
+%{{\Huge {project} \par}}
 \vspace{{1.2cm}}
-{{\Large {project_summary} \par}}
+%{{\Large {project_summary} \par}}
 \vfill
 {{\Large {author} \par}}
 \vspace{{0.3cm}}

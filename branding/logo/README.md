@@ -1,6 +1,6 @@
 # LayTracer Logo Assets
 
-This folder contains the source code and vendored Poppins font needed to regenerate the LayTracer SVG logo assets. The generated SVG files are committed under `docs/source/_static/` so they can be used directly by the README and Sphinx documentation.
+This folder contains the source code and vendored Poppins font needed to regenerate the LayTracer logo assets. The generated SVG and PDF files are committed under `docs/source/_static/` so they can be used directly by the README and Sphinx documentation.
 
 Run from the LayTracer repository root:
 
@@ -8,7 +8,7 @@ Run from the LayTracer repository root:
 conda run -n laytracer python branding/logo/generate_logos.py
 ```
 
-Check whether the committed SVG files are up to date:
+Check whether the committed logo files are up to date:
 
 ```powershell
 conda run -n laytracer python branding/logo/generate_logos.py --check
@@ -34,6 +34,7 @@ The orange point marks the source-side ray branch, and the dark navy point marks
 The generator writes:
 
 - `docs/source/_static/laytracer-logo-full.svg`
+- `docs/source/_static/laytracer-logo-full.pdf`
 - `docs/source/_static/laytracer-logo-medium.svg`
 - `docs/source/_static/laytracer-icon.svg`
 - `docs/source/_static/laytracer-icon-circle.svg`
@@ -41,6 +42,8 @@ The generator writes:
 ## Usage
 
 - `laytracer-logo-full.svg` is shown near the top of the repository `README.md`.
+- `laytracer-logo-full.svg` is shown on the HTML documentation index page after the `Overview` heading.
+- `laytracer-logo-full.pdf` is the PDF-compatible full logo used on the LaTeX title page.
 - `laytracer-logo-medium.svg` is used as the Sphinx/pydata theme header logo in `docs/source/conf.py`.
 - `laytracer-icon-circle.svg` is used as the Sphinx favicon in `docs/source/conf.py`.
 - `laytracer-icon.svg` is the plain icon variant for contexts that do not need a circular background.

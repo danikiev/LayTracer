@@ -1,23 +1,29 @@
-"""Generate the LayTracer SVG logo assets.
+"""Generate the LayTracer logo assets.
 
 Run from the repository root:
 
     python branding/logo/generate_logos.py
 
-Use ``--check`` to verify that committed SVG files are up to date.
+Use ``--check`` to verify that committed logo files are up to date.
 """
 
 from __future__ import annotations
 
 import argparse
+from io import BytesIO
 import sys
 from dataclasses import dataclass
 from math import sqrt
 from pathlib import Path
 
+from matplotlib.figure import Figure
 from matplotlib.font_manager import FontProperties
+from matplotlib.lines import Line2D
 from matplotlib.path import Path as MplPath
+from matplotlib.patches import Circle as MplCircle
+from matplotlib.patches import PathPatch
 from matplotlib.textpath import TextPath
+from matplotlib.transforms import Affine2D
 
 
 DARK_NAVY = "#0B1F3B"
@@ -30,6 +36,7 @@ FONT_PATH = Path(__file__).resolve().parent / "fonts" / "Poppins-SemiBold.ttf"
 STATIC_DIR = ROOT / "docs" / "source" / "_static"
 
 FULL_LOGO = STATIC_DIR / "laytracer-logo-full.svg"
+FULL_LOGO_PDF = STATIC_DIR / "laytracer-logo-full.pdf"
 MEDIUM_LOGO = STATIC_DIR / "laytracer-logo-medium.svg"
 ICON_LOGO = STATIC_DIR / "laytracer-icon.svg"
 ICON_CIRCLE_LOGO = STATIC_DIR / "laytracer-icon-circle.svg"
@@ -114,6 +121,79 @@ def _text_element(
     return element, box
 
 
+def _pdf_canvas(width: float, height: float) -> tuple[Figure, object]:
+    fig = Figure(figsize=(width / 72.0, height / 72.0), dpi=72)
+    ax = fig.add_axes((0, 0, 1, 1))
+    ax.set_xlim(0, width)
+    ax.set_ylim(height, 0)
+    ax.set_axis_off()
+    return fig, ax
+
+
+def _pdf_text_element(
+    ax,
+    text: str,
+    *,
+    left: float,
+    baseline_y: float,
+    size: float,
+    color: str,
+    font: FontProperties,
+) -> TextBox:
+    path = _text_path(text, size, font)
+    bbox = path.get_extents()
+    tx = left - bbox.x0
+    transform = Affine2D().scale(1.0, -1.0).translate(tx, baseline_y)
+    patch = PathPatch(
+        path,
+        facecolor=color,
+        edgecolor="none",
+        linewidth=0,
+        transform=transform + ax.transData,
+    )
+    ax.add_patch(patch)
+    return TextBox(
+        left=left,
+        right=left + bbox.width,
+        top=baseline_y - bbox.y1,
+        bottom=baseline_y - bbox.y0,
+    )
+
+
+def _pdf_tracked_text_elements(
+    ax,
+    text: str,
+    *,
+    left: float,
+    baseline_y: float,
+    size: float,
+    color: str,
+    font: FontProperties,
+    tracking: float,
+) -> TextBox:
+    boxes: list[TextBox] = []
+    cursor = left
+    for letter in text:
+        box = _pdf_text_element(
+            ax,
+            letter,
+            left=cursor,
+            baseline_y=baseline_y,
+            size=size,
+            color=color,
+            font=font,
+        )
+        boxes.append(box)
+        cursor = box.right + tracking
+
+    return TextBox(
+        left=min(box.left for box in boxes),
+        right=max(box.right for box in boxes),
+        top=min(box.top for box in boxes),
+        bottom=max(box.bottom for box in boxes),
+    )
+
+
 def _line(
     x1: float,
     y1: float,
@@ -139,6 +219,36 @@ def _circle(cx: float, cy: float, radius: float, color: str) -> str:
         f'<circle cx="{_fmt(cx)}" cy="{_fmt(cy)}" r="{_fmt(radius)}" '
         f'fill="{color}"/>'
     )
+
+
+def _pdf_line(
+    ax,
+    x1: float,
+    y1: float,
+    x2: float,
+    y2: float,
+    *,
+    color: str,
+    width: float,
+    opacity: float | None = None,
+    dasharray: str | None = None,
+) -> None:
+    line = Line2D(
+        [x1, x2],
+        [y1, y2],
+        color=color,
+        linewidth=width,
+        alpha=opacity,
+        solid_capstyle="round",
+        dash_capstyle="round",
+    )
+    if dasharray:
+        line.set_dashes([float(value) for value in dasharray.split()])
+    ax.add_line(line)
+
+
+def _pdf_circle(ax, cx: float, cy: float, radius: float, color: str) -> None:
+    ax.add_patch(MplCircle((cx, cy), radius, facecolor=color, edgecolor="none"))
 
 
 def _svg(width: float, height: float, elements: list[str]) -> str:
@@ -361,6 +471,71 @@ def _y_motif(
     )
 
 
+def _pdf_y_letter(
+    ax,
+    *,
+    left: float,
+    baseline_y: float,
+    size: float,
+    font: FontProperties,
+    boundary_y: float,
+    dot_radius: float = 9.0,
+) -> tuple[TextBox, tuple[float, float], tuple[float, float], tuple[float, float]]:
+    box = _pdf_text_element(
+        ax,
+        "y",
+        left=left,
+        baseline_y=baseline_y,
+        size=size,
+        color=DARK_NAVY,
+        font=font,
+    )
+    navy_dot, orange_dot, reflection_point = _y_ray_geometry(
+        left=left,
+        baseline_y=baseline_y,
+        size=size,
+        font=font,
+        boundary_y=boundary_y,
+        radius=dot_radius,
+    )
+    return box, navy_dot, orange_dot, reflection_point
+
+
+def _pdf_y_overlays(
+    ax,
+    navy_dot: tuple[float, float],
+    orange_dot: tuple[float, float],
+    reflection_point: tuple[float, float],
+    *,
+    dot_radius: float = 9.0,
+    ray_width: float = 4.0,
+) -> None:
+    _pdf_line(
+        ax,
+        navy_dot[0],
+        navy_dot[1],
+        reflection_point[0],
+        reflection_point[1],
+        color=LIGHT_GRAY_BLUE,
+        width=ray_width,
+        opacity=0.95,
+        dasharray="9 7",
+    )
+    _pdf_line(
+        ax,
+        reflection_point[0],
+        reflection_point[1],
+        orange_dot[0],
+        orange_dot[1],
+        color=LIGHT_GRAY_BLUE,
+        width=ray_width,
+        opacity=0.95,
+        dasharray="9 7",
+    )
+    _pdf_circle(ax, navy_dot[0], navy_dot[1], dot_radius, DARK_NAVY)
+    _pdf_circle(ax, orange_dot[0], orange_dot[1], dot_radius, ACCENT_ORANGE)
+
+
 def _chord_x_range(
     *,
     center_x: float,
@@ -474,6 +649,109 @@ def _wordmark(font: FontProperties, *, include_tagline: bool) -> str:
     return _svg(width, height, elements)
 
 
+def _wordmark_pdf(font: FontProperties) -> bytes:
+    width = 800.0
+    height = 180.0
+    left = 56.0
+    baseline_y = 104.0
+    y_shift = 14.0
+    boundary_y = 120.0
+    font_size = 128.0
+    tracking = 7.0
+    y_gap = 24.0
+
+    fig, ax = _pdf_canvas(width, height)
+    la_box = _pdf_tracked_text_elements(
+        ax,
+        "La",
+        left=left,
+        baseline_y=baseline_y,
+        size=font_size,
+        color=DARK_NAVY,
+        font=font,
+        tracking=tracking,
+    )
+    y_left = la_box.right + y_gap
+    y_box, navy_dot, orange_dot, reflection_point = _pdf_y_letter(
+        ax,
+        left=y_left,
+        baseline_y=baseline_y + y_shift,
+        size=font_size,
+        font=font,
+        boundary_y=boundary_y,
+    )
+    tracer_box = _pdf_tracked_text_elements(
+        ax,
+        "Tracer",
+        left=y_box.right + y_gap,
+        baseline_y=baseline_y,
+        size=font_size,
+        color=ACCENT_ORANGE,
+        font=font,
+        tracking=tracking,
+    )
+
+    _pdf_line(
+        ax,
+        la_box.left - 14.0,
+        boundary_y,
+        tracer_box.right + 16.0,
+        boundary_y,
+        color=LIGHT_GRAY_BLUE,
+        width=10.0,
+    )
+    # Move the boundary behind the wordmark while preserving the exact geometry.
+    ax.lines[-1].set_zorder(-1)
+    _pdf_y_overlays(ax, navy_dot, orange_dot, reflection_point)
+
+    tagline_size = 17.0
+    tagline_baseline_y = boundary_y + 27.0
+    descender_x = _y_center_at_svg_y(
+        left=y_left,
+        baseline_y=baseline_y + y_shift,
+        size=font_size,
+        font=font,
+        svg_y=tagline_baseline_y - 0.5 * tagline_size,
+    )
+    text_gap = 24.0
+    _, fast_box = _text_element(
+        TAGLINE_FAST,
+        left=0.0,
+        baseline_y=tagline_baseline_y,
+        size=tagline_size,
+        color=ACCENT_ORANGE,
+        font=font,
+    )
+    fast_width = fast_box.right - fast_box.left
+    _pdf_text_element(
+        ax,
+        TAGLINE_FAST,
+        left=descender_x - text_gap - fast_width,
+        baseline_y=tagline_baseline_y,
+        size=tagline_size,
+        color=ACCENT_ORANGE,
+        font=font,
+    )
+    _pdf_text_element(
+        ax,
+        TAGLINE_REST,
+        left=descender_x + text_gap,
+        baseline_y=tagline_baseline_y,
+        size=tagline_size,
+        color=DARK_NAVY,
+        font=font,
+    )
+
+    output = BytesIO()
+    fig.savefig(
+        output,
+        format="pdf",
+        transparent=True,
+        metadata={"Creator": "LayTracer logo generator", "CreationDate": None},
+    )
+    return output.getvalue()
+
+
 def _icon(font: FontProperties, *, include_circle: bool = False) -> str:
     width = 180.0
     height = 180.0
@@ -533,29 +811,38 @@ def _icon_circle(font: FontProperties) -> str:
     return _icon(font, include_circle=True)
 
 
-def _render_assets() -> dict[Path, str]:
+def _render_assets() -> tuple[dict[Path, str], dict[Path, bytes]]:
     if not FONT_PATH.exists():
         raise FileNotFoundError(f"Missing vendored font: {FONT_PATH}")
     font = FontProperties(fname=str(FONT_PATH))
-    return {
+    svg_assets = {
         FULL_LOGO: _wordmark(font, include_tagline=True),
         MEDIUM_LOGO: _wordmark(font, include_tagline=False),
         ICON_LOGO: _icon_plain(font),
         ICON_CIRCLE_LOGO: _icon_circle(font),
     }
+    pdf_assets = {
+        FULL_LOGO_PDF: _wordmark_pdf(font),
+    }
+    return svg_assets, pdf_assets
 
 
-def _write_assets(assets: dict[Path, str]) -> None:
+def _write_assets(svg_assets: dict[Path, str], pdf_assets: dict[Path, bytes]) -> None:
     STATIC_DIR.mkdir(parents=True, exist_ok=True)
-    for path, content in assets.items():
+    for path, content in svg_assets.items():
         with path.open("w", encoding="utf-8", newline="\n") as handle:
             handle.write(content)
+    for path, content in pdf_assets.items():
+        path.write_bytes(content)
 
 
-def _check_assets(assets: dict[Path, str]) -> int:
+def _check_assets(svg_assets: dict[Path, str], pdf_assets: dict[Path, bytes]) -> int:
     stale: list[str] = []
-    for path, expected in assets.items():
+    for path, expected in svg_assets.items():
         if not path.exists() or path.read_text(encoding="utf-8") != expected:
+            stale.append(str(path.relative_to(ROOT)))
+    for path, expected in pdf_assets.items():
+        if not path.exists() or path.read_bytes() != expected:
             stale.append(str(path.relative_to(ROOT)))
 
     if stale:
@@ -574,16 +861,16 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--check",
         action="store_true",
-        help="fail if generated SVG assets differ from committed files",
+        help="fail if generated logo assets differ from committed files",
     )
     args = parser.parse_args(argv)
 
-    assets = _render_assets()
+    svg_assets, pdf_assets = _render_assets()
     if args.check:
-        return _check_assets(assets)
+        return _check_assets(svg_assets, pdf_assets)
 
-    _write_assets(assets)
-    for path in assets:
+    _write_assets(svg_assets, pdf_assets)
+    for path in [*svg_assets, *pdf_assets]:
         print(f"Wrote {path.relative_to(ROOT)}")
     return 0
 
