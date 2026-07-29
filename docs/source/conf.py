@@ -217,7 +217,15 @@ def setup(app):
 bibtex_bibfiles = ["references.bib"]
 #bibtex_default_style = "unsrt"
 bibtex_reference_style = "author_year"
-suppress_warnings = ["bibtex.duplicate_label", "bibtex.duplicate_citation", "design.fa-build"]
+# ``sphinx_gallery_conf`` intentionally contains ``ExampleTitleSortKey``.  It
+# cannot be pickled by Sphinx's environment cache, but this does not affect the
+# rendered documentation or gallery ordering.
+suppress_warnings = [
+    "bibtex.duplicate_label",
+    "bibtex.duplicate_citation",
+    "design.fa-build",
+    "config.cache",
+]
 
 # Latex Setup for conversion to PDF
 latex_logo = "_static/laytracer-logo-full.pdf"

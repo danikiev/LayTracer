@@ -16,12 +16,16 @@ Solver
 .. autosummary::
    solve
    RayResult
+   SolveDiagnostics
 
 Multi-ray
 ~~~~~~~~~
 .. autosummary::
    trace_rays
    TraceResult
+   Interaction
+   RayItinerary
+   RaySensitivity
 
 Amplitude
 ~~~~~~~~~
@@ -43,6 +47,7 @@ Visualisation
 from .model import LayerStack, ModelArrays, build_layer_stack
 from .solver import (
     RayResult,
+    SolveDiagnostics,
     solve,
     offset,
     offset_dq,
@@ -61,7 +66,8 @@ from .amplitude import (
     find_brewster_angles,
     normalize_rt_coefficient,
 )
-from .api import TraceResult, trace_rays
+from .api import Interaction, RayItinerary, TraceResult, trace_rays
+from .sensitivity import RaySensitivity
 from . import plot
 
 try:
@@ -76,6 +82,7 @@ __all__ = [
     "build_layer_stack",
     # solver
     "RayResult",
+    "SolveDiagnostics",
     "solve",
     "offset",
     "offset_dq",
@@ -94,6 +101,9 @@ __all__ = [
     "normalize_rt_coefficient",
     # api
     "TraceResult",
+    "Interaction",
+    "RayItinerary",
+    "RaySensitivity",
     "trace_rays",
     # visualisation
     "plot",

@@ -34,17 +34,15 @@ Overview
 
 **Features:**
 
-* Fast two-point ray tracing via dimensionless ray parameter method
-* Second-order Newton iteration for rapid convergence
-* Refraction and reflection modes
-* Inline computation of travel time, attenuation operator :math:`t^*`, geometrical spreading, and reflection/transmission coefficients
+* Checked two-point solves using the dimensionless ray parameter
+* Explicit prescribed reflected, transmitted, converted, and multiple paths
+* Opt-in numerical diagnostics and sparse fixed-topology sensitivities
+* Travel time, attenuation, and relative spreading/coefficient attributes
 * Efficient parallel computations via `Joblib <https://joblib.readthedocs.io/>`_
 * Standalone `Matplotlib <https://matplotlib.org/>`_ / `Plotly <https://plotly.com/>`_ visualisation
 * Comprehensive `Sphinx <https://www.sphinx-doc.org/>`_ documentation with extensive theory available at `danikiev.github.io/LayTracer <https://danikiev.github.io/LayTracer>`_
 
 .. only:: html
-
-   ----
 
    **Quick Links:**
 

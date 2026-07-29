@@ -389,6 +389,129 @@ class TestSpreading:
         assert res.spreading is not None
         assert res.spreading > 0
 
+    def test_reflected_spreading_uses_receiver_side_velocity(self):
+        """An upgoing final leg must use its shallow receiver velocity."""
+        h_leg = np.array([1000.0, 1000.0])
+        v_leg = np.array([3000.0, 5000.0])
+        common = {
+            "h": h_leg,
+            "v": v_leg,
+            "vp": v_leg,
+            "vs": v_leg / 1.732,
+            "rho": np.array([2200.0, 2500.0]),
+            "qp": np.array([200.0, 300.0]),
+            "qs": np.array([100.0, 150.0]),
+            "phase": "P",
+        }
+        segments = [
+            {**common, "start_z": 0.0, "end_z": 2000.0},
+            {**common, "start_z": 2000.0, "end_z": 0.0},
+        ]
+        h = np.concatenate([h_leg, h_leg])
+        v = np.concatenate([v_leg, v_leg])
+        target = 5000.0
+        res = laytracer.solve(
+            h,
+            v,
+            segments,
+            [],
+            target,
+            z_src=0.0,
+            z_rcv=0.0,
+            requested={"travel_times", "ray_parameters", "spreading"},
+            tol=1e-10,
+        )
+
+        p = res.ray_parameter
+        vmax = float(v.max())
+        q = q_from_p(p, vmax)
+        dxdq = offset_dq(q, h, v / vmax)
+        dxdp = dxdq * vmax / (1.0 - (p * vmax) ** 2) ** 1.5
+        endpoint_cosine = np.sqrt(1.0 - (p * 3000.0) ** 2)
+        expected = np.sqrt(target * abs(dxdp) * endpoint_cosine**2 / p)
+        assert res.spreading == pytest.approx(expected, rel=1e-10)
+
+
+class TestRequestedPropertyValidation:
+    def test_tstar_requires_q_for_traversed_phase(self):
+        h = np.array([500.0, 500.0])
+        v = np.array([3000.0, 4000.0])
+        segment = {
+            "h": h, "v": v, "vp": v, "vs": v / 1.732,
+            "rho": np.array([2200.0, 2400.0]),
+            "qp": None, "qs": None, "phase": "P",
+            "start_z": 0.0, "end_z": 1000.0,
+        }
+        with pytest.raises(ValueError, match="QP is required"):
+            laytracer.solve(
+                h, v, [segment], [], 1000.0, 0.0, 1000.0,
+                requested={"travel_times", "tstar"},
+            )
+
+    def test_horizontal_fast_path_requires_q_when_tstar_requested(self):
+        model = pd.DataFrame({
+            "Depth": [0.0],
+            "Vp": [3000.0],
+            "Vs": [1700.0],
+        })
+        with pytest.raises(ValueError, match="Qp is required"):
+            laytracer.trace_rays(
+                np.array([0.0, 0.0, 100.0]),
+                np.array([1000.0, 0.0, 100.0]),
+                model,
+                requested={"travel_times", "tstar"},
+                verbose=False,
+            )
+
+    def test_coefficients_require_density_only_when_requested(self):
+        h = np.array([500.0, 500.0])
+        v = np.array([3000.0, 4000.0])
+        segment = {
+            "h": h, "v": v, "vp": v, "vs": v / 1.732,
+            "rho": None, "qp": np.array([200.0, 200.0]),
+            "qs": np.array([100.0, 100.0]), "phase": "P",
+            "start_z": 0.0, "end_z": 1000.0,
+        }
+        result = laytracer.solve(
+            h, v, [segment], [], 1000.0, 0.0, 1000.0,
+            requested={"travel_times"},
+        )
+        assert np.isfinite(result.travel_time)
+        with pytest.raises(ValueError, match="Rho is required"):
+            laytracer.solve(
+                h, v, [segment], [], 1000.0, 0.0, 1000.0,
+                requested={"travel_times", "trans_product"},
+            )
+
+    def test_complex_product_preserves_phase_and_legacy_magnitude(self):
+        h = np.array([500.0, 500.0])
+        vp = np.array([3000.0, 4500.0])
+        segment = {
+            "h": h, "v": vp, "vp": vp,
+            "vs": np.array([1700.0, 2500.0]),
+            "rho": np.array([2200.0, 2500.0]),
+            "qp": np.array([200.0, 300.0]),
+            "qs": np.array([100.0, 150.0]),
+            "phase": "P", "start_z": 0.0, "end_z": 1000.0,
+        }
+        result = laytracer.solve(
+            h,
+            vp,
+            [segment],
+            [],
+            1200.0,
+            0.0,
+            1000.0,
+            requested={
+                "travel_times", "trans_product",
+                "complex_coefficient_product",
+            },
+        )
+        assert np.iscomplexobj(result.complex_coefficient_product)
+        assert result.trans_product == pytest.approx(
+            abs(result.complex_coefficient_product), rel=1e-12
+        )
+
 # =====================================================================================================================================================================================================================
 #  Brewster-angle detection
 # =====================================================================================================================================================================================================================

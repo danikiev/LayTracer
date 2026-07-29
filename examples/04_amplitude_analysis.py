@@ -298,6 +298,12 @@ refr_df = pd.DataFrame({
 def v_func(z):
     return 5000.0 - 0.5 * z
 grad_df = discretize_gradient_layer(0.0, 3000.0, v_func, dz=50.0)
+# ``discretize_gradient_layer`` provides the kinematic model and density.  This
+# amplitude and attenuation comparison also requests t*, so specify the
+# constant attenuation model explicitly rather than relying on an implicit
+# missing-property convention.
+grad_df["Qp"] = 300.0
+grad_df["Qs"] = 150.0
 
 src_p = np.array([0.0, 0.0, 0.0])
 offsets = np.arange(500, 15001, 100)

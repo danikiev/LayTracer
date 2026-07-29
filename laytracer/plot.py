@@ -421,9 +421,7 @@ def rays_2d(
     matplotlib.axes.Axes
     """
     import matplotlib.pyplot as plt
-    from matplotlib.patches import Rectangle
-    from matplotlib.collections import PatchCollection
-    import matplotlib.cm as cm
+    from matplotlib.cm import ScalarMappable
     from matplotlib.colors import Normalize, BoundaryNorm, ListedColormap
 
     if ax is None:
@@ -471,15 +469,15 @@ def rays_2d(
             step = (vmax - vmin) / (len(unique_vels) - 1) if len(unique_vels) > 1 else 1.0
             bounds = np.concatenate(([vmin - step/2], mids, [vmax + step/2]))
             
-            cmap = layer_cmap or cm.get_cmap("viridis", len(unique_vels))
+            cmap = layer_cmap or plt.get_cmap("viridis", len(unique_vels))
             norm = BoundaryNorm(bounds, cmap.N)
         elif discrete_colorbar and len(unique_vels) == 1:
             # Single unique velocity — one discrete colour, tick at exact value
             bounds = np.array([vmin - 0.5, vmax + 0.5])
-            cmap = layer_cmap or cm.get_cmap("viridis", 1)
+            cmap = layer_cmap or plt.get_cmap("viridis", 1)
             norm = BoundaryNorm(bounds, cmap.N)
         else:
-            cmap = layer_cmap or cm.get_cmap("viridis")
+            cmap = layer_cmap or plt.get_cmap("viridis")
             # Guard against vmin == vmax (e.g. single-velocity model)
             if vmin == vmax:
                 norm = Normalize(vmin=vmin - 1.0, vmax=vmax + 1.0)
@@ -499,8 +497,8 @@ def rays_2d(
         if receivers is not None:
             z_max_data = max(z_max_data, float(np.atleast_2d(receivers)[:, -1].max() / scale))
 
-        patches = []
         colors_list = []
+        layer_bounds = [depths[0] / scale]
         for i in range(n):
             z_top = depths[i] / scale
             
@@ -520,19 +518,34 @@ def rays_2d(
                 else:
                     z_bot = z_def
             
-            rect = Rectangle((x_lo, z_top), x_hi - x_lo, z_bot - z_top)
-            patches.append(rect)
             # Use the norm to map velocity to color
             colors_list.append(cmap(norm(vels[i])))
+            layer_bounds.append(z_bot)
 
-        pc = PatchCollection(patches, facecolor=colors_list, alpha=model_alpha, edgecolor="grey", linewidth=0.5)
-        ax.add_collection(pc)
+        # Use a QuadMesh so the layered background remains a collection for
+        # callers that inspect it, while avoiding PatchCollection's native
+        # path-transform failure in some Windows Matplotlib builds.  The
+        # nonuniform y grid preserves the physical layer thicknesses.
+        pc = ax.pcolormesh(
+            [x_lo, x_hi],
+            layer_bounds,
+            np.asarray(vels).reshape(-1, 1),
+            cmap=cmap,
+            norm=norm,
+            alpha=model_alpha,
+            edgecolors="grey",
+            linewidth=0.5,
+            shading="flat",
+        )
+        # Resolve colors immediately: this preserves the established
+        # ``get_facecolors`` behavior for custom layer colors before drawing.
+        pc.set_facecolor(colors_list)
         
         if add_colorbar:
             from mpl_toolkits.axes_grid1 import make_axes_locatable
             divider = make_axes_locatable(ax)
             
-            sm = cm.ScalarMappable(cmap=cmap, norm=norm)
+            sm = ScalarMappable(cmap=cmap, norm=norm)
             sm.set_array([])
             
             if colorbar_orientation == "horizontal":

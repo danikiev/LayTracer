@@ -4,8 +4,7 @@
 Methodology
 ===========
 
-This chapter presents the theoretical foundations of the ray tracing
-algorithm implemented in LayTracer.
+This chapter presents the theoretical foundations of the ray tracing algorithm implemented in LayTracer.
 
 ----
 
@@ -43,8 +42,27 @@ transverse, decoupled shear mode.
 
 ----
 
-Dimensionless ray parameter
+Prescribed phase itineraries
 ============================
+
+LayTracer solves a branch selected by the caller.  A
+:class:`~laytracer.RayItinerary` is an ordered sequence of interface
+interactions.  ``reflect`` reverses vertical propagation direction and
+``transmit`` retains it; each interaction also specifies the phase on the
+outgoing leg.  Every monotonic segment is split into atomic physical-layer
+legs, so a layer crossed more than once contributes more than once to the
+offset and traveltime while retaining one physical model-parameter index.
+
+The legacy ``reflection`` and ``refraction`` tuple arguments compile to the
+same representation.  In that legacy spelling, ``refraction`` denotes a
+prescribed transmission or mode conversion.  It does not enumerate a
+critically refracted head wave.  The solver does not perform branch discovery,
+automatic phase search, or global first-arrival selection.
+
+----
+
+Dimensionless ray parameter
+===========================
 
 :cite:t:`FangChen2019` introduce a dimensionless parameter
 
@@ -98,7 +116,7 @@ Second derivative
 ----
 
 Asymptotic initial estimate
-============================
+===========================
 
 Two linear asymptotes of :math:`X(q)` provide an efficient initial guess
 (see "Initial estimate of q" in :cite:t:`FangChen2019`):
@@ -127,7 +145,7 @@ or far-field regime.
 ----
 
 Quadratic Newton iteration
-===========================
+==========================
 
 The two-point problem :math:`X(q) = X_R` is solved by second-order
 Newton iteration (see :cite:t:`FangChen2019`).  At each
@@ -139,8 +157,32 @@ step, :math:`X(q)` is expanded to second order about the current iterate
    + \bigl[X(q_i) - X_R\bigr] = 0
 
 This quadratic equation in :math:`\Delta q` yields two roots.  The root
-minimising :math:`|X(q_i + \Delta q) - X_R|` is selected.  Convergence
-is typically achieved within **2–3 iterations**.
+minimising :math:`|X(q_i + \Delta q) - X_R|` is selected.  The iteration is
+usually rapid, but convergence is not inferred from a fixed iteration count;
+the independently recomputed endpoint residual below is the acceptance test.
+
+----
+
+Safeguarding and numerical diagnostics
+======================================
+
+The production solve accepts a quadratic-iteration result only after
+independently recomputing :math:`X(q)-X_R`.  If the requested offset tolerance
+is not met, monotonicity of :math:`X(q)` is used to construct a bracket on
+:math:`q\in[0,\infty)` and Brent's method supplies a safeguarded root.  The
+returned :class:`~laytracer.SolveDiagnostics` record identifies the accepted
+route (``q_newton`` or ``q_brentq``), primary and fallback iteration counts,
+initial and final :math:`q` and :math:`p`, signed and absolute endpoint
+residuals, the criticality margin :math:`1-pv_{\max}`, and the dimensionless
+logarithmic slope
+
+.. math::
+   \kappa_q = \left|\frac{q}{X}\frac{\mathrm{d}X}{\mathrm{d}q}\right|.
+
+Diagnostics are opt-in and do not allocate per-ray diagnostic objects for
+ordinary calls.  Invalid itineraries and missing properties required by a
+requested output raise an explicit exception; they are not reported as a
+successful trace.
 
 ----
 
@@ -158,8 +200,46 @@ layer :math:`k`.  The total travel time is :math:`t = \sum_k \Delta t_k`.
 
 ----
 
+Fixed-topology analytic sensitivities
+=====================================
+
+For atomic leg :math:`j`, define
+
+.. math::
+   c_j=\sqrt{1-p^2v_j^2},\qquad
+   X_p=\sum_j\frac{h_jv_j}{c_j^3}.
+
+For a model parameter :math:`m`, implicit differentiation of the offset
+constraint and Fermat stationarity give
+
+.. math::
+   \frac{\mathrm{d}p}{\mathrm{d}m}=-\frac{X_m}{X_p},\qquad
+   \left.\frac{\mathrm{d}T}{\mathrm{d}m}\right|_X=T_m-pX_m.
+
+The per-leg velocity and vertical-thickness derivatives reduce to
+
+.. math::
+   \frac{\mathrm{d}T}{\mathrm{d}v_j}
+   =-\frac{h_j}{v_j^2c_j},\qquad
+   \frac{\mathrm{d}T}{\mathrm{d}h_j}=\frac{c_j}{v_j}.
+
+The implementation aggregates repeated leg contributions into sparse
+derivatives for :math:`V_P` and :math:`V_S` in each physical layer.  Signed
+incidence coefficients map thickness derivatives to interface-depth
+derivatives.  Endpoint derivatives are returned for source and receiver
+``x``, ``y``, and ``z`` coordinates, together with derivatives of the physical
+ray parameter :math:`p`.  Calculating the derivatives in :math:`p` avoids
+introducing an artificial discontinuity when the identity of the fastest
+traversed leg changes.
+
+These derivatives are local.  They are valid only while endpoint layer
+membership, the prescribed phase itinerary, and the propagating branch remain
+unchanged; critical or evanescent paths are marked invalid.
+
+----
+
 Attenuation operator :math:`t^*`
-=================================
+================================
 
 The attenuation operator (:cite:t:`AkiRichards2002`, Ch. 5) measures
 the cumulative dissipative loss of wave amplitude along the ray path. Since the
@@ -500,7 +580,16 @@ computed from the 2-D ray remains valid in 3-D:
 Thus, the layered-media solver operates in the 2-D incidence plane; the
 3-D ray geometry and scalar amplitude attributes are recovered by rotation.
 Full vector receiver components or source radiation patterns require an
-additional polarization/projection step.
+additional polarization/projection step.  The legacy ``trans_product`` is a
+real, nonnegative product of coefficient magnitudes.  Request
+``complex_coefficient_product`` separately when polarity and post-critical
+phase are needed; for the same compatible path,
+``trans_product == abs(complex_coefficient_product)``.  Neither coefficient
+product nor the spreading factor is a complete synthetic amplitude because
+source radiation, free-surface response, polarization projection, and
+finite-frequency effects are outside this operator.  Density and quality
+factor columns are validated only when an output that depends on them is
+requested.
 
 ----
 
