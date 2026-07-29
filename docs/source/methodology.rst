@@ -203,20 +203,58 @@ layer :math:`k`.  The total travel time is :math:`t = \sum_k \Delta t_k`.
 Fixed-topology analytic sensitivities
 =====================================
 
-For atomic leg :math:`j`, define
+Ray tracing predicts an arrival time; many practical tasks also need to know
+*why* that prediction changes.  For example, an event locator needs the
+Jacobian of travel time with respect to source position for a Gauss--Newton
+update, and a network-design or uncertainty study needs the Jacobian with
+respect to layer velocities and interface depths.  Those Jacobians turn small
+model perturbations into predicted arrival-time perturbations,
+
+.. math::
+   \delta\mathbf{t} \approx \mathbf{J}_m\,\delta\mathbf{m}
+   + \mathbf{J}_x\,\delta\mathbf{x}.
+
+They also permit first-order propagation of velocity-model uncertainty into an
+arrival-time covariance, for example
+:math:`\mathbf{C}_t = \mathbf{J}_m\mathbf{C}_m\mathbf{J}_m^\mathsf{T} + \mathbf{C}_{\mathrm{pick}}`.
+Without analytic derivatives, each column of these matrices normally requires
+several perturbed ray traces; the resulting finite differences are slower and
+can be noisy when the nonlinear ray solve is poorly conditioned.
+
+LayTracer therefore differentiates the *already solved* ray.  ``"Fixed
+topology"`` means that, over the small perturbation being considered, the ray
+retains the same ordered sequence of layer legs, phase conversions, and
+reflections.  It is the appropriate local approximation for a specified
+arrival (for example, a PP reflection from a selected interface) rather than
+an automatic comparison or switch between competing branches.  LayTracer
+returns the derivatives; selecting phases, defining an objective function, and
+performing the inversion remain the caller's responsibility.
+
+The ray parameter must change when a velocity, interface, source, or receiver
+is perturbed so that the ray still joins the same endpoints.  For atomic leg
+:math:`j`, define
 
 .. math::
    c_j=\sqrt{1-p^2v_j^2},\qquad
    X_p=\sum_j\frac{h_jv_j}{c_j^3}.
 
-For a model parameter :math:`m`, implicit differentiation of the offset
-constraint and Fermat stationarity give
+Here :math:`p` is the physical horizontal slowness, :math:`h_j` and :math:`v_j`
+are the leg thickness and phase velocity, and :math:`X_p` measures the local
+change in offset with ray parameter.  If :math:`X_m` and :math:`T_m` denote the
+partial offset and travel-time changes at fixed :math:`p`, implicit
+differentiation of the endpoint-offset constraint and Fermat stationarity give
 
 .. math::
    \frac{\mathrm{d}p}{\mathrm{d}m}=-\frac{X_m}{X_p},\qquad
    \left.\frac{\mathrm{d}T}{\mathrm{d}m}\right|_X=T_m-pX_m.
 
-The per-leg velocity and vertical-thickness derivatives reduce to
+The first expression is the small refraction-angle adjustment required to keep
+the endpoints fixed.  The second is the corresponding travel-time derivative:
+the direct effect of changing the parameter plus the effect of re-bending the
+ray, without tracing a separate perturbed ray.
+
+After this fixed-offset correction, the per-leg velocity and vertical-thickness
+building blocks reduce to
 
 .. math::
    \frac{\mathrm{d}T}{\mathrm{d}v_j}
@@ -224,7 +262,9 @@ The per-leg velocity and vertical-thickness derivatives reduce to
    \frac{\mathrm{d}T}{\mathrm{d}h_j}=\frac{c_j}{v_j}.
 
 The implementation aggregates repeated leg contributions into sparse
-derivatives for :math:`V_P` and :math:`V_S` in each physical layer.  Signed
+derivatives for :math:`V_P` and :math:`V_S` in each physical layer.  Thus a
+multiple that crosses one layer several times contributes to that layer's
+single model parameter rather than creating duplicate columns.  Signed
 incidence coefficients map thickness derivatives to interface-depth
 derivatives.  Endpoint derivatives are returned for source and receiver
 ``x``, ``y``, and ``z`` coordinates, together with derivatives of the physical
@@ -232,14 +272,17 @@ ray parameter :math:`p`.  Calculating the derivatives in :math:`p` avoids
 introducing an artificial discontinuity when the identity of the fastest
 traversed leg changes.
 
-These derivatives are local.  They are valid only while endpoint layer
-membership, the prescribed phase itinerary, and the propagating branch remain
-unchanged; critical or evanescent paths are marked invalid.
+These are deliberately **local** derivatives.  They are valid only while the
+endpoint layer membership, prescribed phase itinerary, and propagating branch
+remain unchanged.  A perturbation that moves an endpoint across an interface,
+creates or removes a leg, changes the selected arrival, or reaches a critical
+or evanescent path is outside this linearization; such sensitivity records are
+marked invalid rather than being silently extrapolated.
 
 ----
 
 Attenuation operator :math:`t^*`
-================================
+=================================
 
 The attenuation operator (:cite:t:`AkiRichards2002`, Ch. 5) measures
 the cumulative dissipative loss of wave amplitude along the ray path. Since the
@@ -336,7 +379,7 @@ and the system determinant
    D = EF + GH\,p^2.
 
 The complete :math:`4\times 4` scattering matrix
-(:cite:t:`AkiRichards2002`, Eqs. 5.38–5.40) is computed by LayTracer.
+(:cite:t:`AkiRichards2002`, Eqs. 5.38-5.40) is computed by LayTracer.
 The eight independent P-SV coefficients are listed below.
 
 **Incident P-wave** — reflection and transmission:
@@ -373,7 +416,7 @@ The eight independent P-SV coefficients are listed below.
 
 For references and details on the derivation of these formulas, see
 :cite:t:`LayWallace1995` (Table 3.1, note the sign error in the second
-term of :math:`b`) and :cite:t:`AkiRichards2002` (Equations 5.38–5.40).
+term of :math:`b`) and :cite:t:`AkiRichards2002` (Equations 5.38-5.40).
 
 For post-critical incidence the coefficients may become complex; for
 amplitude modelling the software uses :math:`|T_l|`.
@@ -553,7 +596,7 @@ has been computed, it is mapped back to 3-D Cartesian coordinates via
    Z_k &= z_k.
    \end{aligned}
 
-This simply *sweeps* the 2-D ray along the source–receiver azimuth.
+This simply *sweeps* the 2-D ray along the source-receiver azimuth.
 
 Validity of amplitude attributes
 ---------------------------------
