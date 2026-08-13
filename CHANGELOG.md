@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - ordered ``Interaction`` and ``RayItinerary`` objects for prescribed direct, reflected, transmitted, converted, and multiple phase paths
 - opt-in per-ray ``SolveDiagnostics`` with accepted solve route, iteration counts, transformed and physical ray parameters, independently recomputed endpoint residual, conditioning, and criticality margin
 - sparse fixed-topology analytic derivatives of traveltime and physical ray parameter with respect to layer ``Vp``/``Vs``, interface depths, and source and receiver coordinates
+- a visual sensitivity example showing how one converted reflection predicts nearby traveltime and physical-ray-parameter changes
 - optional ``complex_coefficient_product`` output alongside the established real coefficient-magnitude product
 - LayTracer logo and branding assets, including full, medium, icon, circular icon, and PDF-compatible logo variants (#12)
 - deterministic logo generation script under `branding/logo/` with vendored Poppins font assets and staleness checking (#12)

@@ -415,6 +415,7 @@ LayTracer/
 │   ├── 03_reflection_transmission.py
 │   ├── 04_amplitude_analysis.py
 │   ├── 05_homogeneous_equivalence.py
+│   ├── 06_visualizing_sensitivities.py
 │   └── README.txt
 ├── branding/                # Branding assets and logo source
 │   └── logo/                # Logo generator, vendored Poppins font, and usage docs
