@@ -281,6 +281,32 @@ figure.subplots_adjust(left=0.055, right=0.985, top=0.88, bottom=0.18, wspace=0.
 plt.show()
 
 ###############################################################################
+# **How to read this figure.** Panel (a) shows the selected ray in depth
+# section.  Blue is the downgoing P leg, magenta is the upgoing SV leg, and the
+# black dashed path is the independently retraced ray after moving the
+# reflector 100 m deeper.  Only the two layers above the reflector are crossed,
+# which explains why properties below it do not appear in the sensitivity
+# fingerprint.  The separation between the solid and dashed paths makes both
+# consequences of a perturbation tangible: the arrival time changes and the
+# takeoff direction changes.
+#
+# Panel (b) converts every raw traveltime derivative into the effect of the
+# labelled, physically small perturbation.  A marker to the left of zero means
+# an earlier arrival; a marker to the right means a later arrival.  For
+# example, increasing a sampled velocity shortens the traveltime, whereas
+# deepening either crossed interface lengthens the path and delays the arrival.
+# Equal and opposite horizontal source and receiver effects express the
+# translational symmetry of the layered model.
+#
+# Panel (c) applies the same perturbations to physical horizontal slowness
+# :math:`p`.  Changes in :math:`p` alter takeoff direction and ray bending.
+# Signs need not match those in panel (b): moving the reflector deeper delays
+# this arrival, for example, but changes the launch direction in the opposite
+# sense.  The shared colors connect each parameter class across panels (b) and
+# (c), while missing out-of-plane and below-reflector entries make the sparse
+# derivative structure visible.
+
+###############################################################################
 # Use the derivatives as a local predictor
 # ----------------------------------------
 #
@@ -432,6 +458,25 @@ figure.suptitle("One traced ray predicts nearby rays", fontsize=14)
 figure.subplots_adjust(left=0.07, right=0.985, top=0.84, bottom=0.25, wspace=0.34)
 plt.show()
 
+###############################################################################
+# **How to read this figure.** Panels (a) and (b) compare the derivative
+# prediction with a full retrace after simultaneously perturbing velocities,
+# interfaces, and endpoint coordinates.  Each dot is one deterministic nearby
+# model.  Dots on the dashed 1:1 line are exact first-order predictions; the
+# tight alignment shows that one sensitivity record predicts both the
+# traveltime change and the change in physical :math:`p` without tracing a
+# separate finite-difference ray for every parameter.
+#
+# Panel (c) repeats the same perturbation directions at one quarter, nominal,
+# and four times their original size.  The error is normalized by the size of
+# the actual response.  Both curves grow smoothly with distance from the
+# reference model, showing the expected local character of a linear
+# approximation.  The nominal perturbations remain close to the reference,
+# while the four-times case begins to show where retracing or a new
+# linearization point becomes useful.  The annotation below the panels states
+# the computational comparison: one analytic trace supplies 10 active
+# sensitivities, whereas centered finite differences would require 21 traces.
+
 # The analytic derivatives are local: the prediction is best for small changes
 # that preserve the endpoint layers, selected P-to-SV itinerary, and
 # propagating branch.  This first prediction experiment changes the model and
@@ -559,6 +604,19 @@ for spacing, count, rms_error, maximum_error in zip(
         f"RMS error {rms_error:.4f} ms, maximum error {maximum_error:.4f} ms"
     )
 
+# Trace three representative rays only for the geometry panel.  The prediction
+# itself still uses the 45 exact anchor pairs defined above.
+middle_source_index = len(dense_sources) // 2
+representative_receiver_indices = np.array([0, len(dense_receivers) // 2, len(dense_receivers) - 1])
+representative = trace_ps_reflection(
+    model,
+    dense_sources[middle_source_index],
+    dense_receivers[representative_receiver_indices],
+    {"travel_times", "rays"},
+)
+nominal_source_anchor_indices = anchor_indices(source_x, nominal_spacing)
+nominal_receiver_anchor_indices = anchor_indices(receiver_x, nominal_spacing)
+
 ###############################################################################
 # Plot prediction accuracy
 # ------------------------
@@ -567,9 +625,85 @@ for spacing, count, rms_error, maximum_error in zip(
 # times.  The full dense result remains the validation reference, not an input
 # to the prediction.
 
-figure, axes = plt.subplots(1, 3, figsize=(13.8, 4.5))
+figure, axes = plt.subplots(2, 2, figsize=(12.8, 8.2))
 
-axis = axes[0]
+axis = axes[0, 0]
+axis.axhspan(0.0, 1.2, color="#DCEAF4")
+axis.axhspan(1.2, 2.5, color="#B7D5E8")
+axis.axhline(1.2, color="white", linewidth=1.4)
+axis.axhline(2.5, color="#009E73", linewidth=1.3)
+for ray_index, ray in enumerate(representative.rays):
+    turning_index = int(np.argmax(ray[:, 2]))
+    alpha = 1.0 if ray_index == 1 else 0.42
+    linewidth = 2.2 if ray_index == 1 else 1.2
+    axis.plot(
+        ray[: turning_index + 1, 0] / 1000.0,
+        ray[: turning_index + 1, 2] / 1000.0,
+        color="#0072B2",
+        linewidth=linewidth,
+        alpha=alpha,
+    )
+    axis.plot(
+        ray[turning_index:, 0] / 1000.0,
+        ray[turning_index:, 2] / 1000.0,
+        color="#CC79A7",
+        linewidth=linewidth,
+        alpha=alpha,
+    )
+axis.scatter(
+    source_x / 1000.0,
+    dense_sources[:, 2] / 1000.0,
+    s=9,
+    color=group_colors["Source"],
+    label="41 sources (10 m spacing)",
+    zorder=4,
+)
+axis.scatter(
+    receiver_x / 1000.0,
+    dense_receivers[:, 2] / 1000.0,
+    s=7,
+    color=group_colors["Receiver"],
+    label="161 receivers (5 m spacing)",
+    zorder=4,
+)
+axis.scatter(
+    source_x[nominal_source_anchor_indices] / 1000.0,
+    dense_sources[nominal_source_anchor_indices, 2] / 1000.0,
+    s=42,
+    facecolors="none",
+    edgecolors="#A96700",
+    linewidths=1.2,
+    label="100 m anchors",
+    zorder=5,
+)
+axis.scatter(
+    receiver_x[nominal_receiver_anchor_indices] / 1000.0,
+    dense_receivers[nominal_receiver_anchor_indices, 2] / 1000.0,
+    s=42,
+    facecolors="none",
+    edgecolors="#333333",
+    linewidths=1.2,
+    zorder=5,
+)
+axis.text(0.0, 0.08, "source aperture", color="#A96700", ha="center", fontsize=8)
+axis.text(4.0, 0.08, "receiver aperture", color="#444444", ha="center", fontsize=8)
+axis.text(0.0, 2.45, "reflector at 2.5 km", color="#007C5B", va="bottom", fontsize=8)
+axis.text(
+    0.02,
+    0.04,
+    r"5 source anchors $\times$ 9 receiver anchors = 45 exact ray pairs",
+    transform=axis.transAxes,
+    fontsize=8,
+    bbox={"boxstyle": "round,pad=0.3", "facecolor": "white", "alpha": 0.88, "edgecolor": "#BBBBBB"},
+)
+axis.set_xlim(-0.35, 4.55)
+axis.set_ylim(2.7, 0.0)
+axis.set_xlabel("Horizontal position (km)")
+axis.set_ylabel("Depth (km)")
+axis.set_title("(a) Source, receiver, and anchor geometry")
+axis.legend(frameon=False, fontsize=7.5, loc="upper center", bbox_to_anchor=(0.52, 0.99))
+
+axis = axes[0, 1]
 exact_ms = 1e3 * exact_times.ravel()
 predicted_ms = 1e3 * nominal_prediction.ravel()
 bounds = [min(exact_ms.min(), predicted_ms.min()), max(exact_ms.max(), predicted_ms.max())]
@@ -580,11 +714,11 @@ axis.set_ylim(bounds)
 axis.set_aspect("equal", adjustable="box")
 axis.set_xlabel("Fully retraced travel time (ms)")
 axis.set_ylabel("Derivative prediction (ms)")
-axis.set_title("(a) Dense travel-time matrix")
+axis.set_title("(b) Dense travel-time matrix")
 axis.legend(frameon=False, fontsize=8)
 axis.grid(alpha=0.2)
 
-axis = axes[1]
+axis = axes[1, 0]
 image = axis.imshow(
     np.abs(nominal_error_ms),
     origin="lower",
@@ -594,11 +728,11 @@ image = axis.imshow(
 )
 axis.set_xlabel("Receiver position (km)")
 axis.set_ylabel("Source position (km)")
-axis.set_title("(b) Absolute error, 100 m anchors")
+axis.set_title("(c) Absolute error, 100 m anchors")
 colorbar = figure.colorbar(image, ax=axis, pad=0.02)
 colorbar.set_label("Absolute travel-time error (ms)")
 
-axis = axes[2]
+axis = axes[1, 1]
 axis.plot(anchor_spacings, rms_errors_ms, "o-", color="#0072B2", label="RMS error")
 axis.plot(anchor_spacings, maximum_errors_ms, "s-", color="#D55E00", label="maximum error")
 for spacing, count, maximum_error in zip(anchor_spacings, anchor_counts, maximum_errors_ms):
@@ -612,7 +746,7 @@ for spacing, count, maximum_error in zip(anchor_spacings, anchor_counts, maximum
     )
 axis.set_xlabel("Source and receiver anchor spacing (m)")
 axis.set_ylabel("Travel-time error (ms)")
-axis.set_title("(c) Accuracy versus exact-ray count")
+axis.set_title("(d) Accuracy versus exact-ray count")
 axis.legend(frameon=False, fontsize=8)
 axis.grid(alpha=0.2)
 
@@ -628,10 +762,40 @@ figure.text(
     bbox={"boxstyle": "round,pad=0.4", "facecolor": "#F2F6F8", "edgecolor": "#AAB7BF"},
 )
 figure.suptitle("Predict dense travel times from sparse exact anchors", fontsize=14)
-figure.subplots_adjust(left=0.07, right=0.985, top=0.84, bottom=0.23, wspace=0.34)
+figure.subplots_adjust(left=0.08, right=0.965, top=0.91, bottom=0.12, hspace=0.38, wspace=0.28)
 plt.show()
 
 ###############################################################################
+# **How to read this figure.** Panel (a) defines the acquisition geometry for
+# the endpoint-prediction experiment.  All points lie in the same vertical
+# plane at 200 m depth.  The orange source aperture spans -0.2 to 0.2 km and
+# contains 41 sources at 10 m spacing; the gray receiver aperture spans 3.6 to
+# 4.4 km and contains 161 receivers at 5 m spacing.  Open circles mark the
+# coarser 100 m anchor positions.  Combining five source anchors with nine
+# receiver anchors produces 45 exactly traced anchor rays.  Three rays from
+# the central source illustrate the common P-down/SV-up reflection at 2.5 km;
+# all 6601 endpoint pairs use this same fixed topology.
+#
+# Panel (b) compares every predicted traveltime with the independently retraced
+# value.  Each dot is one of the :math:`41\times161=6601` source--receiver
+# pairs.  The dots collapse onto the dashed 1:1 line, so the prediction error is
+# much smaller than the roughly 300 ms traveltime variation across the
+# acquisition apertures.  The full retraces are used only for validation in
+# this example.
+#
+# Panel (c) magnifies the small absolute errors for the 100 m anchor grid.  The
+# horizontal and vertical axes correspond directly to the receiver and source
+# apertures in panel (a).  Error is zero at an anchor and grows smoothly toward
+# the midpoint between neighboring anchors, producing the repeated triangular
+# pattern.  Even the brightest locations remain below 0.13 ms.
+#
+# Panel (d) exposes the accuracy--cost trade-off.  Denser 50 m anchors require
+# 153 exact rays and give the smallest errors.  The nominal 100 m grid needs 45
+# rays and has 0.028 ms RMS error.  With only 15 exact rays at 200 m spacing,
+# the approximation remains accurate but the maximum error rises to about
+# 0.54 ms.  Thus the plot provides a direct way to choose anchor spacing for a
+# desired traveltime tolerance.
+#
 # These are local, fixed-topology predictions.  Source and receiver layer
 # membership, the P-to-SV itinerary, and the propagating branch must remain
 # unchanged.  Larger endpoint separations require closer anchors or full ray
