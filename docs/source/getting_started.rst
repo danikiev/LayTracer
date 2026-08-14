@@ -260,6 +260,16 @@ The implementation is separated into focused modules with clear responsibilities
     * Exposes high-level user workflows (for example, multi source-receiver tracing via ``trace_rays``).
     * Handles batching, parallel execution, and result aggregation into user-facing containers.
 
+* ``laytracer.sensitivity``
+
+    * Computes sparse fixed-topology derivatives of travel time and physical ray parameter.
+    * Keeps model-layer indices explicit so the derivatives can be assembled into custom Jacobians.
+
+* ``laytracer.approximation``
+
+    * Selects deterministic point-cloud anchors and traces their Cartesian product once.
+    * Predicts nearby traveltimes from analytic endpoint derivatives while enforcing compatible ray topology.
+
 * ``laytracer.plot``
 
     * Provides visualization utilities (2-D profiles and 3-D interactive rendering).
@@ -270,6 +280,56 @@ Public API surface
 
 The package root (``laytracer.__init__``) re-exports the primary classes/functions so typical user workflows stay concise while internal module boundaries remain explicit.
 
+Approximate nearby traveltimes
+------------------------------
+
+For a dense source-receiver table, exact rays can be retained at sparse
+anchors and nearby traveltimes predicted from their analytic endpoint
+derivatives.  This is useful when many endpoints are close together and the
+velocity model and selected ray branch remain fixed.
+
+.. code-block:: python
+
+    import numpy as np
+    import pandas as pd
+    import laytracer
+
+    model = pd.DataFrame({
+        "Depth": [0.0, 700.0, 1400.0],
+        "Vp": [2600.0, 3400.0, 4300.0],
+        "Vs": [1450.0, 1950.0, 2500.0],
+    })
+    sources = np.column_stack([
+        np.arange(0.0, 2000.0, 50.0),
+        np.zeros(40),
+        np.full(40, 100.0),
+    ])
+    receivers = np.array([
+        [2500.0, 0.0, 100.0],
+        [2750.0, 0.0, 100.0],
+    ])
+
+    approximator = laytracer.TravelTimeApproximator.fit(
+        sources,
+        receivers,
+        model,
+        source_phase="P",
+        source_max_distance=150.0,
+        receiver_max_distance=None,
+    )
+    prediction = approximator.predict()
+
+    travel_times = prediction.travel_time_matrix
+    valid = prediction.valid_matrix
+    print(approximator.exact_ray_count, travel_times.shape)
+
+Coordinates and anchor distances are in metres, and traveltimes are in
+seconds.  ``receiver_max_distance=None`` keeps every supplied receiver as an
+exact anchor.  Invalid local predictions are ``NaN``; inspect
+``prediction.reason_matrix`` rather than assuming that every requested branch
+can be extrapolated.  See :ref:`sphx_glr_examples_06_visualizing_sensitivities.py`
+for visual error experiments and :ref:`methodology` for the validity rules.
+
 Design principles
 -----------------
 
@@ -278,7 +338,7 @@ LayTracer follows several engineering principles:
 * **Separation of concerns**: numerical solvers, physical coefficients, API orchestration, and plotting are isolated.
 * **Composability**: low-level building blocks can be used independently in custom workflows.
 * **Performance-aware implementation**: vectorized NumPy operations and optional parallel execution for survey-scale runs.
-* **Reproducibility**: environment-driven dependency management and deterministic, test-backed numerical behavior.
+* **Reproducibility**: environment-driven dependency management and deterministic, test-backed numerical and anchor-selection behavior.
 * **Extensibility**: new physical attributes or workflow wrappers can be added without rewriting the solver core.
 
 Typical execution flow
@@ -286,6 +346,7 @@ Typical execution flow
 
 1. Build a layered model from input data (``build_layer_stack`` or high-level API input).
 2. Solve one or many source-receiver ray paths (``solve`` / ``trace_rays``).
-3. Optionally compute attenuation/spreading/transmission attributes.
-4. Visualize outputs using ``laytracer.plot`` helpers.
+3. Optionally request sensitivities or attenuation/spreading/transmission attributes.
+4. For dense nearby endpoints, fit a ``TravelTimeApproximator`` and predict a local traveltime table from exact anchor rays.
+5. Visualize outputs using ``laytracer.plot`` helpers.
 

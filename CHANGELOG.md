@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - ordered ``Interaction`` and ``RayItinerary`` objects for prescribed direct, reflected, transmitted, converted, and multiple phase paths
 - opt-in per-ray ``SolveDiagnostics`` with accepted solve route, iteration counts, transformed and physical ray parameters, independently recomputed endpoint residual, conditioning, and criticality margin
 - sparse fixed-topology analytic derivatives of traveltime and physical ray parameter with respect to layer ``Vp``/``Vs``, interface depths, and source and receiver coordinates
+- reusable linearized-ray, point-cloud anchor-selection, and topology-safe dense traveltime approximation APIs
 - a visual sensitivity example showing scaled traveltime and ray-parameter effects, local model prediction, dense endpoint prediction, and a vertical-well microseismic traveltime table approximated from sparse source anchors
 - optional ``complex_coefficient_product`` output alongside the established real coefficient-magnitude product
 - LayTracer logo and branding assets, including full, medium, icon, circular icon, and PDF-compatible logo variants (#12)

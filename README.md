@@ -189,6 +189,29 @@ branches or guarantee a global first arrival. The legacy ``reflection=`` and
 ``refraction=`` tuple arguments remain available; in that API ``refraction``
 means a prescribed transmission or mode conversion, not a head wave.
 
+### Approximate a dense traveltime table from exact anchors
+
+```python
+approximator = laytracer.TravelTimeApproximator.fit(
+    sources,
+    receivers,
+    vel_df,
+    source_max_distance=100.0,
+    receiver_max_distance=None,  # keep every receiver as an exact anchor
+    source_phase="P",
+)
+prediction = approximator.predict()
+
+times = prediction.travel_time_matrix
+valid = prediction.valid_matrix
+print(approximator.exact_ray_count, times.shape)
+```
+
+Anchor placement accepts arbitrary 3-D point clouds. Predictions use only
+nearby anchors with the same ordered layer, phase, and vertical-direction
+topology. Unsupported targets are returned as ``NaN`` with a validity mask and
+reason code; LayTracer does not silently retrace them.
+
 ### Trace multiple rays in 3-D (with relative amplitude attributes)
 
 ```python
@@ -272,6 +295,15 @@ fig.show()
 | `Interaction` / `RayItinerary` | Ordered, fixed-topology reflection and transmission/mode-conversion description |
 | `TraceResult` | Container: source phase, travel times, ray paths, ray parameters, optional attributes, diagnostics, and sensitivities |
 | `RaySensitivity` | Sparse fixed-topology derivatives with respect to layer velocities, interface depths, and endpoint coordinates |
+
+### Approximation
+
+| Symbol | Description |
+| --- | --- |
+| `linearized_ray_change(...)` | Apply one sparse sensitivity record to model and endpoint perturbations |
+| `select_anchors(points, max_distance, groups=None)` | Deterministic grouped point-cloud anchor coverage |
+| `TravelTimeApproximator` | Fit exact topology-compatible anchors and predict nearby traveltimes |
+| `TravelTimePrediction` | Predicted times, validity/reason arrays, and anchor-assignment diagnostics |
 
 ### Visualisation (`laytracer.plot`)
 

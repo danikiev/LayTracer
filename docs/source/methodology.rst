@@ -281,8 +281,75 @@ marked invalid rather than being silently extrapolated.
 
 ----
 
+Topology-safe traveltime approximation
+======================================
+
+The endpoint derivatives can replace repeated exact tracing in a dense local
+source-receiver table.  For an exact anchor ray joining
+:math:`\mathbf{s}_a` and :math:`\mathbf{r}_a`, LayTracer evaluates
+
+.. math::
+   T(\mathbf{s},\mathbf{r}) \approx T_a
+   + \nabla_{\mathbf{s}}T_a\mathbin{\cdot}
+     (\mathbf{s}-\mathbf{s}_a)
+   + \nabla_{\mathbf{r}}T_a\mathbin{\cdot}
+     (\mathbf{r}-\mathbf{r}_a).
+
+This is a first-order interpolation of one selected arrival, not a new ray
+solve.  The velocity model and any explicit :class:`~laytracer.RayItinerary`
+are fixed for the lifetime of a :class:`~laytracer.TravelTimeApproximator`.
+Changing either requires refitting.
+
+Anchor coverage
+---------------
+
+:func:`~laytracer.select_anchors` uses deterministic farthest-point coverage
+of an arbitrary three-dimensional point cloud.  It starts from the
+lexicographically smallest point in each group and adds the farthest point
+until every target lies within the requested Euclidean distance of an anchor.
+During approximator fitting, source and receiver anchors are initially
+selected independently within their physical endpoint layers.  The sets are
+then refined until every reachable fitting pair has a topology-compatible
+anchor pair inside both distance limits.  A limit of ``None`` keeps every
+supplied endpoint of that type as an exact anchor.
+
+The final Cartesian product of source and receiver anchors is traced once with
+sensitivities and diagnostics.  For each prediction, candidate anchor pairs
+are ranked using the source and receiver distances normalized by their
+respective limits.  The nearest compatible valid sensitivity supplies the
+linear prediction above.
+
+Topology and validity
+---------------------
+
+Compatibility is defined by the ordered physical path legs.  Each leg records
+its model-layer index, phase, and vertical direction.  Consequently, the
+approximator does not use an anchor that would move an endpoint across an
+interface, reverse the vertical direction of a direct ray, change a prescribed
+itinerary, or switch phase sequence.
+
+Unsupported predictions are not silently retraced.  They are returned as
+``NaN`` with a validity mask and one of four reason codes:
+
+- ``unreachable_topology``: the requested fixed itinerary cannot connect the endpoints;
+- ``no_topology_match``: no fitted anchor ray represents the requested branch;
+- ``outside_anchor_distance``: compatible anchors exist but are beyond a distance limit;
+- ``invalid_anchor_sensitivity``: compatible nearby anchor rays have unusable derivatives.
+
+Anchor distance controls locality but is not an intrinsic error estimate.
+Approximation error depends on model contrasts, geometry, and distance from
+the anchor, and can be largest near rapidly varying configurations such as
+very short source-receiver offsets.  Applications should select distance
+limits using representative validation retraces.  LayTracer deliberately does
+not perform those retraces, adapt anchors to an error tolerance, or fall back
+to exact tracing automatically.  The visual accuracy--cost experiments in
+:ref:`sphx_glr_examples_06_visualizing_sensitivities.py` illustrate this
+validation workflow.
+
+----
+
 Attenuation operator :math:`t^*`
-=================================
+================================
 
 The attenuation operator (:cite:t:`AkiRichards2002`, Ch. 5) measures
 the cumulative dissipative loss of wave amplitude along the ray path. Since the
@@ -540,7 +607,7 @@ user-specified threshold.
 ----
 
 Extension to 3-D layered media
-===============================
+==============================
 
 The formulae above are written in a local incidence coordinate system. The
 ray geometry is two-dimensional because the velocity model varies only with
@@ -584,7 +651,7 @@ the role of the target offset :math:`X_R` and the depth coordinates
 :math:`z_s, z_r` determining the traversed layers.
 
 Back-projection to 3-D
------------------------
+----------------------
 
 Once the 2-D ray path :math:`\{(x_k^{(2\mathrm{D})},\, z_k)\}_{k=0}^M`
 has been computed, it is mapped back to 3-D Cartesian coordinates via
@@ -599,7 +666,7 @@ has been computed, it is mapped back to 3-D Cartesian coordinates via
 This simply *sweeps* the 2-D ray along the source-receiver azimuth.
 
 Validity of amplitude attributes
----------------------------------
+--------------------------------
 
 Because the medium properties depend only on depth, every quantity
 computed from the 2-D ray remains valid in 3-D:

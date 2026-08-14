@@ -60,6 +60,25 @@ Multi-ray interface
 .. autoclass:: laytracer.RaySensitivity
    :members:
 
+Traveltime approximation
+------------------------
+
+.. autofunction:: laytracer.linearized_ray_change
+
+.. autofunction:: laytracer.select_anchors
+
+.. autoclass:: laytracer.LinearizedRayChange
+   :members:
+
+.. autoclass:: laytracer.AnchorSelection
+   :members:
+
+.. autoclass:: laytracer.TravelTimeApproximator
+   :members:
+
+.. autoclass:: laytracer.TravelTimePrediction
+   :members:
+
 Amplitude
 ---------
 

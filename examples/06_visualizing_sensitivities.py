@@ -321,8 +321,6 @@ def perturb_and_predict(scale, random_generator):
     trial_model = model.copy()
     trial_source = source.copy()
     trial_receiver = receiver.copy()
-    predicted_time = 0.0
-    predicted_parameter = 0.0
 
     delta_vp = random_generator.normal(size=2) * 0.01 * scale * model.loc[[0, 1], "Vp"].to_numpy()
     delta_vs = random_generator.normal(size=2) * 0.01 * scale * model.loc[[0, 1], "Vs"].to_numpy()
@@ -336,17 +334,24 @@ def perturb_and_predict(scale, random_generator):
     trial_source[[0, 2]] += delta_source
     trial_receiver[[0, 2]] += delta_receiver
 
-    predicted_time += np.dot(sensitivity.dtravel_time_dvp, delta_vp)
-    predicted_time += np.dot(sensitivity.dtravel_time_dvs, delta_vs)
-    predicted_time += np.dot(sensitivity.dtravel_time_dinterface_depths, delta_interfaces)
-    predicted_time += np.dot(sensitivity.dtravel_time_dsource[[0, 2]], delta_source)
-    predicted_time += np.dot(sensitivity.dtravel_time_dreceiver[[0, 2]], delta_receiver)
-
-    predicted_parameter += np.dot(sensitivity.dray_parameter_dvp, delta_vp)
-    predicted_parameter += np.dot(sensitivity.dray_parameter_dvs, delta_vs)
-    predicted_parameter += np.dot(sensitivity.dray_parameter_dinterface_depths, delta_interfaces)
-    predicted_parameter += np.dot(sensitivity.dray_parameter_dsource[[0, 2]], delta_source)
-    predicted_parameter += np.dot(sensitivity.dray_parameter_dreceiver[[0, 2]], delta_receiver)
+    delta_vp_full = np.zeros(len(model))
+    delta_vs_full = np.zeros(len(model))
+    delta_interfaces_full = np.zeros(len(model))
+    delta_source_full = np.zeros(3)
+    delta_receiver_full = np.zeros(3)
+    delta_vp_full[[0, 1]] = delta_vp
+    delta_vs_full[[0, 1]] = delta_vs
+    delta_interfaces_full[[1, 2]] = delta_interfaces
+    delta_source_full[[0, 2]] = delta_source
+    delta_receiver_full[[0, 2]] = delta_receiver
+    predicted = lt.linearized_ray_change(
+        sensitivity,
+        delta_vp=delta_vp_full,
+        delta_vs=delta_vs_full,
+        delta_interface_depths=delta_interfaces_full,
+        delta_source=delta_source_full,
+        delta_receiver=delta_receiver_full,
+    )
 
     assert np.all(np.diff(trial_model["Depth"]) > 0.0)
     trial = trace_ps_reflection(
@@ -357,7 +362,12 @@ def perturb_and_predict(scale, random_generator):
     )
     exact_time = trial.travel_times[0] - reference.travel_times[0]
     exact_parameter = trial.ray_parameters[0] - reference.ray_parameters[0]
-    return predicted_time, exact_time, predicted_parameter, exact_parameter
+    return (
+        predicted.delta_travel_time,
+        exact_time,
+        predicted.delta_ray_parameter,
+        exact_parameter,
+    )
 
 
 scales = np.array([0.25, 1.0, 4.0])
@@ -524,83 +534,53 @@ dense_exact = trace_ps_reflection(
 )
 exact_times = dense_exact.travel_times.reshape(len(dense_sources), len(dense_receivers))
 
-
-def anchor_indices(coordinates, spacing):
-    """Return regularly spaced indices, always including both endpoints."""
-    coordinate_step = float(coordinates[1] - coordinates[0])
-    index_step = int(round(spacing / coordinate_step))
-    indices = np.arange(0, len(coordinates), index_step, dtype=int)
-    return np.unique(np.append(indices, len(coordinates) - 1))
-
-
-def predict_from_anchors(spacing):
-    """Predict the dense travel-time matrix from sparse exact anchor pairs."""
-    source_anchor_indices = anchor_indices(source_x, spacing)
-    receiver_anchor_indices = anchor_indices(receiver_x, spacing)
-    source_anchors = dense_sources[source_anchor_indices]
-    receiver_anchors = dense_receivers[receiver_anchor_indices]
-
-    anchors = trace_ps_reflection(
-        model,
-        source_anchors,
-        receiver_anchors,
-        {"travel_times", "sensitivities"},
-    )
-    predicted = np.empty_like(exact_times)
-
-    for source_index, source_point in enumerate(dense_sources):
-        nearest_source = int(np.argmin(np.abs(source_x[source_anchor_indices] - source_point[0])))
-        source_change = source_point - source_anchors[nearest_source]
-
-        for receiver_index, receiver_point in enumerate(dense_receivers):
-            nearest_receiver = int(
-                np.argmin(np.abs(receiver_x[receiver_anchor_indices] - receiver_point[0]))
-            )
-            receiver_change = receiver_point - receiver_anchors[nearest_receiver]
-            flat_anchor_index = (
-                nearest_source * len(receiver_anchor_indices) + nearest_receiver
-            )
-            anchor_sensitivity = anchors.sensitivities[flat_anchor_index]
-            assert anchor_sensitivity.valid
-            predicted[source_index, receiver_index] = (
-                anchors.travel_times[flat_anchor_index]
-                + np.dot(anchor_sensitivity.dtravel_time_dsource, source_change)
-                + np.dot(anchor_sensitivity.dtravel_time_dreceiver, receiver_change)
-            )
-
-    return predicted, len(source_anchor_indices) * len(receiver_anchor_indices)
-
-
-anchor_spacings = np.array([50.0, 100.0, 200.0])
+dense_itinerary = lt.RayItinerary(
+    source_phase="P",
+    interactions=[lt.Interaction(float(model.iloc[2]["Depth"]), "reflect", "SV")],
+)
+anchor_distances = np.array([25.0, 50.0, 100.0])
+approximators = {}
 predictions = {}
 anchor_counts = []
 rms_errors_ms = []
 maximum_errors_ms = []
 
-for spacing in anchor_spacings:
-    predicted_times, anchor_count = predict_from_anchors(spacing)
+for max_distance in anchor_distances:
+    approximator = lt.TravelTimeApproximator.fit(
+        dense_sources,
+        dense_receivers,
+        model,
+        source_max_distance=max_distance,
+        receiver_max_distance=max_distance,
+        itinerary=dense_itinerary,
+        n_jobs=1,
+    )
+    prediction = approximator.predict()
+    assert prediction.valid_mask.all()
+    predicted_times = prediction.travel_time_matrix
     error_ms = 1e3 * (predicted_times - exact_times)
-    predictions[spacing] = predicted_times
-    anchor_counts.append(anchor_count)
+    approximators[max_distance] = approximator
+    predictions[max_distance] = predicted_times
+    anchor_counts.append(approximator.exact_ray_count)
     rms_errors_ms.append(float(np.sqrt(np.mean(error_ms**2))))
     maximum_errors_ms.append(float(np.max(np.abs(error_ms))))
 
-nominal_spacing = 100.0
-nominal_prediction = predictions[nominal_spacing]
+nominal_distance = 50.0
+nominal_approximator = approximators[nominal_distance]
+nominal_prediction = predictions[nominal_distance]
 nominal_error_ms = 1e3 * (nominal_prediction - exact_times)
-nominal_index = int(np.flatnonzero(anchor_spacings == nominal_spacing)[0])
+nominal_index = int(np.flatnonzero(anchor_distances == nominal_distance)[0])
 
-assert anchor_counts[nominal_index] == 45
 assert rms_errors_ms[nominal_index] < 0.05
 assert maximum_errors_ms[nominal_index] < 0.2
 
 print("\nDense endpoint travel-time prediction:")
 print(f"  Dense source-receiver pairs: {exact_times.size}")
-for spacing, count, rms_error, maximum_error in zip(
-    anchor_spacings, anchor_counts, rms_errors_ms, maximum_errors_ms
+for max_distance, count, rms_error, maximum_error in zip(
+    anchor_distances, anchor_counts, rms_errors_ms, maximum_errors_ms
 ):
     print(
-        f"  {spacing:.0f} m anchors: {count} exact rays, "
+        f"  {max_distance:.0f} m maximum anchor distance: {count} exact rays, "
         f"RMS error {rms_error:.4f} ms, maximum error {maximum_error:.4f} ms"
     )
 
@@ -614,16 +594,16 @@ representative = trace_ps_reflection(
     dense_receivers[representative_receiver_indices],
     {"travel_times", "rays"},
 )
-nominal_source_anchor_indices = anchor_indices(source_x, nominal_spacing)
-nominal_receiver_anchor_indices = anchor_indices(receiver_x, nominal_spacing)
+nominal_source_anchor_indices = nominal_approximator.source_anchor_indices
+nominal_receiver_anchor_indices = nominal_approximator.receiver_anchor_indices
 
 ###############################################################################
 # Plot prediction accuracy
 # ------------------------
 #
-# At 100 m anchor spacing, only 45 exact anchor rays predict all 6601 travel
-# times.  The full dense result remains the validation reference, not an input
-# to the prediction.
+# The nominal 50 m maximum endpoint-to-anchor distance uses sparse exact anchor
+# rays to predict all 6601 travel times.  The full dense result remains the
+# validation reference, not an input to the prediction.
 
 figure, axes = plt.subplots(2, 2, figsize=(12.8, 8.2))
 
@@ -673,7 +653,7 @@ axis.scatter(
     facecolors="none",
     edgecolors="#A96700",
     linewidths=1.2,
-    label="100 m anchors",
+    label=r"anchors ($\leq$50 m away)",
     zorder=5,
 )
 axis.scatter(
@@ -691,7 +671,9 @@ axis.text(0.0, 2.45, "reflector at 2.5 km", color="#007C5B", va="bottom", fontsi
 axis.text(
     0.02,
     0.04,
-    r"5 source anchors $\times$ 9 receiver anchors = 45 exact ray pairs",
+    rf"{len(nominal_source_anchor_indices)} source anchors $\times$ "
+    rf"{len(nominal_receiver_anchor_indices)} receiver anchors = "
+    rf"{anchor_counts[nominal_index]} exact ray pairs",
     transform=axis.transAxes,
     fontsize=8,
     bbox={"boxstyle": "round,pad=0.3", "facecolor": "white", "alpha": 0.88, "edgecolor": "#BBBBBB"},
@@ -728,23 +710,23 @@ image = axis.imshow(
 )
 axis.set_xlabel("Receiver position (km)")
 axis.set_ylabel("Source position (km)")
-axis.set_title("(c) Absolute error, 100 m anchors")
+axis.set_title("(c) Absolute error, 50 m maximum distance")
 colorbar = figure.colorbar(image, ax=axis, pad=0.02)
 colorbar.set_label("Absolute travel-time error (ms)")
 
 axis = axes[1, 1]
-axis.plot(anchor_spacings, rms_errors_ms, "o-", color="#0072B2", label="RMS error")
-axis.plot(anchor_spacings, maximum_errors_ms, "s-", color="#D55E00", label="maximum error")
-for spacing, count, maximum_error in zip(anchor_spacings, anchor_counts, maximum_errors_ms):
+axis.plot(anchor_distances, rms_errors_ms, "o-", color="#0072B2", label="RMS error")
+axis.plot(anchor_distances, maximum_errors_ms, "s-", color="#D55E00", label="maximum error")
+for max_distance, count, maximum_error in zip(anchor_distances, anchor_counts, maximum_errors_ms):
     axis.annotate(
         f"{count} anchors",
-        (spacing, maximum_error),
+        (max_distance, maximum_error),
         xytext=(0, 8),
         textcoords="offset points",
         ha="center",
         fontsize=7.5,
     )
-axis.set_xlabel("Source and receiver anchor spacing (m)")
+axis.set_xlabel("Maximum endpoint-to-anchor distance (m)")
 axis.set_ylabel("Travel-time error (ms)")
 axis.set_title("(d) Accuracy versus exact-ray count")
 axis.legend(frameon=False, fontsize=8)
@@ -753,7 +735,7 @@ axis.grid(alpha=0.2)
 figure.text(
     0.5,
     0.025,
-    f"At 100 m spacing: {anchor_counts[nominal_index]} exact anchor rays predict "
+    f"At 50 m maximum distance: {anchor_counts[nominal_index]} exact anchor rays predict "
     f"{exact_times.size} nearby travel times; RMS error = "
     f"{rms_errors_ms[nominal_index]:.3f} ms.",
     ha="center",
@@ -770,11 +752,11 @@ plt.show()
 # the endpoint-prediction experiment.  All points lie in the same vertical
 # plane at 200 m depth.  The orange source aperture spans -0.2 to 0.2 km and
 # contains 41 sources at 10 m spacing; the gray receiver aperture spans 3.6 to
-# 4.4 km and contains 161 receivers at 5 m spacing.  Open circles mark the
-# coarser 100 m anchor positions.  Combining five source anchors with nine
-# receiver anchors produces 45 exactly traced anchor rays.  Three rays from
-# the central source illustrate the common P-down/SV-up reflection at 2.5 km;
-# all 6601 endpoint pairs use this same fixed topology.
+# 4.4 km and contains 161 receivers at 5 m spacing.  Open circles mark anchors
+# selected automatically so that every endpoint lies within 50 m of one.
+# Combining five source anchors with nine receiver anchors produces 45 exactly
+# traced anchor rays.  Three rays from the central source illustrate the common
+# P-down/SV-up reflection at 2.5 km; all 6601 endpoint pairs use this topology.
 #
 # Panel (b) compares every predicted traveltime with the independently retraced
 # value.  Each dot is one of the :math:`41\times161=6601` source--receiver
@@ -783,18 +765,17 @@ plt.show()
 # acquisition apertures.  The full retraces are used only for validation in
 # this example.
 #
-# Panel (c) magnifies the small absolute errors for the 100 m anchor grid.  The
-# horizontal and vertical axes correspond directly to the receiver and source
-# apertures in panel (a).  Error is zero at an anchor and grows smoothly toward
-# the midpoint between neighboring anchors, producing the repeated triangular
-# pattern.  Even the brightest locations remain below 0.13 ms.
+# Panel (c) magnifies the small absolute errors for the 50 m maximum-distance
+# model.  The axes correspond directly to the receiver and source apertures in
+# panel (a).  Error is zero at an anchor and grows smoothly toward the midpoint
+# between neighboring anchors, producing the repeated triangular pattern.
+# Even the brightest locations remain below 0.13 ms.
 #
-# Panel (d) exposes the accuracy--cost trade-off.  Denser 50 m anchors require
-# 153 exact rays and give the smallest errors.  The nominal 100 m grid needs 45
-# rays and has 0.028 ms RMS error.  With only 15 exact rays at 200 m spacing,
-# the approximation remains accurate but the maximum error rises to about
-# 0.54 ms.  Thus the plot provides a direct way to choose anchor spacing for a
-# desired traveltime tolerance.
+# Panel (d) exposes the accuracy--cost trade-off.  A 25 m maximum distance uses
+# 153 exact rays and gives the smallest errors.  The nominal 50 m limit needs
+# 45 rays and has 0.028 ms RMS error.  With a 100 m limit only 15 exact rays are
+# needed, but the maximum error rises to about 0.54 ms.  Thus the plot provides
+# a direct way to choose anchor distance for a desired traveltime tolerance.
 #
 # These are local, fixed-topology predictions.  Source and receiver layer
 # membership, the P-to-SV itinerary, and the propagating branch must remain
@@ -812,11 +793,11 @@ plt.show()
 #
 # The dense calculation below traces all 1640 source locations to all 10
 # receivers.  The anchored calculation traces every receiver only from a
-# coarser, layer-aware subset of source locations.  Traveltimes at neighboring
-# source points are predicted with the analytic source-coordinate derivatives.
-# Anchors are selected separately within each layer.  For each receiver, the
-# predictor also stays on the same vertical side of that receiver, so no local
-# prediction crosses an interface or reverses the direct-ray direction.
+# coarser subset of source locations.  Traveltimes at neighboring source
+# points are predicted with the analytic source-coordinate derivatives.
+# LayTracer places initial point-cloud anchors within each layer and refines
+# them until every source--receiver pair has a nearby anchor with the same
+# ordered layer, phase, and vertical-direction topology.
 
 micro_model = pd.DataFrame({
     "Depth": [0.0, 700.0, 1400.0],
@@ -855,107 +836,42 @@ def trace_direct_p(sources_to_trace, receivers_to_trace, requested):
 
 micro_exact = trace_direct_p(micro_sources, micro_receivers, {"travel_times"})
 micro_exact_times = micro_exact.travel_times.reshape(len(micro_sources), len(micro_receivers))
-micro_layer_indices = (
-    np.searchsorted(micro_model["Depth"].to_numpy(), micro_source_z, side="right") - 1
-)
-
-
-def layer_aware_anchor_indices(coordinates, layer_indices, spacing):
-    """Select depth anchors independently within every source layer."""
-    selected = []
-    for layer_index in np.unique(layer_indices):
-        in_layer = np.flatnonzero(layer_indices == layer_index)
-        selected.extend(in_layer[anchor_indices(coordinates[in_layer], spacing)])
-    return np.asarray(selected, dtype=int)
-
-
-def predict_microseismic_times(spacing):
-    """Predict the dense source grid from layer-aware exact source anchors."""
-    x_indices = anchor_indices(micro_source_x, spacing)
-    z_indices = layer_aware_anchor_indices(
-        micro_source_z,
-        micro_layer_indices,
-        spacing,
-    )
-    anchor_grid_x, anchor_grid_z = np.meshgrid(
-        micro_source_x[x_indices],
-        micro_source_z[z_indices],
-    )
-    anchor_sources = np.column_stack([
-        anchor_grid_x.ravel(),
-        np.zeros(anchor_grid_x.size),
-        anchor_grid_z.ravel(),
-    ])
-    anchor_layers = (
-        np.searchsorted(
-            micro_model["Depth"].to_numpy(),
-            anchor_sources[:, 2],
-            side="right",
-        )
-        - 1
-    )
-    anchors = trace_direct_p(
-        anchor_sources,
-        micro_receivers,
-        {"travel_times", "sensitivities"},
-    )
-    predicted = np.empty_like(micro_exact_times)
-    source_layers = (
-        np.searchsorted(
-            micro_model["Depth"].to_numpy(),
-            micro_sources[:, 2],
-            side="right",
-        )
-        - 1
-    )
-
-    for source_index, source_point in enumerate(micro_sources):
-        for receiver_index, receiver_point in enumerate(micro_receivers):
-            same_layer = anchor_layers == source_layers[source_index]
-            same_vertical_side = (
-                (anchor_sources[:, 2] - receiver_point[2])
-                * (source_point[2] - receiver_point[2])
-                > 0.0
-            )
-            candidates = np.flatnonzero(same_layer & same_vertical_side)
-            squared_distance = np.sum(
-                (anchor_sources[candidates][:, [0, 2]] - source_point[[0, 2]]) ** 2,
-                axis=1,
-            )
-            nearest_anchor = candidates[int(np.argmin(squared_distance))]
-            source_change = source_point - anchor_sources[nearest_anchor]
-            flat_anchor_index = nearest_anchor * len(micro_receivers) + receiver_index
-            anchor_sensitivity = anchors.sensitivities[flat_anchor_index]
-            assert anchor_sensitivity.valid
-            predicted[source_index, receiver_index] = (
-                anchors.travel_times[flat_anchor_index]
-                + np.dot(anchor_sensitivity.dtravel_time_dsource, source_change)
-            )
-
-    return predicted, anchor_sources
-
-
-micro_anchor_spacings = np.array([100.0, 200.0, 400.0])
+micro_anchor_distances = np.array([75.0, 150.0, 300.0])
+micro_approximators = {}
 micro_predictions = {}
 micro_anchor_sources = {}
 micro_exact_ray_counts = []
 micro_rms_errors_ms = []
 micro_maximum_errors_ms = []
 
-for spacing in micro_anchor_spacings:
-    predicted_times, anchor_sources = predict_microseismic_times(spacing)
+for max_distance in micro_anchor_distances:
+    approximator = lt.TravelTimeApproximator.fit(
+        micro_sources,
+        micro_receivers,
+        micro_model,
+        source_max_distance=max_distance,
+        receiver_max_distance=None,
+        source_phase="P",
+        n_jobs=1,
+        tol=1e-10,
+        max_iter=30,
+    )
+    prediction = approximator.predict()
+    assert prediction.valid_mask.all()
+    predicted_times = prediction.travel_time_matrix
     error_ms = 1e3 * (predicted_times - micro_exact_times)
-    micro_predictions[spacing] = predicted_times
-    micro_anchor_sources[spacing] = anchor_sources
-    micro_exact_ray_counts.append(len(anchor_sources) * len(micro_receivers))
+    micro_approximators[max_distance] = approximator
+    micro_predictions[max_distance] = predicted_times
+    micro_anchor_sources[max_distance] = approximator.anchor_sources
+    micro_exact_ray_counts.append(approximator.exact_ray_count)
     micro_rms_errors_ms.append(float(np.sqrt(np.mean(error_ms**2))))
     micro_maximum_errors_ms.append(float(np.max(np.abs(error_ms))))
 
-micro_nominal_spacing = 200.0
+micro_nominal_distance = 150.0
 micro_nominal_index = int(
-    np.flatnonzero(micro_anchor_spacings == micro_nominal_spacing)[0]
+    np.flatnonzero(micro_anchor_distances == micro_nominal_distance)[0]
 )
-micro_nominal_prediction = micro_predictions[micro_nominal_spacing]
+micro_nominal_prediction = micro_predictions[micro_nominal_distance]
 micro_nominal_error_ms = 1e3 * (micro_nominal_prediction - micro_exact_times)
 micro_nominal_absolute_error_ms = np.abs(micro_nominal_error_ms)
 micro_percentile_95_ms = float(np.percentile(micro_nominal_absolute_error_ms, 95.0))
@@ -964,21 +880,24 @@ micro_source_rms_error_ms = np.sqrt(np.mean(micro_nominal_error_ms**2, axis=1)).
 )
 
 assert micro_exact_times.size == 16400
-assert micro_exact_ray_counts[micro_nominal_index] < micro_exact_times.size / 10
+assert micro_exact_ray_counts[micro_nominal_index] < micro_exact_times.size
 
 print("\nMicroseismic source-grid traveltime prediction:")
 print(f"  Full calculation: {micro_exact_times.size} exact rays")
-for spacing, ray_count, rms_error, maximum_error in zip(
-    micro_anchor_spacings,
+for max_distance, ray_count, rms_error, maximum_error in zip(
+    micro_anchor_distances,
     micro_exact_ray_counts,
     micro_rms_errors_ms,
     micro_maximum_errors_ms,
 ):
     print(
-        f"  {spacing:.0f} m source anchors: {ray_count} exact rays, "
+        f"  {max_distance:.0f} m maximum source-anchor distance: {ray_count} exact rays, "
         f"RMS error {rms_error:.4f} ms, maximum error {maximum_error:.4f} ms"
     )
-print(f"  200 m anchors: 95% of absolute errors below {micro_percentile_95_ms:.4f} ms")
+print(
+    f"  150 m maximum distance: 95% of absolute errors below "
+    f"{micro_percentile_95_ms:.4f} ms"
+)
 
 assert micro_rms_errors_ms[micro_nominal_index] < 5.0
 
@@ -986,8 +905,8 @@ assert micro_rms_errors_ms[micro_nominal_index] < 5.0
 # Plot the monitoring geometry and prediction errors
 # --------------------------------------------------
 #
-# The nominal comparison uses 200 m source anchors.  The full dense solution
-# is plotted only as a validation reference.
+# The nominal comparison limits every source to a topology-compatible anchor
+# no farther than 150 m away.  The full dense solution is validation only.
 
 micro_geometry_sources = np.array([
     [250.0, 0.0, 325.0],
@@ -1018,7 +937,7 @@ axis.scatter(
     alpha=0.28,
     label="1640 possible sources",
 )
-nominal_micro_anchors = micro_anchor_sources[micro_nominal_spacing]
+nominal_micro_anchors = micro_anchor_sources[micro_nominal_distance]
 axis.scatter(
     nominal_micro_anchors[:, 0] / 1000.0,
     nominal_micro_anchors[:, 2] / 1000.0,
@@ -1026,7 +945,7 @@ axis.scatter(
     facecolors="none",
     edgecolors="#D55E00",
     linewidths=0.8,
-    label="154 source anchors",
+    label=f"{len(nominal_micro_anchors)} source anchors",
     zorder=3,
 )
 axis.plot([0.0, 0.0], [0.0, 1.0], color="#222222", linewidth=3.0, label="1 km well")
@@ -1117,27 +1036,27 @@ colorbar.set_label("RMS traveltime error (ms)")
 
 axis = axes[1, 1]
 axis.plot(
-    micro_anchor_spacings,
+    micro_anchor_distances,
     micro_rms_errors_ms,
     "o-",
     color="#0072B2",
     label="RMS error",
 )
 axis.plot(
-    micro_anchor_spacings,
+    micro_anchor_distances,
     micro_maximum_errors_ms,
     "s-",
     color="#D55E00",
     label="maximum error",
 )
-for spacing, ray_count, maximum_error in zip(
-    micro_anchor_spacings,
+for max_distance, ray_count, maximum_error in zip(
+    micro_anchor_distances,
     micro_exact_ray_counts,
     micro_maximum_errors_ms,
 ):
     axis.annotate(
         f"{ray_count} rays",
-        (spacing, maximum_error),
+        (max_distance, maximum_error),
         xytext=(0, 7),
         textcoords="offset points",
         ha="center",
@@ -1145,17 +1064,18 @@ for spacing, ray_count, maximum_error in zip(
     )
 axis.axhline(1.0, color="#666666", linestyle=":", linewidth=1.0, label="1 ms")
 axis.set_yscale("log")
-axis.set_xlabel("Source-anchor spacing (m)")
+axis.set_xlabel("Maximum source-to-anchor distance (m)")
 axis.set_ylabel("Traveltime error (ms, log scale)")
 axis.set_title("(d) Accuracy versus exact-ray count")
 axis.legend(frameon=False, fontsize=8)
 axis.grid(alpha=0.2, which="both")
+axis.margins(x=0.08, y=0.16)
 
 micro_reduction = micro_exact_times.size / micro_exact_ray_counts[micro_nominal_index]
 figure.text(
     0.5,
     0.022,
-    f"At 200 m spacing: {micro_exact_ray_counts[micro_nominal_index]} exact rays "
+    f"At 150 m maximum distance: {micro_exact_ray_counts[micro_nominal_index]} exact rays "
     f"predict {micro_exact_times.size} traveltimes ({micro_reduction:.1f}$\\times$ fewer solves); "
     f"RMS error = {micro_rms_errors_ms[micro_nominal_index]:.2f} ms.",
     ha="center",
@@ -1172,8 +1092,8 @@ plt.show()
 # depth section.  The black vertical line is the 1-km well and the triangles
 # are its 10 receivers.  Small gray points are the 1640 possible event
 # locations covering the one-sided 0--2 km horizontal and depth search region.
-# Orange circles are the 154 source anchors used for the nominal 200 m
-# approximation.  Blue examples illustrate direct P rays through the three
+# Orange circles are the 173 source anchors selected for the nominal 150 m
+# maximum distance.  Blue examples illustrate direct P rays through the three
 # velocity layers; refraction at 0.7 and 1.4 km is visible as a change in ray
 # slope.
 #
@@ -1187,24 +1107,24 @@ plt.show()
 # Panel (c) maps the RMS prediction error at every possible source location,
 # averaged over the 10 receivers.  The well and receivers are repeated in cyan
 # to connect the error pattern to the acquisition geometry.  Errors are lowest
-# at and near anchors and generally increase between them, producing the
-# repeated 200 m cells.  Horizontal bands in the upper kilometre align with
-# receiver depths.  The largest local errors occur close to the well, where
+# at and near anchors and generally increase between their coverage regions.
+# Horizontal bands in the upper kilometre align with receiver depths.  The
+# largest local errors occur close to the well, where
 # short source--receiver distance makes traveltime change most rapidly with
 # source position.  Layer-aware and receiver-side-aware anchor selection
 # prevents predictions from crossing an interface or reversing the local ray
 # branch; the white lines mark the two model interfaces.
 #
 # Panel (d) summarizes the accuracy--cost trade-off on a logarithmic error
-# scale.  At 100 m spacing, 4830 exact rays give 0.61 ms RMS error.  The nominal
-# 200 m grid uses 1540 exact rays instead of 16,400---10.6 times fewer solves---
-# with 1.92 ms RMS error, and 95% of individual absolute errors are below
-# 2.87 ms.  At 400 m spacing only 540 rays are traced, but the RMS error rises
-# to 6.07 ms.  Maximum errors are much larger than RMS errors because a small
+# scale.  A 75 m distance limit uses 3670 exact rays and gives 0.56 ms RMS
+# error.  The nominal 150 m limit uses 1730 rays instead of 16,400---9.5 times
+# fewer solves---with 1.27 ms RMS error, and 95% of individual absolute errors
+# are below 1.88 ms.  At 300 m only 630 rays are traced, but the RMS error rises
+# to 4.82 ms.  Maximum errors are much larger than RMS errors because a small
 # number of source points lie very close to individual receivers; such regions
 # are natural candidates for denser anchors or direct tracing.
 #
 # This experiment treats the fully traced table as validation only.  In a
 # location scan, the anchored table would be the computational product: exact
 # rays are calculated at the anchors and neighboring traveltimes are filled in
-# analytically, with anchor spacing chosen from the acceptable error level.
+# analytically, with maximum anchor distance chosen from the acceptable error.

@@ -27,6 +27,16 @@ Multi-ray
    RayItinerary
    RaySensitivity
 
+Approximation
+~~~~~~~~~~~~~
+.. autosummary::
+   linearized_ray_change
+   select_anchors
+   LinearizedRayChange
+   AnchorSelection
+   TravelTimeApproximator
+   TravelTimePrediction
+
 Amplitude
 ~~~~~~~~~
 .. autosummary::
@@ -68,6 +78,14 @@ from .amplitude import (
 )
 from .api import Interaction, RayItinerary, TraceResult, trace_rays
 from .sensitivity import RaySensitivity
+from .approximation import (
+    AnchorSelection,
+    LinearizedRayChange,
+    TravelTimeApproximator,
+    TravelTimePrediction,
+    linearized_ray_change,
+    select_anchors,
+)
 from . import plot
 
 try:
@@ -105,6 +123,13 @@ __all__ = [
     "RayItinerary",
     "RaySensitivity",
     "trace_rays",
+    # approximation
+    "AnchorSelection",
+    "LinearizedRayChange",
+    "TravelTimeApproximator",
+    "TravelTimePrediction",
+    "linearized_ray_change",
+    "select_anchors",
     # visualisation
     "plot",
 ]
