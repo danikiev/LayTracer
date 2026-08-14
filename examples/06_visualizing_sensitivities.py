@@ -20,6 +20,8 @@ the source and receiver coordinates.
 # reflects at 2500 m, and returns as SV.  Requesting ``sensitivities`` and
 # ``diagnostics`` is opt-in; the ordinary travel-time API is unchanged.
 
+import time
+
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 import numpy as np
@@ -837,7 +839,9 @@ def trace_direct_p(sources_to_trace, receivers_to_trace, requested):
     )
 
 
+start = time.perf_counter()
 micro_exact = trace_direct_p(micro_sources, micro_receivers, {"travel_times"})
+micro_full_trace_seconds = time.perf_counter() - start
 micro_exact_times = micro_exact.travel_times.reshape(len(micro_sources), len(micro_receivers))
 micro_anchor_distances = np.array([75.0, 150.0, 300.0])
 micro_approximators = {}
@@ -846,8 +850,12 @@ micro_anchor_sources = {}
 micro_exact_ray_counts = []
 micro_rms_errors_ms = []
 micro_maximum_errors_ms = []
+micro_anchor_setup_seconds = []
+micro_prediction_seconds = []
+micro_approximation_seconds = []
 
 for max_distance in micro_anchor_distances:
+    start = time.perf_counter()
     approximator = lt.TravelTimeApproximator.fit(
         micro_sources,
         micro_receivers,
@@ -859,7 +867,13 @@ for max_distance in micro_anchor_distances:
         tol=1e-10,
         max_iter=30,
     )
+    micro_anchor_setup_seconds.append(time.perf_counter() - start)
+    start = time.perf_counter()
     prediction = approximator.predict()
+    micro_prediction_seconds.append(time.perf_counter() - start)
+    micro_approximation_seconds.append(
+        micro_anchor_setup_seconds[-1] + micro_prediction_seconds[-1]
+    )
     assert prediction.valid_mask.all()
     predicted_times = prediction.travel_time_matrix
     error_ms = 1e3 * (predicted_times - micro_exact_times)
@@ -886,15 +900,33 @@ assert micro_exact_times.size == 16400
 assert micro_exact_ray_counts[micro_nominal_index] < micro_exact_times.size
 
 print("\nMicroseismic source-grid traveltime prediction:")
-print(f"  Full calculation: {micro_exact_times.size} exact rays")
-for max_distance, ray_count, rms_error, maximum_error in zip(
+print(
+    f"  Full calculation: {micro_exact_times.size} exact rays in "
+    f"{micro_full_trace_seconds:.3f} s (single process)"
+)
+print("  Anchor setup and prediction are timed separately (machine-dependent):")
+for (
+    max_distance,
+    ray_count,
+    rms_error,
+    maximum_error,
+    setup_seconds,
+    prediction_seconds,
+    approximation_seconds,
+) in zip(
     micro_anchor_distances,
     micro_exact_ray_counts,
     micro_rms_errors_ms,
     micro_maximum_errors_ms,
+    micro_anchor_setup_seconds,
+    micro_prediction_seconds,
+    micro_approximation_seconds,
 ):
+    speedup = micro_full_trace_seconds / approximation_seconds
     print(
         f"  {max_distance:.0f} m maximum source-anchor distance: {ray_count} exact rays, "
+        f"setup {setup_seconds:.3f} s + prediction {prediction_seconds:.3f} s = "
+        f"{approximation_seconds:.3f} s ({speedup:.2f}x versus full trace), "
         f"RMS error {rms_error:.4f} ms, maximum error {maximum_error:.4f} ms"
     )
 print(
