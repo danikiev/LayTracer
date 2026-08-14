@@ -185,12 +185,13 @@ group_colors = {
 }
 colors = [group_colors[group] for group in effects["group"]]
 
-figure, axes = plt.subplots(
-    1,
-    3,
-    figsize=(16.0, 5.8),
-    gridspec_kw={"width_ratios": [1.1, 1.35, 1.35]},
-)
+figure = plt.figure(figsize=(12.8, 13.0))
+grid = figure.add_gridspec(2, 2, height_ratios=[3.0, 1.0])
+axes = [
+    figure.add_subplot(grid[0, :]),
+    figure.add_subplot(grid[1, 0]),
+    figure.add_subplot(grid[1, 1]),
+]
 
 axis = axes[0]
 axis.axhspan(0.0, 1.2, color="#DCEAF4")
@@ -227,6 +228,7 @@ axis.text(
 )
 axis.set_xlim(-0.15, 4.15)
 axis.set_ylim(2.9, 0.0)
+axis.set_aspect("equal", adjustable="box")
 axis.set_xlabel("Horizontal distance (km)")
 axis.set_ylabel("Depth (km)")
 axis.set_title("(a) One selected P-to-SV reflection")
@@ -275,9 +277,9 @@ legend_handles = [
     Line2D([0], [0], marker="o", linestyle="", color=color, label=group)
     for group, color in group_colors.items()
 ]
-figure.legend(handles=legend_handles, frameon=False, ncol=5, loc="lower center", bbox_to_anchor=(0.67, 0.01))
+figure.legend(handles=legend_handles, frameon=False, ncol=5, loc="lower center", bbox_to_anchor=(0.5, 0.01))
 figure.suptitle("What changes this arrival?", fontsize=14)
-figure.subplots_adjust(left=0.055, right=0.985, top=0.88, bottom=0.18, wspace=0.58)
+figure.subplots_adjust(left=0.17, right=0.97, top=0.93, bottom=0.10, hspace=0.35, wspace=0.25)
 plt.show()
 
 ###############################################################################
@@ -680,6 +682,7 @@ axis.text(
 )
 axis.set_xlim(-0.35, 4.55)
 axis.set_ylim(2.7, 0.0)
+axis.set_aspect("equal", adjustable="box")
 axis.set_xlabel("Horizontal position (km)")
 axis.set_ylabel("Depth (km)")
 axis.set_title("(a) Source, receiver, and anchor geometry")
@@ -704,7 +707,7 @@ axis = axes[1, 0]
 image = axis.imshow(
     np.abs(nominal_error_ms),
     origin="lower",
-    aspect="auto",
+    aspect="equal",
     extent=[receiver_x[0] / 1000.0, receiver_x[-1] / 1000.0, source_x[0] / 1000.0, source_x[-1] / 1000.0],
     cmap="magma",
 )
@@ -924,11 +927,10 @@ micro_geometry_rays = trace_direct_p(
 figure, axes = plt.subplots(2, 2, figsize=(12.8, 8.4))
 
 axis = axes[0, 0]
-axis.axhspan(0.0, 0.7, color="#DCEAF4")
-axis.axhspan(0.7, 1.4, color="#B7D5E8")
-axis.axhspan(1.4, 2.05, color="#95C0DA")
-axis.axhline(0.7, color="white", linewidth=1.3)
-axis.axhline(1.4, color="white", linewidth=1.3)
+axis.fill_betweenx([0.0, 0.7], 0.0, 2.0, color="#DCEAF4")
+axis.fill_betweenx([0.7, 1.4], 0.0, 2.0, color="#B7D5E8")
+axis.fill_betweenx([1.4, 2.05], 0.0, 2.0, color="#95C0DA")
+axis.hlines([0.7, 1.4], 0.0, 2.0, color="white", linewidth=1.3)
 axis.scatter(
     micro_sources[:, 0] / 1000.0,
     micro_sources[:, 2] / 1000.0,
@@ -948,7 +950,7 @@ axis.scatter(
     label=f"{len(nominal_micro_anchors)} source anchors",
     zorder=3,
 )
-axis.plot([0.0, 0.0], [0.0, 1.0], color="#222222", linewidth=3.0, label="1 km well")
+axis.plot([0.0, 0.0], [0.0, 1.0], color="#222222", linewidth=1.8, label="1 km well")
 axis.scatter(
     micro_receivers[:, 0] / 1000.0,
     micro_receivers[:, 2] / 1000.0,
@@ -971,15 +973,16 @@ axis.text(1.77, 1.08, r"$V_P=3.4$ km/s", color="#354F60", fontsize=8)
 axis.text(1.77, 1.76, r"$V_P=4.3$ km/s", color="#354F60", fontsize=8)
 axis.set_xlim(-0.12, 2.08)
 axis.set_ylim(2.05, 0.0)
+axis.set_aspect("equal", adjustable="box")
 axis.set_xlabel("Distance from monitoring well (km)")
 axis.set_ylabel("Depth (km)")
 axis.set_title("(a) Vertical-well monitoring geometry")
 axis.legend(
     frameon=False,
     fontsize=7.3,
-    loc="upper center",
-    bbox_to_anchor=(0.48, 0.98),
-    ncol=2,
+    loc="upper left",
+    bbox_to_anchor=(1.02, 0.98),
+    borderaxespad=0.0,
 )
 
 axis = axes[0, 1]
@@ -1028,6 +1031,7 @@ axis.scatter(
 )
 axis.set_xlim(0.0, 2.0)
 axis.set_ylim(2.0, 0.0)
+axis.set_aspect("equal", adjustable="box")
 axis.set_xlabel("Distance from monitoring well (km)")
 axis.set_ylabel("Potential source depth (km)")
 axis.set_title("(c) RMS error over the 10 receivers")
