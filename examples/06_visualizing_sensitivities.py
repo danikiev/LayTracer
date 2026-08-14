@@ -800,3 +800,411 @@ plt.show()
 # membership, the P-to-SV itinerary, and the propagating branch must remain
 # unchanged.  Larger endpoint separations require closer anchors or full ray
 # tracing; the error curve above makes that trade-off explicit.
+
+###############################################################################
+# Microseismic monitoring from a vertical receiver well
+# -----------------------------------------------------
+#
+# Consider a 1-km-deep monitoring well and a set of possible microseismic
+# sources in a 2 km by 2 km region on one side of it.  Ten receivers are fixed
+# in the well.  Direct P-wave traveltimes are needed from every possible source
+# location to every receiver, for example when scanning a location grid.
+#
+# The dense calculation below traces all 1640 source locations to all 10
+# receivers.  The anchored calculation traces every receiver only from a
+# coarser, layer-aware subset of source locations.  Traveltimes at neighboring
+# source points are predicted with the analytic source-coordinate derivatives.
+# Anchors are selected separately within each layer.  For each receiver, the
+# predictor also stays on the same vertical side of that receiver, so no local
+# prediction crosses an interface or reverses the direct-ray direction.
+
+micro_model = pd.DataFrame({
+    "Depth": [0.0, 700.0, 1400.0],
+    "Vp": [2600.0, 3400.0, 4300.0],
+    "Vs": [1450.0, 1950.0, 2500.0],
+})
+micro_source_x = np.arange(0.0, 2000.0 + 50.0, 50.0)
+micro_source_z = np.arange(25.0, 2000.0, 50.0)
+micro_grid_x, micro_grid_z = np.meshgrid(micro_source_x, micro_source_z)
+micro_sources = np.column_stack([
+    micro_grid_x.ravel(),
+    np.zeros(micro_grid_x.size),
+    micro_grid_z.ravel(),
+])
+micro_receivers = np.column_stack([
+    np.zeros(10),
+    np.zeros(10),
+    np.arange(100.0, 1000.0 + 100.0, 100.0),
+])
+
+
+def trace_direct_p(sources_to_trace, receivers_to_trace, requested):
+    """Trace direct P arrivals for the microseismic experiment."""
+    return lt.trace_rays(
+        sources_to_trace,
+        receivers_to_trace,
+        micro_model,
+        source_phase="P",
+        requested=requested,
+        n_jobs=1,
+        verbose=False,
+        tol=1e-10,
+        max_iter=30,
+    )
+
+
+micro_exact = trace_direct_p(micro_sources, micro_receivers, {"travel_times"})
+micro_exact_times = micro_exact.travel_times.reshape(len(micro_sources), len(micro_receivers))
+micro_layer_indices = (
+    np.searchsorted(micro_model["Depth"].to_numpy(), micro_source_z, side="right") - 1
+)
+
+
+def layer_aware_anchor_indices(coordinates, layer_indices, spacing):
+    """Select depth anchors independently within every source layer."""
+    selected = []
+    for layer_index in np.unique(layer_indices):
+        in_layer = np.flatnonzero(layer_indices == layer_index)
+        selected.extend(in_layer[anchor_indices(coordinates[in_layer], spacing)])
+    return np.asarray(selected, dtype=int)
+
+
+def predict_microseismic_times(spacing):
+    """Predict the dense source grid from layer-aware exact source anchors."""
+    x_indices = anchor_indices(micro_source_x, spacing)
+    z_indices = layer_aware_anchor_indices(
+        micro_source_z,
+        micro_layer_indices,
+        spacing,
+    )
+    anchor_grid_x, anchor_grid_z = np.meshgrid(
+        micro_source_x[x_indices],
+        micro_source_z[z_indices],
+    )
+    anchor_sources = np.column_stack([
+        anchor_grid_x.ravel(),
+        np.zeros(anchor_grid_x.size),
+        anchor_grid_z.ravel(),
+    ])
+    anchor_layers = (
+        np.searchsorted(
+            micro_model["Depth"].to_numpy(),
+            anchor_sources[:, 2],
+            side="right",
+        )
+        - 1
+    )
+    anchors = trace_direct_p(
+        anchor_sources,
+        micro_receivers,
+        {"travel_times", "sensitivities"},
+    )
+    predicted = np.empty_like(micro_exact_times)
+    source_layers = (
+        np.searchsorted(
+            micro_model["Depth"].to_numpy(),
+            micro_sources[:, 2],
+            side="right",
+        )
+        - 1
+    )
+
+    for source_index, source_point in enumerate(micro_sources):
+        for receiver_index, receiver_point in enumerate(micro_receivers):
+            same_layer = anchor_layers == source_layers[source_index]
+            same_vertical_side = (
+                (anchor_sources[:, 2] - receiver_point[2])
+                * (source_point[2] - receiver_point[2])
+                > 0.0
+            )
+            candidates = np.flatnonzero(same_layer & same_vertical_side)
+            squared_distance = np.sum(
+                (anchor_sources[candidates][:, [0, 2]] - source_point[[0, 2]]) ** 2,
+                axis=1,
+            )
+            nearest_anchor = candidates[int(np.argmin(squared_distance))]
+            source_change = source_point - anchor_sources[nearest_anchor]
+            flat_anchor_index = nearest_anchor * len(micro_receivers) + receiver_index
+            anchor_sensitivity = anchors.sensitivities[flat_anchor_index]
+            assert anchor_sensitivity.valid
+            predicted[source_index, receiver_index] = (
+                anchors.travel_times[flat_anchor_index]
+                + np.dot(anchor_sensitivity.dtravel_time_dsource, source_change)
+            )
+
+    return predicted, anchor_sources
+
+
+micro_anchor_spacings = np.array([100.0, 200.0, 400.0])
+micro_predictions = {}
+micro_anchor_sources = {}
+micro_exact_ray_counts = []
+micro_rms_errors_ms = []
+micro_maximum_errors_ms = []
+
+for spacing in micro_anchor_spacings:
+    predicted_times, anchor_sources = predict_microseismic_times(spacing)
+    error_ms = 1e3 * (predicted_times - micro_exact_times)
+    micro_predictions[spacing] = predicted_times
+    micro_anchor_sources[spacing] = anchor_sources
+    micro_exact_ray_counts.append(len(anchor_sources) * len(micro_receivers))
+    micro_rms_errors_ms.append(float(np.sqrt(np.mean(error_ms**2))))
+    micro_maximum_errors_ms.append(float(np.max(np.abs(error_ms))))
+
+micro_nominal_spacing = 200.0
+micro_nominal_index = int(
+    np.flatnonzero(micro_anchor_spacings == micro_nominal_spacing)[0]
+)
+micro_nominal_prediction = micro_predictions[micro_nominal_spacing]
+micro_nominal_error_ms = 1e3 * (micro_nominal_prediction - micro_exact_times)
+micro_nominal_absolute_error_ms = np.abs(micro_nominal_error_ms)
+micro_percentile_95_ms = float(np.percentile(micro_nominal_absolute_error_ms, 95.0))
+micro_source_rms_error_ms = np.sqrt(np.mean(micro_nominal_error_ms**2, axis=1)).reshape(
+    micro_grid_x.shape
+)
+
+assert micro_exact_times.size == 16400
+assert micro_exact_ray_counts[micro_nominal_index] < micro_exact_times.size / 10
+
+print("\nMicroseismic source-grid traveltime prediction:")
+print(f"  Full calculation: {micro_exact_times.size} exact rays")
+for spacing, ray_count, rms_error, maximum_error in zip(
+    micro_anchor_spacings,
+    micro_exact_ray_counts,
+    micro_rms_errors_ms,
+    micro_maximum_errors_ms,
+):
+    print(
+        f"  {spacing:.0f} m source anchors: {ray_count} exact rays, "
+        f"RMS error {rms_error:.4f} ms, maximum error {maximum_error:.4f} ms"
+    )
+print(f"  200 m anchors: 95% of absolute errors below {micro_percentile_95_ms:.4f} ms")
+
+assert micro_rms_errors_ms[micro_nominal_index] < 5.0
+
+###############################################################################
+# Plot the monitoring geometry and prediction errors
+# --------------------------------------------------
+#
+# The nominal comparison uses 200 m source anchors.  The full dense solution
+# is plotted only as a validation reference.
+
+micro_geometry_sources = np.array([
+    [250.0, 0.0, 325.0],
+    [900.0, 0.0, 775.0],
+    [1500.0, 0.0, 1275.0],
+    [1950.0, 0.0, 1875.0],
+])
+micro_geometry_receiver = micro_receivers[5]
+micro_geometry_rays = trace_direct_p(
+    micro_geometry_sources,
+    micro_geometry_receiver,
+    {"travel_times", "rays"},
+)
+
+figure, axes = plt.subplots(2, 2, figsize=(12.8, 8.4))
+
+axis = axes[0, 0]
+axis.axhspan(0.0, 0.7, color="#DCEAF4")
+axis.axhspan(0.7, 1.4, color="#B7D5E8")
+axis.axhspan(1.4, 2.05, color="#95C0DA")
+axis.axhline(0.7, color="white", linewidth=1.3)
+axis.axhline(1.4, color="white", linewidth=1.3)
+axis.scatter(
+    micro_sources[:, 0] / 1000.0,
+    micro_sources[:, 2] / 1000.0,
+    s=4,
+    color="#5F7482",
+    alpha=0.28,
+    label="1640 possible sources",
+)
+nominal_micro_anchors = micro_anchor_sources[micro_nominal_spacing]
+axis.scatter(
+    nominal_micro_anchors[:, 0] / 1000.0,
+    nominal_micro_anchors[:, 2] / 1000.0,
+    s=19,
+    facecolors="none",
+    edgecolors="#D55E00",
+    linewidths=0.8,
+    label="154 source anchors",
+    zorder=3,
+)
+axis.plot([0.0, 0.0], [0.0, 1.0], color="#222222", linewidth=3.0, label="1 km well")
+axis.scatter(
+    micro_receivers[:, 0] / 1000.0,
+    micro_receivers[:, 2] / 1000.0,
+    marker=">",
+    s=35,
+    color="#222222",
+    label="10 receivers",
+    zorder=5,
+)
+for ray in micro_geometry_rays.rays:
+    axis.plot(
+        ray[:, 0] / 1000.0,
+        ray[:, 2] / 1000.0,
+        color="#0072B2",
+        linewidth=1.4,
+        alpha=0.75,
+    )
+axis.text(1.77, 0.38, r"$V_P=2.6$ km/s", color="#354F60", fontsize=8)
+axis.text(1.77, 1.08, r"$V_P=3.4$ km/s", color="#354F60", fontsize=8)
+axis.text(1.77, 1.76, r"$V_P=4.3$ km/s", color="#354F60", fontsize=8)
+axis.set_xlim(-0.12, 2.08)
+axis.set_ylim(2.05, 0.0)
+axis.set_xlabel("Distance from monitoring well (km)")
+axis.set_ylabel("Depth (km)")
+axis.set_title("(a) Vertical-well monitoring geometry")
+axis.legend(
+    frameon=False,
+    fontsize=7.3,
+    loc="upper center",
+    bbox_to_anchor=(0.48, 0.98),
+    ncol=2,
+)
+
+axis = axes[0, 1]
+micro_exact_ms = 1e3 * micro_exact_times.ravel()
+micro_predicted_ms = 1e3 * micro_nominal_prediction.ravel()
+micro_bounds = [
+    min(micro_exact_ms.min(), micro_predicted_ms.min()),
+    max(micro_exact_ms.max(), micro_predicted_ms.max()),
+]
+axis.scatter(
+    micro_exact_ms,
+    micro_predicted_ms,
+    s=7,
+    color="#0072B2",
+    alpha=0.20,
+    edgecolors="none",
+)
+axis.plot(micro_bounds, micro_bounds, "--", color="#333333", linewidth=1.0, label="perfect prediction")
+axis.set_xlim(micro_bounds)
+axis.set_ylim(micro_bounds)
+axis.set_aspect("equal", adjustable="box")
+axis.set_xlabel("Fully traced traveltime (ms)")
+axis.set_ylabel("Anchor prediction (ms)")
+axis.set_title("(b) All 16,400 source--receiver times")
+axis.legend(frameon=False, fontsize=8)
+axis.grid(alpha=0.2)
+
+axis = axes[1, 0]
+image = axis.pcolormesh(
+    micro_source_x / 1000.0,
+    micro_source_z / 1000.0,
+    micro_source_rms_error_ms,
+    shading="nearest",
+    cmap="magma",
+)
+axis.axhline(0.7, color="white", linewidth=0.8, alpha=0.8)
+axis.axhline(1.4, color="white", linewidth=0.8, alpha=0.8)
+axis.plot([0.0, 0.0], [0.0, 1.0], color="#00B8D9", linewidth=2.2)
+axis.scatter(
+    micro_receivers[:, 0] / 1000.0,
+    micro_receivers[:, 2] / 1000.0,
+    marker=">",
+    s=24,
+    color="#00B8D9",
+    zorder=4,
+)
+axis.set_xlim(0.0, 2.0)
+axis.set_ylim(2.0, 0.0)
+axis.set_xlabel("Distance from monitoring well (km)")
+axis.set_ylabel("Potential source depth (km)")
+axis.set_title("(c) RMS error over the 10 receivers")
+colorbar = figure.colorbar(image, ax=axis, pad=0.02)
+colorbar.set_label("RMS traveltime error (ms)")
+
+axis = axes[1, 1]
+axis.plot(
+    micro_anchor_spacings,
+    micro_rms_errors_ms,
+    "o-",
+    color="#0072B2",
+    label="RMS error",
+)
+axis.plot(
+    micro_anchor_spacings,
+    micro_maximum_errors_ms,
+    "s-",
+    color="#D55E00",
+    label="maximum error",
+)
+for spacing, ray_count, maximum_error in zip(
+    micro_anchor_spacings,
+    micro_exact_ray_counts,
+    micro_maximum_errors_ms,
+):
+    axis.annotate(
+        f"{ray_count} rays",
+        (spacing, maximum_error),
+        xytext=(0, 7),
+        textcoords="offset points",
+        ha="center",
+        fontsize=7.5,
+    )
+axis.axhline(1.0, color="#666666", linestyle=":", linewidth=1.0, label="1 ms")
+axis.set_yscale("log")
+axis.set_xlabel("Source-anchor spacing (m)")
+axis.set_ylabel("Traveltime error (ms, log scale)")
+axis.set_title("(d) Accuracy versus exact-ray count")
+axis.legend(frameon=False, fontsize=8)
+axis.grid(alpha=0.2, which="both")
+
+micro_reduction = micro_exact_times.size / micro_exact_ray_counts[micro_nominal_index]
+figure.text(
+    0.5,
+    0.022,
+    f"At 200 m spacing: {micro_exact_ray_counts[micro_nominal_index]} exact rays "
+    f"predict {micro_exact_times.size} traveltimes ({micro_reduction:.1f}$\\times$ fewer solves); "
+    f"RMS error = {micro_rms_errors_ms[micro_nominal_index]:.2f} ms.",
+    ha="center",
+    va="bottom",
+    fontsize=9.5,
+    bbox={"boxstyle": "round,pad=0.4", "facecolor": "#F2F6F8", "edgecolor": "#AAB7BF"},
+)
+figure.suptitle("Approximate a microseismic traveltime table from source anchors", fontsize=14)
+figure.subplots_adjust(left=0.08, right=0.965, top=0.91, bottom=0.11, hspace=0.36, wspace=0.28)
+plt.show()
+
+###############################################################################
+# **How to read this figure.** Panel (a) shows the complete monitoring setup in
+# depth section.  The black vertical line is the 1-km well and the triangles
+# are its 10 receivers.  Small gray points are the 1640 possible event
+# locations covering the one-sided 0--2 km horizontal and depth search region.
+# Orange circles are the 154 source anchors used for the nominal 200 m
+# approximation.  Blue examples illustrate direct P rays through the three
+# velocity layers; refraction at 0.7 and 1.4 km is visible as a change in ray
+# slope.
+#
+# Panel (b) contains all 16,400 source--receiver traveltimes.  The horizontal
+# coordinate is obtained by fully tracing every ray, while the vertical
+# coordinate is predicted from the nearest topology-compatible source anchor.
+# The point cloud follows the dashed 1:1 line over the full traveltime range.
+# The small deviations cannot be judged reliably at this scale, so panels (c)
+# and (d) display them directly.
+#
+# Panel (c) maps the RMS prediction error at every possible source location,
+# averaged over the 10 receivers.  The well and receivers are repeated in cyan
+# to connect the error pattern to the acquisition geometry.  Errors are lowest
+# at and near anchors and generally increase between them, producing the
+# repeated 200 m cells.  Horizontal bands in the upper kilometre align with
+# receiver depths.  The largest local errors occur close to the well, where
+# short source--receiver distance makes traveltime change most rapidly with
+# source position.  Layer-aware and receiver-side-aware anchor selection
+# prevents predictions from crossing an interface or reversing the local ray
+# branch; the white lines mark the two model interfaces.
+#
+# Panel (d) summarizes the accuracy--cost trade-off on a logarithmic error
+# scale.  At 100 m spacing, 4830 exact rays give 0.61 ms RMS error.  The nominal
+# 200 m grid uses 1540 exact rays instead of 16,400---10.6 times fewer solves---
+# with 1.92 ms RMS error, and 95% of individual absolute errors are below
+# 2.87 ms.  At 400 m spacing only 540 rays are traced, but the RMS error rises
+# to 6.07 ms.  Maximum errors are much larger than RMS errors because a small
+# number of source points lie very close to individual receivers; such regions
+# are natural candidates for denser anchors or direct tracing.
+#
+# This experiment treats the fully traced table as validation only.  In a
+# location scan, the anchored table would be the computational product: exact
+# rays are calculated at the anchors and neighboring traveltimes are filled in
+# analytically, with anchor spacing chosen from the acceptable error level.
