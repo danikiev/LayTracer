@@ -41,6 +41,10 @@ class RaySensitivity:
 
     The derivatives are valid while layer membership, prescribed phase
     itinerary, and the propagating branch remain unchanged.
+
+    ``ray_parameter`` and ``doffset_dray_parameter`` retain :math:`p` and
+    :math:`X_p=\partial X/\partial p` from the solved ray.  They support the
+    optional second-order endpoint predictor without another ray solve.
     """
 
     vp_layer_indices: np.ndarray
@@ -56,6 +60,8 @@ class RaySensitivity:
     dtravel_time_dreceiver: np.ndarray
     dray_parameter_dsource: np.ndarray
     dray_parameter_dreceiver: np.ndarray
+    ray_parameter: float = np.nan
+    doffset_dray_parameter: float = np.nan
     valid: bool = True
     reason: str | None = None
 
@@ -79,6 +85,8 @@ def _empty_sensitivity(valid: bool, reason: str | None = None) -> RaySensitivity
         dtravel_time_dreceiver=endpoint.copy(),
         dray_parameter_dsource=endpoint.copy(),
         dray_parameter_dreceiver=endpoint.copy(),
+        ray_parameter=np.nan,
+        doffset_dray_parameter=np.nan,
         valid=valid,
         reason=reason,
     )
@@ -195,6 +203,8 @@ def _horizontal_path_sensitivity(
         dtravel_time_dreceiver=dtime_receiver,
         dray_parameter_dsource=np.zeros(3),
         dray_parameter_dreceiver=np.zeros(3),
+        ray_parameter=1.0 / velocity,
+        doffset_dray_parameter=np.inf,
     )
 
 
@@ -304,4 +314,6 @@ def compute_ray_sensitivity(
         dtravel_time_dreceiver=dtime_receiver,
         dray_parameter_dsource=dparameter_source,
         dray_parameter_dreceiver=dparameter_receiver,
+        ray_parameter=p,
+        doffset_dray_parameter=x_p,
     )

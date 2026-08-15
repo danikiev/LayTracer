@@ -387,9 +387,95 @@ def _normalized_distance(distance: np.ndarray, limit: float | None) -> np.ndarra
     return distance / limit
 
 
+def _extend_anchor_cover(
+    points: np.ndarray,
+    target_indices: np.ndarray,
+    selected: set[int],
+    max_distance: float,
+) -> None:
+    """Extend an anchor set to cover one topology-compatible point group."""
+    target_indices = np.asarray(target_indices, dtype=np.int64)
+    group_points = points[target_indices]
+    group_selected = np.asarray(
+        sorted(selected.intersection(target_indices.tolist())), dtype=np.int64
+    )
+    if group_selected.size == 0:
+        order = np.lexsort(
+            (
+                target_indices,
+                group_points[:, 2],
+                group_points[:, 1],
+                group_points[:, 0],
+            )
+        )
+        first = int(target_indices[order[0]])
+        selected.add(first)
+        group_selected = np.array([first], dtype=np.int64)
+
+    nearest = np.min(
+        np.linalg.norm(
+            group_points[:, None, :] - points[group_selected][None, :, :], axis=2
+        ),
+        axis=1,
+    )
+    tolerance = 1e-12 * max(1.0, max_distance)
+    while float(np.max(nearest)) > max_distance + tolerance:
+        farthest_distance = float(np.max(nearest))
+        candidates = np.flatnonzero(
+            np.isclose(nearest, farthest_distance, rtol=0.0, atol=tolerance)
+        )
+        next_index = int(
+            target_indices[candidates[np.argmin(target_indices[candidates])]]
+        )
+        selected.add(next_index)
+        distance = np.linalg.norm(group_points - points[next_index], axis=1)
+        nearest = np.minimum(nearest, distance)
+
+
+def _quadratic_endpoint_time_correction(
+    sensitivity: RaySensitivity,
+    anchor_source: np.ndarray,
+    anchor_receiver: np.ndarray,
+    delta_source: np.ndarray,
+    delta_receiver: np.ndarray,
+) -> float:
+    r"""Return the fixed-topology second-order endpoint correction.
+
+    For horizontal anchor offset :math:`R`, ray parameter :math:`p`, and
+    :math:`X_p=\partial X/\partial p`, the directional curvature is
+
+    .. math::
+
+       T'' = X_p (p')^2 + p\|\delta r_\perp\|^2/R.
+
+    The zero-offset limit replaces the second term by
+    :math:`\|\delta r\|^2/X_p`.
+    """
+    x_p = float(sensitivity.doffset_dray_parameter)
+    p = float(sensitivity.ray_parameter)
+    if not np.isfinite(x_p) or x_p <= 0.0 or not np.isfinite(p):
+        return 0.0
+
+    delta_parameter = float(
+        np.dot(sensitivity.dray_parameter_dsource, delta_source)
+        + np.dot(sensitivity.dray_parameter_dreceiver, delta_receiver)
+    )
+    relative_change = delta_receiver[:2] - delta_source[:2]
+    horizontal = anchor_receiver[:2] - anchor_source[:2]
+    offset = float(np.linalg.norm(horizontal))
+    curvature = x_p * delta_parameter**2
+    if offset > 1e-12:
+        direction = horizontal / offset
+        transverse = relative_change - direction * np.dot(direction, relative_change)
+        curvature += p * float(np.dot(transverse, transverse)) / offset
+    else:
+        curvature += float(np.dot(relative_change, relative_change)) / x_p
+    return 0.5 * curvature
+
+
 @dataclass
 class TravelTimeApproximator:
-    """Fitted topology-safe first-order traveltime approximator.
+    """Fitted topology-safe endpoint-Taylor traveltime approximator.
 
     Use :meth:`fit` to construct instances. The fitted velocity model and
     itinerary are fixed; model changes require refitting.
@@ -525,75 +611,107 @@ class TravelTimeApproximator:
 
         source_set = set(source_indices.tolist())
         receiver_set = set(receiver_indices.tolist())
-        while True:
-            sorted_sources = np.asarray(sorted(source_set), dtype=np.int64)
-            sorted_receivers = np.asarray(sorted(receiver_set), dtype=np.int64)
-            pair_source_indices = np.repeat(sorted_sources, len(sorted_receivers))
-            pair_receiver_indices = np.tile(sorted_receivers, len(sorted_sources))
-            anchor_groups: dict[object, list[int]] = {}
-            for pair_index, (source_index, receiver_index) in enumerate(zip(
-                pair_source_indices, pair_receiver_indices
-            )):
-                key = topology(source_points[source_index], receiver_points[receiver_index])
-                if key is not None:
-                    anchor_groups.setdefault(key, []).append(pair_index)
+        if receiver_limit is None and source_limit is not None:
+            for receiver_index in range(len(receiver_points)):
+                grouped_sources: dict[object, list[int]] = {}
+                for source_index in range(len(source_points)):
+                    key = target_topologies[
+                        source_index * len(receiver_points) + receiver_index
+                    ]
+                    if key is not None:
+                        grouped_sources.setdefault(key, []).append(source_index)
+                for group_indices in grouped_sources.values():
+                    _extend_anchor_cover(
+                        source_points,
+                        np.asarray(group_indices, dtype=np.int64),
+                        source_set,
+                        source_limit,
+                    )
+        elif source_limit is None and receiver_limit is not None:
+            for source_index in range(len(source_points)):
+                grouped_receivers: dict[object, list[int]] = {}
+                start = source_index * len(receiver_points)
+                for receiver_index in range(len(receiver_points)):
+                    key = target_topologies[start + receiver_index]
+                    if key is not None:
+                        grouped_receivers.setdefault(key, []).append(receiver_index)
+                for group_indices in grouped_receivers.values():
+                    _extend_anchor_cover(
+                        receiver_points,
+                        np.asarray(group_indices, dtype=np.int64),
+                        receiver_set,
+                        receiver_limit,
+                    )
+        else:
+            while True:
+                sorted_sources = np.asarray(sorted(source_set), dtype=np.int64)
+                sorted_receivers = np.asarray(sorted(receiver_set), dtype=np.int64)
+                pair_source_indices = np.repeat(sorted_sources, len(sorted_receivers))
+                pair_receiver_indices = np.tile(sorted_receivers, len(sorted_sources))
+                anchor_groups: dict[object, list[int]] = {}
+                for pair_index, (source_index, receiver_index) in enumerate(zip(
+                    pair_source_indices, pair_receiver_indices
+                )):
+                    key = topology(source_points[source_index], receiver_points[receiver_index])
+                    if key is not None:
+                        anchor_groups.setdefault(key, []).append(pair_index)
 
-            uncovered_groups: dict[object, list[tuple[int, int]]] = {}
-            for flat_index, target_key in enumerate(target_topologies):
-                if target_key is None:
-                    continue
-                source_index = flat_index // len(receiver_points)
-                receiver_index = flat_index % len(receiver_points)
-                candidate_positions = anchor_groups.get(target_key, ())
-                if candidate_positions:
-                    candidate_positions = np.asarray(candidate_positions, dtype=np.int64)
-                    source_distances = np.linalg.norm(
-                        source_points[pair_source_indices[candidate_positions]]
-                        - source_points[source_index],
-                        axis=1,
-                    )
-                    receiver_distances = np.linalg.norm(
-                        receiver_points[pair_receiver_indices[candidate_positions]]
-                        - receiver_points[receiver_index],
-                        axis=1,
-                    )
-                    covered = np.any(
-                        _distance_allowed(source_distances, source_limit)
-                        & _distance_allowed(receiver_distances, receiver_limit)
-                    )
-                else:
-                    covered = False
-                if not covered:
-                    uncovered_groups.setdefault(target_key, []).append(
-                        (source_index, receiver_index)
-                    )
+                uncovered_groups: dict[object, list[tuple[int, int]]] = {}
+                for flat_index, target_key in enumerate(target_topologies):
+                    if target_key is None:
+                        continue
+                    source_index = flat_index // len(receiver_points)
+                    receiver_index = flat_index % len(receiver_points)
+                    candidate_positions = anchor_groups.get(target_key, ())
+                    if candidate_positions:
+                        candidate_positions = np.asarray(candidate_positions, dtype=np.int64)
+                        source_distances = np.linalg.norm(
+                            source_points[pair_source_indices[candidate_positions]]
+                            - source_points[source_index],
+                            axis=1,
+                        )
+                        receiver_distances = np.linalg.norm(
+                            receiver_points[pair_receiver_indices[candidate_positions]]
+                            - receiver_points[receiver_index],
+                            axis=1,
+                        )
+                        covered = np.any(
+                            _distance_allowed(source_distances, source_limit)
+                            & _distance_allowed(receiver_distances, receiver_limit)
+                        )
+                    else:
+                        covered = False
+                    if not covered:
+                        uncovered_groups.setdefault(target_key, []).append(
+                            (source_index, receiver_index)
+                        )
 
-            if not uncovered_groups:
-                break
+                if not uncovered_groups:
+                    break
 
-            previous_sizes = (len(source_set), len(receiver_set))
-            for uncovered in uncovered_groups.values():
-                uncovered_array = np.asarray(uncovered, dtype=np.int64)
-                candidate_sources = np.unique(uncovered_array[:, 0])
-                candidate_receivers = np.unique(uncovered_array[:, 1])
-                if source_limit is None:
-                    source_set.update(candidate_sources.tolist())
-                else:
-                    selected = select_anchors(
-                        source_points[candidate_sources], source_limit
-                    ).indices
-                    source_set.update(candidate_sources[selected].tolist())
-                if receiver_limit is None:
-                    receiver_set.update(candidate_receivers.tolist())
-                else:
-                    selected = select_anchors(
-                        receiver_points[candidate_receivers], receiver_limit
-                    ).indices
-                    receiver_set.update(candidate_receivers[selected].tolist())
-            if previous_sizes == (len(source_set), len(receiver_set)):
-                first_uncovered = next(iter(uncovered_groups.values()))[0]
-                source_set.add(first_uncovered[0])
-                receiver_set.add(first_uncovered[1])
+                previous_sizes = (len(source_set), len(receiver_set))
+                for uncovered in uncovered_groups.values():
+                    uncovered_array = np.asarray(uncovered, dtype=np.int64)
+                    candidate_sources = np.unique(uncovered_array[:, 0])
+                    candidate_receivers = np.unique(uncovered_array[:, 1])
+                    if source_limit is None:
+                        source_set.update(candidate_sources.tolist())
+                    else:
+                        selected = select_anchors(
+                            source_points[candidate_sources], source_limit
+                        ).indices
+                        source_set.update(candidate_sources[selected].tolist())
+                    if receiver_limit is None:
+                        receiver_set.update(candidate_receivers.tolist())
+                    else:
+                        selected = select_anchors(
+                            receiver_points[candidate_receivers], receiver_limit
+                        ).indices
+                        receiver_set.update(candidate_receivers[selected].tolist())
+                if previous_sizes == (len(source_set), len(receiver_set)):
+                    first_uncovered = next(iter(uncovered_groups.values()))[0]
+                    source_set.add(first_uncovered[0])
+                    receiver_set.add(first_uncovered[1])
 
         source_indices = np.asarray(sorted(source_set), dtype=np.int64)
         receiver_indices = np.asarray(sorted(receiver_set), dtype=np.int64)
@@ -636,7 +754,7 @@ class TravelTimeApproximator:
             anchor_topologies=anchor_topologies,
         )
 
-    def predict(self, sources=None, receivers=None) -> TravelTimePrediction:
+    def predict(self, sources=None, receivers=None, *, order: int = 1) -> TravelTimePrediction:
         """Predict traveltimes for targets inside the fitted anchor domain.
 
         Parameters
@@ -644,6 +762,10 @@ class TravelTimeApproximator:
         sources, receivers : array-like, optional
             Query endpoints. Omitted arrays default to the corresponding
             points supplied to :meth:`fit`.
+        order : {1, 2}
+            Endpoint Taylor order. Second order adds fixed-topology curvature
+            and evaluates direct same-layer paths exactly. The default retains
+            the original first-order predictor.
 
         Returns
         -------
@@ -657,6 +779,8 @@ class TravelTimeApproximator:
         ``"no_topology_match"``, ``"outside_anchor_distance"``, and
         ``"invalid_anchor_sensitivity"``.
         """
+        if order not in (1, 2):
+            raise ValueError("order must be 1 or 2.")
         source_points = self.fit_sources if sources is None else _normalize_points(sources, "sources")
         receiver_points = self.fit_receivers if receivers is None else _normalize_points(receivers, "receivers")
         model = ModelArrays.from_dataframe(self.velocity_model)
@@ -674,6 +798,18 @@ class TravelTimeApproximator:
                 grouped_positions.setdefault(key, []).append(index)
         for key, positions in grouped_positions.items():
             anchor_groups[key] = np.asarray(positions, dtype=np.int64)
+        sensitivity_valid = np.asarray(
+            [
+                sensitivity is not None and sensitivity.valid
+                for sensitivity in self.anchor_trace.sensitivities
+            ],
+            dtype=bool,
+        )
+        receiver_distance_matrix = np.linalg.norm(
+            receiver_points[:, None, :] - self.anchor_receivers[None, :, :], axis=2
+        )
+        source_layers = _layer_indices(source_points[:, 2], model.depths)
+        receiver_layers = _layer_indices(receiver_points[:, 2], model.depths)
         topology_cache: dict[tuple[float, float, bool], object] = {}
 
         for source_index, source_point in enumerate(source_points):
@@ -703,7 +839,7 @@ class TravelTimeApproximator:
                     reasons[flat_index] = _REASON_NO_MATCH
                     continue
 
-                receiver_distances = np.linalg.norm(self.anchor_receivers - receiver_point, axis=1)
+                receiver_distances = receiver_distance_matrix[receiver_index]
                 candidate_source_indices = topology_candidates // len(self.anchor_receivers)
                 candidate_receiver_indices = topology_candidates % len(self.anchor_receivers)
                 candidate_source_distances = source_distances[candidate_source_indices]
@@ -722,29 +858,48 @@ class TravelTimeApproximator:
                     _normalized_distance(candidate_source_distances, self.source_max_distance),
                     _normalized_distance(candidate_receiver_distances, self.receiver_max_distance),
                 )
-                order = np.argsort(ranking, kind="stable")
-                chosen = None
-                for position in order:
-                    candidate = int(candidates[position])
-                    sensitivity = self.anchor_trace.sensitivities[candidate]
-                    if sensitivity is not None and sensitivity.valid:
-                        chosen = (candidate, int(position), sensitivity)
-                        break
-                if chosen is None:
+                ranking[~sensitivity_valid[candidates]] = np.inf
+                position = int(np.argmin(ranking))
+                if not np.isfinite(ranking[position]):
                     reasons[flat_index] = _REASON_INVALID_SENSITIVITY
                     continue
 
-                candidate, position, sensitivity = chosen
+                candidate = int(candidates[position])
+                sensitivity = self.anchor_trace.sensitivities[candidate]
                 anchor_source_index = candidate // len(self.anchor_receivers)
                 anchor_receiver_index = candidate % len(self.anchor_receivers)
-                change = linearized_ray_change(
-                    sensitivity,
-                    delta_source=source_point - self.anchor_sources[anchor_source_index],
-                    delta_receiver=receiver_point - self.anchor_receivers[anchor_receiver_index],
+                anchor_source = self.anchor_sources[anchor_source_index]
+                anchor_receiver = self.anchor_receivers[anchor_receiver_index]
+                delta_source = source_point - anchor_source
+                delta_receiver = receiver_point - anchor_receiver
+                delta_time = float(
+                    np.dot(sensitivity.dtravel_time_dsource, delta_source)
+                    + np.dot(sensitivity.dtravel_time_dreceiver, delta_receiver)
                 )
-                travel_times[flat_index] = (
-                    self.anchor_trace.travel_times[candidate] + change.delta_travel_time
-                )
+                predicted_time = self.anchor_trace.travel_times[candidate] + delta_time
+                if order == 2:
+                    if (
+                        self.itinerary is None
+                        and source_layers[source_index] == receiver_layers[receiver_index]
+                    ):
+                        layer_index = source_layers[source_index]
+                        velocity = (
+                            model.vp[layer_index]
+                            if self.source_phase == "P"
+                            else model.vs[layer_index]
+                        )
+                        predicted_time = float(
+                            np.linalg.norm(receiver_point - source_point) / velocity
+                        )
+                    else:
+                        predicted_time += _quadratic_endpoint_time_correction(
+                            sensitivity,
+                            anchor_source,
+                            anchor_receiver,
+                            delta_source,
+                            delta_receiver,
+                        )
+                travel_times[flat_index] = predicted_time
                 valid[flat_index] = True
                 reasons[flat_index] = _REASON_OK
                 anchor_indices[flat_index] = candidate

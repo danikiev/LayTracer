@@ -799,7 +799,8 @@ plt.show()
 # The dense calculation below traces all 1640 source locations to all 10
 # receivers.  The anchored calculation traces every receiver only from a
 # coarser subset of source locations.  Traveltimes at neighboring source
-# points are predicted with the analytic source-coordinate derivatives.
+# points are predicted with the analytic source-coordinate derivatives and
+# fixed-topology endpoint curvature (``order=2``).
 # LayTracer places initial point-cloud anchors within each layer and refines
 # them until every source--receiver pair has a nearby anchor with the same
 # ordered layer, phase, and vertical-direction topology.
@@ -869,7 +870,7 @@ for max_distance in micro_anchor_distances:
     )
     micro_anchor_setup_seconds.append(time.perf_counter() - start)
     start = time.perf_counter()
-    prediction = approximator.predict()
+    prediction = approximator.predict(order=2)
     micro_prediction_seconds.append(time.perf_counter() - start)
     micro_approximation_seconds.append(
         micro_anchor_setup_seconds[-1] + micro_prediction_seconds[-1]
@@ -1037,7 +1038,7 @@ axis.set_xlim(micro_bounds)
 axis.set_ylim(micro_bounds)
 axis.set_aspect("equal", adjustable="box")
 axis.set_xlabel("Fully traced traveltime (ms)")
-axis.set_ylabel("Anchor prediction (ms)")
+axis.set_ylabel("Second-order anchor prediction (ms)")
 axis.set_title("(b) All 16,400 source--receiver times")
 axis.legend(frameon=False, fontsize=8)
 axis.grid(alpha=0.2)
@@ -1128,14 +1129,15 @@ plt.show()
 # depth section.  The black vertical line is the 1-km well and the triangles
 # are its 10 receivers.  Small gray points are the 1640 possible event
 # locations covering the one-sided 0--2 km horizontal and depth search region.
-# Orange circles are the 173 source anchors selected for the nominal 150 m
+# Orange circles are the 166 source anchors selected for the nominal 150 m
 # maximum distance.  Blue examples illustrate direct P rays through the three
 # velocity layers; refraction at 0.7 and 1.4 km is visible as a change in ray
 # slope.
 #
 # Panel (b) contains all 16,400 source--receiver traveltimes.  The horizontal
 # coordinate is obtained by fully tracing every ray, while the vertical
-# coordinate is predicted from the nearest topology-compatible source anchor.
+# coordinate is predicted to second order from the nearest
+# topology-compatible source anchor.
 # The point cloud follows the dashed 1:1 line over the full traveltime range.
 # The small deviations cannot be judged reliably at this scale, so panels (c)
 # and (d) display them directly.
@@ -1144,21 +1146,22 @@ plt.show()
 # averaged over the 10 receivers.  The well and receivers are repeated in cyan
 # to connect the error pattern to the acquisition geometry.  Errors are lowest
 # at and near anchors and generally increase between their coverage regions.
-# Horizontal bands in the upper kilometre align with receiver depths.  The
-# largest local errors occur close to the well, where
-# short source--receiver distance makes traveltime change most rapidly with
-# source position.  Layer-aware and receiver-side-aware anchor selection
-# prevents predictions from crossing an interface or reversing the local ray
-# branch; the white lines mark the two model interfaces.
+# The second-order correction removes most of the horizontal bands around
+# receiver depths that appear with a linear predictor.  The remaining largest
+# local errors occur where a short source--receiver path approaches an
+# interface, so curvature is strong while the fixed-topology constraint
+# prevents crossing that interface.  Layer-aware and receiver-side-aware
+# anchor selection prevents predictions from reversing the local ray branch;
+# the white lines mark the two model interfaces.
 #
 # Panel (d) summarizes the accuracy--cost trade-off on a logarithmic error
-# scale.  A 75 m distance limit uses 3670 exact rays and gives 0.56 ms RMS
-# error.  The nominal 150 m limit uses 1730 rays instead of 16,400---9.5 times
-# fewer solves---with 1.27 ms RMS error, and 95% of individual absolute errors
-# are below 1.88 ms.  At 300 m only 630 rays are traced, but the RMS error rises
-# to 4.82 ms.  Maximum errors are much larger than RMS errors because a small
-# number of source points lie very close to individual receivers; such regions
-# are natural candidates for denser anchors or direct tracing.
+# scale.  A 75 m distance limit uses 3470 exact rays and gives 0.052 ms RMS
+# error.  The nominal 150 m limit uses 1660 rays instead of 16,400---9.9 times
+# fewer solves---with 0.114 ms RMS error, and 95% of individual absolute errors
+# are below 0.090 ms.  At 300 m only 630 rays are traced, but the RMS error rises
+# to 0.94 ms.  Maximum errors are much larger than RMS errors because a small
+# number of short paths lie close to an interface; such regions are natural
+# candidates for denser anchors or direct tracing.
 #
 # This experiment treats the fully traced table as validation only.  In a
 # location scan, the anchored table would be the computational product: exact

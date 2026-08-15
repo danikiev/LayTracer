@@ -183,6 +183,30 @@ def test_direct_topology_refinement_handles_both_sides_of_receiver():
     assert np.all((chosen_source_depths - 400.0) * (target_depths - 400.0) > 0.0)
 
 
+def test_exact_sources_use_receiver_side_fast_coverage_path():
+    """Receiver approximation is symmetric with exact-receiver fitting."""
+    model = _model()
+    sources = np.array([[0.0, 0.0, 150.0], [0.0, 0.0, 950.0]])
+    receivers = np.column_stack([
+        np.arange(400.0, 1400.0, 50.0),
+        np.zeros(20),
+        np.full(20, 450.0),
+    ])
+    approximator = laytracer.TravelTimeApproximator.fit(
+        sources,
+        receivers,
+        model,
+        source_max_distance=None,
+        receiver_max_distance=125.0,
+        n_jobs=1,
+    )
+    prediction = approximator.predict()
+
+    assert prediction.valid_mask.all()
+    assert approximator.exact_ray_count < len(sources) * len(receivers)
+    assert np.all(prediction.receiver_anchor_distances <= 125.0 + 1e-12)
+
+
 def test_itinerary_prediction_masks_unreachable_and_outside_targets():
     """Unsupported itinerary and extrapolation targets are reported, not traced."""
     model = _model()
@@ -272,3 +296,104 @@ def test_three_layer_source_grid_reduces_exact_ray_count_with_bounded_error():
     assert prediction.valid_mask.all()
     assert approximator.exact_ray_count < len(exact.travel_times)
     assert np.sqrt(np.mean(error_ms**2)) < 5.0
+
+
+def test_second_order_predictor_reduces_vertical_anchor_curvature_error():
+    """Quadratic endpoint curvature improves a cross-layer near-offset query."""
+    model = pd.DataFrame({
+        "Depth": [0.0, 500.0],
+        "Vp": [2000.0, 3000.0],
+        "Vs": [1000.0, 1500.0],
+    })
+    anchor_source = np.array([[0.0, 0.0, 100.0]])
+    receiver = np.array([[0.0, 0.0, 700.0]])
+    query_source = np.array([[100.0, 0.0, 100.0]])
+    approximator = laytracer.TravelTimeApproximator.fit(
+        anchor_source,
+        receiver,
+        model,
+        source_max_distance=150.0,
+        receiver_max_distance=None,
+        n_jobs=1,
+    )
+
+    first_order = approximator.predict(query_source, receiver, order=1)
+    second_order = approximator.predict(query_source, receiver, order=2)
+    exact = laytracer.trace_rays(
+        query_source,
+        receiver,
+        model,
+        requested={"travel_times"},
+        n_jobs=1,
+        verbose=False,
+    )
+
+    first_error = abs(first_order.travel_times[0] - exact.travel_times[0])
+    second_error = abs(second_order.travel_times[0] - exact.travel_times[0])
+    assert second_error < first_error / 10.0
+    sensitivity = approximator.anchor_trace.sensitivities[0]
+    assert sensitivity.ray_parameter == pytest.approx(0.0)
+    assert sensitivity.doffset_dray_parameter > 0.0
+
+
+def test_second_order_predictor_is_exact_for_direct_same_layer_path():
+    """The quadratic mode uses the closed-form homogeneous-layer solution."""
+    model = pd.DataFrame({"Depth": [0.0], "Vp": [2000.0], "Vs": [1000.0]})
+    receiver = np.array([[0.0, 0.0, 300.0]])
+    approximator = laytracer.TravelTimeApproximator.fit(
+        np.array([[0.0, 0.0, 100.0]]),
+        receiver,
+        model,
+        source_max_distance=250.0,
+        receiver_max_distance=None,
+        n_jobs=1,
+    )
+    query = np.array([[150.0, 0.0, 125.0]])
+
+    prediction = approximator.predict(query, receiver, order=2)
+    expected = np.linalg.norm(query[0] - receiver[0]) / 2000.0
+    assert prediction.travel_times[0] == pytest.approx(expected, abs=1e-14)
+
+    with pytest.raises(ValueError, match="order must be 1 or 2"):
+        approximator.predict(order=3)
+
+
+def test_second_order_predictor_handles_both_moving_reflected_endpoints():
+    """The endpoint Hessian includes azimuth, depth, and itinerary effects."""
+    model = pd.DataFrame({
+        "Depth": [0.0, 700.0, 1400.0, 2200.0],
+        "Vp": [2500.0, 3100.0, 3900.0, 4500.0],
+        "Vs": [1300.0, 1700.0, 2200.0, 2600.0],
+    })
+    source = np.array([[300.0, 100.0, 200.0]])
+    receiver = np.array([[1600.0, -200.0, 300.0]])
+    itinerary = laytracer.RayItinerary(
+        "P", [laytracer.Interaction(2200.0, "reflect", "SV")]
+    )
+    approximator = laytracer.TravelTimeApproximator.fit(
+        source,
+        receiver,
+        model,
+        source_max_distance=100.0,
+        receiver_max_distance=100.0,
+        itinerary=itinerary,
+        n_jobs=1,
+    )
+    query_source = source + np.array([[12.0, -6.0, 4.0]])
+    query_receiver = receiver + np.array([[-4.0, 8.0, -2.0]])
+
+    first = approximator.predict(query_source, query_receiver, order=1)
+    second = approximator.predict(query_source, query_receiver, order=2)
+    exact = laytracer.trace_rays(
+        query_source,
+        query_receiver,
+        model,
+        itinerary=itinerary,
+        requested={"travel_times"},
+        n_jobs=1,
+        verbose=False,
+    )
+
+    first_error = abs(first.travel_times[0] - exact.travel_times[0])
+    second_error = abs(second.travel_times[0] - exact.travel_times[0])
+    assert second_error < first_error / 100.0

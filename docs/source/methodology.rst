@@ -295,10 +295,30 @@ source-receiver table.  For an exact anchor ray joining
    + \nabla_{\mathbf{r}}T_a\mathbin{\cdot}
      (\mathbf{r}-\mathbf{r}_a).
 
-This is a first-order interpolation of one selected arrival, not a new ray
-solve.  The velocity model and any explicit :class:`~laytracer.RayItinerary`
-are fixed for the lifetime of a :class:`~laytracer.TravelTimeApproximator`.
-Changing either requires refitting.
+This is the default first-order interpolation of one selected arrival, not a
+new ray solve.  The velocity model and any explicit
+:class:`~laytracer.RayItinerary` are fixed for the lifetime of a
+:class:`~laytracer.TravelTimeApproximator`. Changing either requires refitting.
+
+Second-order endpoint prediction is available with ``predict(order=2)``.  Let
+:math:`R` be the anchor's horizontal offset, :math:`p` its physical ray
+parameter, :math:`X_p=\partial X/\partial p`, and :math:`p'` the directional
+change in ray parameter obtained from the endpoint derivatives.  If
+:math:`\delta\mathbf{r}_\perp` is the component of the relative horizontal
+endpoint displacement perpendicular to the anchor azimuth, the directional
+curvature is
+
+.. math::
+   T'' = X_p(p')^2
+   + \frac{p}{R}\|\delta\mathbf{r}_\perp\|^2.
+
+The zero-offset limit replaces the second term by
+:math:`\|\delta\mathbf{r}\|^2/X_p`.  LayTracer adds :math:`T''/2` to the
+linear prediction.  Direct endpoints in the same physical layer use the exact
+homogeneous straight-path traveltime instead, including horizontal and
+coincident limits.  Second order remains a local, fixed-topology
+approximation; it does not make extrapolation across a layer boundary or ray
+branch valid.
 
 Anchor coverage
 ---------------
@@ -314,10 +334,12 @@ anchor pair inside both distance limits.  A limit of ``None`` keeps every
 supplied endpoint of that type as an exact anchor.
 
 The final Cartesian product of source and receiver anchors is traced once with
-sensitivities and diagnostics.  For each prediction, candidate anchor pairs
-are ranked using the source and receiver distances normalized by their
-respective limits.  The nearest compatible valid sensitivity supplies the
-linear prediction above.
+sensitivities and diagnostics.  When one endpoint type is retained exactly,
+coverage is refined independently for each exact endpoint and topology; this
+avoids repeatedly scanning the full anchor-pair product.  For each prediction,
+candidate anchor pairs are ranked using the source and receiver distances
+normalized by their respective limits.  The nearest compatible valid
+sensitivity supplies the first- or second-order prediction above.
 
 Topology and validity
 ---------------------
@@ -339,10 +361,12 @@ Unsupported predictions are not silently retraced.  They are returned as
 Anchor distance controls locality but is not an intrinsic error estimate.
 Approximation error depends on model contrasts, geometry, and distance from
 the anchor, and can be largest near rapidly varying configurations such as
-very short source-receiver offsets.  Applications should select distance
-limits using representative validation retraces.  LayTracer deliberately does
-not perform those retraces, adapt anchors to an error tolerance, or fall back
-to exact tracing automatically.  The visual accuracy--cost experiments in
+very short source-receiver offsets.  The second-order mode reduces this local
+curvature error but does not provide an error bound. Applications should select
+distance limits using representative validation retraces. LayTracer
+deliberately does not perform those retraces, adapt anchors to an error
+tolerance, or fall back to exact tracing automatically. The visual
+accuracy--cost experiments in
 :ref:`sphx_glr_examples_06_visualizing_sensitivities.py` illustrate this
 validation workflow.
 

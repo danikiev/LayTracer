@@ -200,7 +200,7 @@ approximator = laytracer.TravelTimeApproximator.fit(
     receiver_max_distance=None,  # keep every receiver as an exact anchor
     source_phase="P",
 )
-prediction = approximator.predict()
+prediction = approximator.predict(order=2)
 
 times = prediction.travel_time_matrix
 valid = prediction.valid_matrix
@@ -210,7 +210,10 @@ print(approximator.exact_ray_count, times.shape)
 Anchor placement accepts arbitrary 3-D point clouds. Predictions use only
 nearby anchors with the same ordered layer, phase, and vertical-direction
 topology. Unsupported targets are returned as ``NaN`` with a validity mask and
-reason code; LayTracer does not silently retrace them.
+reason code; LayTracer does not silently retrace them. ``order=1`` is the
+default linear endpoint predictor. ``order=2`` adds analytic fixed-topology
+endpoint curvature and uses the exact straight-path expression when both
+endpoints lie in one homogeneous layer.
 
 ### Trace multiple rays in 3-D (with relative amplitude attributes)
 
@@ -302,7 +305,7 @@ fig.show()
 | --- | --- |
 | `linearized_ray_change(...)` | Apply one sparse sensitivity record to model and endpoint perturbations |
 | `select_anchors(points, max_distance, groups=None)` | Deterministic grouped point-cloud anchor coverage |
-| `TravelTimeApproximator` | Fit exact topology-compatible anchors and predict nearby traveltimes |
+| `TravelTimeApproximator` | Fit exact topology-compatible anchors and predict nearby traveltimes at first or second endpoint-Taylor order |
 | `TravelTimePrediction` | Predicted times, validity/reason arrays, and anchor-assignment diagnostics |
 
 ### Visualisation (`laytracer.plot`)
