@@ -1,5 +1,3 @@
-# LayTracer
-
 <p align="center">
   <img src="docs/source/_static/laytracer-logo-full.svg" alt="LayTracer logo" width="720">
 </p>
@@ -8,6 +6,8 @@
 [![Pytest](https://github.com/danikiev/LayTracer/actions/workflows/pytest.yml/badge.svg)](https://github.com/danikiev/LayTracer/actions/workflows/pytest.yml)
 [![Docs](https://github.com/danikiev/LayTracer/actions/workflows/docs.yml/badge.svg)](https://github.com/danikiev/LayTracer/actions/workflows/docs.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellowgreen.svg)](https://github.com/danikiev/LayTracer/blob/main/LICENSE)
+
+# LayTracer
 
 **Fast two-point seismic ray tracing in layered media.**
 
