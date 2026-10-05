@@ -33,6 +33,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - the documentation's project pages follow the main chapters in the order Citing, Contributing, Changelog, Credits, as do the panels on the overview, where the PDF download now spans the full width
 - chapters of the PDF start on the next page rather than the next right-hand one, so the PDF has no blank pages
 - the documentation workflow builds with Python 3.12, which Sphinx 9.1 requires; the test matrix is unchanged
+- the changelog page shows version headings without brackets, each followed by a link to its changes on GitHub, taken from the link definitions now at the end of ``CHANGELOG.md``; code written between double backticks there renders as code instead of showing stray backticks
 
 ### Fixed
 
@@ -173,3 +174,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Files for initial release
 - This changelog
 - GitHub Actions CI for pytest, docs build, and release automation
+
+[Unreleased]: https://github.com/danikiev/LayTracer/compare/v0.4.0...HEAD
+[v0.4.0]: https://github.com/danikiev/LayTracer/compare/v0.3.1...v0.4.0
+[v0.3.1]: https://github.com/danikiev/LayTracer/compare/v0.3.0...v0.3.1
+[v0.3.0]: https://github.com/danikiev/LayTracer/compare/v0.2.1...v0.3.0
+[v0.2.1]: https://github.com/danikiev/LayTracer/compare/v0.2.0...v0.2.1
+[v0.2.0]: https://github.com/danikiev/LayTracer/compare/v0.1.0...v0.2.0
+[v0.1.0]: https://github.com/danikiev/LayTracer/releases/tag/v0.1.0
