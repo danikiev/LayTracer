@@ -18,7 +18,7 @@ help:
 cleanall:
 	@$(SPHINXBUILD) -M clean "$(SOURCEDIR)" "$(BUILDDIR)" $(SPHINXOPTS) $(O)
 	@rm -rf $(SOURCEDIR)/api/generated
-	@rm -rf $(SOURCEDIR)/gallery
+	@rm -rf $(SOURCEDIR)/examples
 
 # Catch-all target: route all unknown targets to Sphinx using the new
 # "make mode" option.  $(O) is meant as a shortcut for $(SPHINXOPTS).

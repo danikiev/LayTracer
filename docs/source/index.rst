@@ -95,13 +95,13 @@ Overview
          Find citation information and BibTeX entries for referencing LayTracer in your research.
 
       .. grid-item-card::
-         :link: credits
+         :link: contributing
          :link-type: ref
-         :link-alt: credits
+         :link-alt: contributing
 
-         :fas:`users;pst-color-primary` **Credits**
+         :fas:`code-pull-request;pst-color-primary` **Contributing**
          ^^^
-         Acknowledge authors, contributors and used libraries in the development of LayTracer.
+         Report issues, propose changes and set up a development environment.
 
       .. grid-item-card::
          :link: changelog
@@ -113,7 +113,19 @@ Overview
          Review release notes and notable changes across versions.
 
       .. grid-item-card::
-         :link: _static/laytracer.pdf     
+         :link: credits
+         :link-type: ref
+         :link-alt: credits
+
+         :fas:`users;pst-color-primary` **Credits**
+         ^^^
+         Acknowledge authors, contributors and used libraries in the development of LayTracer.
+
+   .. grid:: 1
+      :gutter: 3
+
+      .. grid-item-card::
+         :link: _static/laytracer.pdf
          :link-alt: pdf
 
          :fas:`file-pdf;pst-color-primary` **Download as PDF**
@@ -133,5 +145,6 @@ Overview
    examples/index
    api/index
    citing
-   credits
+   contributing
    changelog
+   credits

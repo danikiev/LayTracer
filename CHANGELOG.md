@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - deterministic logo generation script under `branding/logo/` with vendored Poppins font assets and staleness checking (#12)
 - logo integration in the repository README, HTML documentation overview, Sphinx header, favicon, and LaTeX/PDF title page (#12)
 - branding documentation describing the logo design concept, color palette, generated outputs, usage locations, and regeneration commands (#12)
+- a Contributing page in the documentation, covering issue reports, the development setup, branches and releases, tests, the documentation build, and the changelog; it replaces the short contributing note in Credits
 
 ### Changed
 
@@ -29,6 +30,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - new scientific outputs remain additive and opt-in; the 0.4 public ``trace_rays`` argument order, result flattening, phase dispatch, and default
   allocations are unchanged
 - exact-endpoint anchor fitting and per-pair prediction bookkeeping are streamlined for dense traveltime tables
+- the documentation's project pages follow the main chapters in the order Citing, Contributing, Changelog, Credits, as do the panels on the overview, where the PDF download now spans the full width
+- chapters of the PDF start on the next page rather than the next right-hand one, so the PDF has no blank pages
+- the documentation workflow builds with Python 3.12, which Sphinx 9.1 requires; the test matrix is unchanged
 
 ### Fixed
 
@@ -36,6 +40,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - coefficient products retain complex sign and phase when explicitly requested while ``trans_product`` remains a real, nonnegative magnitude for
   existing workflows
 - 2-D ray plotting uses the public pyplot colormap accessor and remains compatible with Matplotlib 3.11, where ``matplotlib.cm.get_cmap`` was removed
+- the PDF builds with the June 2026 LaTeX release, where tables in the default ``colorrows`` style of Sphinx 9.1.0 exhausted the TeX input stack (sphinx-doc/sphinx#14465)
+- citations in the PDF link to its bibliography; they pointed at the reference lists that only the HTML pages contain
+- ``build-docs.bat`` detects failed steps inside its blocks, and both build scripts stop at a LaTeX error instead of waiting at the TeX prompt
+- ``make cleanall`` removes the generated example gallery in ``docs/source/examples``
+- a push to ``dev`` no longer cancels a running documentation build of ``main`` or of a release tag, and with it the Pages deployment
 
 ## [v0.4.0] - 2026-05-02
 

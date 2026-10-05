@@ -45,9 +45,11 @@ fi
 if [ $BUILD_PDF -eq 1 ]; then
     echo "##################################################################"
     echo "Building PDF..."
-    make latexpdf
+    # On a LaTeX error, stop instead of waiting at the TeX prompt
+    LATEXMKOPTS="-interaction=nonstopmode -halt-on-error" make latexpdf
     if [ $? -ne 0 ]; then
         echo "Error during PDF build process!"
+        echo "See docs/build/latex/laytracer.log for the LaTeX output."
         exit 1
     fi
 
