@@ -4,8 +4,7 @@
 Methodology
 ===========
 
-This chapter presents the theoretical foundations of the ray tracing
-algorithm implemented in LayTracer.
+This chapter presents the theoretical foundations of the ray tracing algorithm implemented in LayTracer.
 
 ----
 
@@ -43,8 +42,27 @@ transverse, decoupled shear mode.
 
 ----
 
-Dimensionless ray parameter
+Prescribed phase itineraries
 ============================
+
+LayTracer solves a branch selected by the caller.  A
+:class:`~laytracer.RayItinerary` is an ordered sequence of interface
+interactions.  ``reflect`` reverses vertical propagation direction and
+``transmit`` retains it; each interaction also specifies the phase on the
+outgoing leg.  Every monotonic segment is split into atomic physical-layer
+legs, so a layer crossed more than once contributes more than once to the
+offset and traveltime while retaining one physical model-parameter index.
+
+The legacy ``reflection`` and ``refraction`` tuple arguments compile to the
+same representation.  In that legacy spelling, ``refraction`` denotes a
+prescribed transmission or mode conversion.  It does not enumerate a
+critically refracted head wave.  The solver does not perform branch discovery,
+automatic phase search, or global first-arrival selection.
+
+----
+
+Dimensionless ray parameter
+===========================
 
 :cite:t:`FangChen2019` introduce a dimensionless parameter
 
@@ -98,7 +116,7 @@ Second derivative
 ----
 
 Asymptotic initial estimate
-============================
+===========================
 
 Two linear asymptotes of :math:`X(q)` provide an efficient initial guess
 (see "Initial estimate of q" in :cite:t:`FangChen2019`):
@@ -127,7 +145,7 @@ or far-field regime.
 ----
 
 Quadratic Newton iteration
-===========================
+==========================
 
 The two-point problem :math:`X(q) = X_R` is solved by second-order
 Newton iteration (see :cite:t:`FangChen2019`).  At each
@@ -139,8 +157,32 @@ step, :math:`X(q)` is expanded to second order about the current iterate
    + \bigl[X(q_i) - X_R\bigr] = 0
 
 This quadratic equation in :math:`\Delta q` yields two roots.  The root
-minimising :math:`|X(q_i + \Delta q) - X_R|` is selected.  Convergence
-is typically achieved within **2–3 iterations**.
+minimising :math:`|X(q_i + \Delta q) - X_R|` is selected.  The iteration is
+usually rapid, but convergence is not inferred from a fixed iteration count;
+the independently recomputed endpoint residual below is the acceptance test.
+
+----
+
+Safeguarding and numerical diagnostics
+======================================
+
+The production solve accepts a quadratic-iteration result only after
+independently recomputing :math:`X(q)-X_R`.  If the requested offset tolerance
+is not met, monotonicity of :math:`X(q)` is used to construct a bracket on
+:math:`q\in[0,\infty)` and Brent's method supplies a safeguarded root.  The
+returned :class:`~laytracer.SolveDiagnostics` record identifies the accepted
+route (``q_newton`` or ``q_brentq``), primary and fallback iteration counts,
+initial and final :math:`q` and :math:`p`, signed and absolute endpoint
+residuals, the criticality margin :math:`1-pv_{\max}`, and the dimensionless
+logarithmic slope
+
+.. math::
+   \kappa_q = \left|\frac{q}{X}\frac{\mathrm{d}X}{\mathrm{d}q}\right|.
+
+Diagnostics are opt-in and do not allocate per-ray diagnostic objects for
+ordinary calls.  Invalid itineraries and missing properties required by a
+requested output raise an explicit exception; they are not reported as a
+successful trace.
 
 ----
 
@@ -158,8 +200,180 @@ layer :math:`k`.  The total travel time is :math:`t = \sum_k \Delta t_k`.
 
 ----
 
+Fixed-topology analytic sensitivities
+=====================================
+
+Ray tracing predicts an arrival time; many practical tasks also need to know
+*why* that prediction changes.  For example, an event locator needs the
+Jacobian of travel time with respect to source position for a Gauss--Newton
+update, and a network-design or uncertainty study needs the Jacobian with
+respect to layer velocities and interface depths.  Those Jacobians turn small
+model perturbations into predicted arrival-time perturbations,
+
+.. math::
+   \delta\mathbf{t} \approx \mathbf{J}_m\,\delta\mathbf{m}
+   + \mathbf{J}_x\,\delta\mathbf{x}.
+
+They also permit first-order propagation of velocity-model uncertainty into an
+arrival-time covariance, for example
+:math:`\mathbf{C}_t = \mathbf{J}_m\mathbf{C}_m\mathbf{J}_m^\mathsf{T} + \mathbf{C}_{\mathrm{pick}}`.
+Without analytic derivatives, each column of these matrices normally requires
+several perturbed ray traces; the resulting finite differences are slower and
+can be noisy when the nonlinear ray solve is poorly conditioned.
+
+LayTracer therefore differentiates the *already solved* ray.  ``"Fixed
+topology"`` means that, over the small perturbation being considered, the ray
+retains the same ordered sequence of layer legs, phase conversions, and
+reflections.  It is the appropriate local approximation for a specified
+arrival (for example, a PP reflection from a selected interface) rather than
+an automatic comparison or switch between competing branches.  LayTracer
+returns the derivatives; selecting phases, defining an objective function, and
+performing the inversion remain the caller's responsibility.
+
+The ray parameter must change when a velocity, interface, source, or receiver
+is perturbed so that the ray still joins the same endpoints.  For atomic leg
+:math:`j`, define
+
+.. math::
+   c_j=\sqrt{1-p^2v_j^2},\qquad
+   X_p=\sum_j\frac{h_jv_j}{c_j^3}.
+
+Here :math:`p` is the physical horizontal slowness, :math:`h_j` and :math:`v_j`
+are the leg thickness and phase velocity, and :math:`X_p` measures the local
+change in offset with ray parameter.  If :math:`X_m` and :math:`T_m` denote the
+partial offset and travel-time changes at fixed :math:`p`, implicit
+differentiation of the endpoint-offset constraint and Fermat stationarity give
+
+.. math::
+   \frac{\mathrm{d}p}{\mathrm{d}m}=-\frac{X_m}{X_p},\qquad
+   \left.\frac{\mathrm{d}T}{\mathrm{d}m}\right|_X=T_m-pX_m.
+
+The first expression is the small refraction-angle adjustment required to keep
+the endpoints fixed.  The second is the corresponding travel-time derivative:
+the direct effect of changing the parameter plus the effect of re-bending the
+ray, without tracing a separate perturbed ray.
+
+After this fixed-offset correction, the per-leg velocity and vertical-thickness
+building blocks reduce to
+
+.. math::
+   \frac{\mathrm{d}T}{\mathrm{d}v_j}
+   =-\frac{h_j}{v_j^2c_j},\qquad
+   \frac{\mathrm{d}T}{\mathrm{d}h_j}=\frac{c_j}{v_j}.
+
+The implementation aggregates repeated leg contributions into sparse
+derivatives for :math:`V_P` and :math:`V_S` in each physical layer.  Thus a
+multiple that crosses one layer several times contributes to that layer's
+single model parameter rather than creating duplicate columns.  Signed
+incidence coefficients map thickness derivatives to interface-depth
+derivatives.  Endpoint derivatives are returned for source and receiver
+``x``, ``y``, and ``z`` coordinates, together with derivatives of the physical
+ray parameter :math:`p`.  Calculating the derivatives in :math:`p` avoids
+introducing an artificial discontinuity when the identity of the fastest
+traversed leg changes.
+
+These are deliberately **local** derivatives.  They are valid only while the
+endpoint layer membership, prescribed phase itinerary, and propagating branch
+remain unchanged.  A perturbation that moves an endpoint across an interface,
+creates or removes a leg, changes the selected arrival, or reaches a critical
+or evanescent path is outside this linearization; such sensitivity records are
+marked invalid rather than being silently extrapolated.
+
+----
+
+Topology-safe traveltime approximation
+======================================
+
+The endpoint derivatives can replace repeated exact tracing in a dense local
+source-receiver table.  For an exact anchor ray joining
+:math:`\mathbf{s}_a` and :math:`\mathbf{r}_a`, LayTracer evaluates
+
+.. math::
+   T(\mathbf{s},\mathbf{r}) \approx T_a
+   + \nabla_{\mathbf{s}}T_a\mathbin{\cdot}
+     (\mathbf{s}-\mathbf{s}_a)
+   + \nabla_{\mathbf{r}}T_a\mathbin{\cdot}
+     (\mathbf{r}-\mathbf{r}_a).
+
+This is the default first-order interpolation of one selected arrival, not a
+new ray solve.  The velocity model and any explicit
+:class:`~laytracer.RayItinerary` are fixed for the lifetime of a
+:class:`~laytracer.TravelTimeApproximator`. Changing either requires refitting.
+
+Second-order endpoint prediction is available with ``predict(order=2)``.  Let
+:math:`R` be the anchor's horizontal offset, :math:`p` its physical ray
+parameter, :math:`X_p=\partial X/\partial p`, and :math:`p'` the directional
+change in ray parameter obtained from the endpoint derivatives.  If
+:math:`\delta\mathbf{r}_\perp` is the component of the relative horizontal
+endpoint displacement perpendicular to the anchor azimuth, the directional
+curvature is
+
+.. math::
+   T'' = X_p(p')^2
+   + \frac{p}{R}\|\delta\mathbf{r}_\perp\|^2.
+
+The zero-offset limit replaces the second term by
+:math:`\|\delta\mathbf{r}\|^2/X_p`.  LayTracer adds :math:`T''/2` to the
+linear prediction.  Direct endpoints in the same physical layer use the exact
+homogeneous straight-path traveltime instead, including horizontal and
+coincident limits.  Second order remains a local, fixed-topology
+approximation; it does not make extrapolation across a layer boundary or ray
+branch valid.
+
+Anchor coverage
+---------------
+
+:func:`~laytracer.select_anchors` uses deterministic farthest-point coverage
+of an arbitrary three-dimensional point cloud.  It starts from the
+lexicographically smallest point in each group and adds the farthest point
+until every target lies within the requested Euclidean distance of an anchor.
+During approximator fitting, source and receiver anchors are initially
+selected independently within their physical endpoint layers.  The sets are
+then refined until every reachable fitting pair has a topology-compatible
+anchor pair inside both distance limits.  A limit of ``None`` keeps every
+supplied endpoint of that type as an exact anchor.
+
+The final Cartesian product of source and receiver anchors is traced once with
+sensitivities and diagnostics.  When one endpoint type is retained exactly,
+coverage is refined independently for each exact endpoint and topology; this
+avoids repeatedly scanning the full anchor-pair product.  For each prediction,
+candidate anchor pairs are ranked using the source and receiver distances
+normalized by their respective limits.  The nearest compatible valid
+sensitivity supplies the first- or second-order prediction above.
+
+Topology and validity
+---------------------
+
+Compatibility is defined by the ordered physical path legs.  Each leg records
+its model-layer index, phase, and vertical direction.  Consequently, the
+approximator does not use an anchor that would move an endpoint across an
+interface, reverse the vertical direction of a direct ray, change a prescribed
+itinerary, or switch phase sequence.
+
+Unsupported predictions are not silently retraced.  They are returned as
+``NaN`` with a validity mask and one of four reason codes:
+
+- ``unreachable_topology``: the requested fixed itinerary cannot connect the endpoints;
+- ``no_topology_match``: no fitted anchor ray represents the requested branch;
+- ``outside_anchor_distance``: compatible anchors exist but are beyond a distance limit;
+- ``invalid_anchor_sensitivity``: compatible nearby anchor rays have unusable derivatives.
+
+Anchor distance controls locality but is not an intrinsic error estimate.
+Approximation error depends on model contrasts, geometry, and distance from
+the anchor, and can be largest near rapidly varying configurations such as
+very short source-receiver offsets.  The second-order mode reduces this local
+curvature error but does not provide an error bound. Applications should select
+distance limits using representative validation retraces. LayTracer
+deliberately does not perform those retraces, adapt anchors to an error
+tolerance, or fall back to exact tracing automatically. The visual
+accuracy--cost experiments in
+:ref:`sphx_glr_examples_06_visualizing_sensitivities.py` illustrate this
+validation workflow.
+
+----
+
 Attenuation operator :math:`t^*`
-=================================
+================================
 
 The attenuation operator (:cite:t:`AkiRichards2002`, Ch. 5) measures
 the cumulative dissipative loss of wave amplitude along the ray path. Since the
@@ -256,7 +470,7 @@ and the system determinant
    D = EF + GH\,p^2.
 
 The complete :math:`4\times 4` scattering matrix
-(:cite:t:`AkiRichards2002`, Eqs. 5.38–5.40) is computed by LayTracer.
+(:cite:t:`AkiRichards2002`, Eqs. 5.38-5.40) is computed by LayTracer.
 The eight independent P-SV coefficients are listed below.
 
 **Incident P-wave** — reflection and transmission:
@@ -293,7 +507,7 @@ The eight independent P-SV coefficients are listed below.
 
 For references and details on the derivation of these formulas, see
 :cite:t:`LayWallace1995` (Table 3.1, note the sign error in the second
-term of :math:`b`) and :cite:t:`AkiRichards2002` (Equations 5.38–5.40).
+term of :math:`b`) and :cite:t:`AkiRichards2002` (Equations 5.38-5.40).
 
 For post-critical incidence the coefficients may become complex; for
 amplitude modelling the software uses :math:`|T_l|`.
@@ -417,7 +631,7 @@ user-specified threshold.
 ----
 
 Extension to 3-D layered media
-===============================
+==============================
 
 The formulae above are written in a local incidence coordinate system. The
 ray geometry is two-dimensional because the velocity model varies only with
@@ -461,7 +675,7 @@ the role of the target offset :math:`X_R` and the depth coordinates
 :math:`z_s, z_r` determining the traversed layers.
 
 Back-projection to 3-D
------------------------
+----------------------
 
 Once the 2-D ray path :math:`\{(x_k^{(2\mathrm{D})},\, z_k)\}_{k=0}^M`
 has been computed, it is mapped back to 3-D Cartesian coordinates via
@@ -473,10 +687,10 @@ has been computed, it is mapped back to 3-D Cartesian coordinates via
    Z_k &= z_k.
    \end{aligned}
 
-This simply *sweeps* the 2-D ray along the source–receiver azimuth.
+This simply *sweeps* the 2-D ray along the source-receiver azimuth.
 
 Validity of amplitude attributes
----------------------------------
+--------------------------------
 
 Because the medium properties depend only on depth, every quantity
 computed from the 2-D ray remains valid in 3-D:
@@ -500,7 +714,16 @@ computed from the 2-D ray remains valid in 3-D:
 Thus, the layered-media solver operates in the 2-D incidence plane; the
 3-D ray geometry and scalar amplitude attributes are recovered by rotation.
 Full vector receiver components or source radiation patterns require an
-additional polarization/projection step.
+additional polarization/projection step.  The legacy ``trans_product`` is a
+real, nonnegative product of coefficient magnitudes.  Request
+``complex_coefficient_product`` separately when polarity and post-critical
+phase are needed; for the same compatible path,
+``trans_product == abs(complex_coefficient_product)``.  Neither coefficient
+product nor the spreading factor is a complete synthetic amplitude because
+source radiation, free-surface response, polarization projection, and
+finite-frequency effects are outside this operator.  Density and quality
+factor columns are validated only when an output that depends on them is
+requested.
 
 ----
 

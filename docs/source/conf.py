@@ -32,6 +32,7 @@ extensions = [
     "sphinx.ext.intersphinx",
     "sphinx_design",    
     "sphinxcontrib.bibtex",
+    "_ext.bibliography",
     "matplotlib.sphinxext.plot_directive",
     "numpydoc",
     "sphinx_gallery.gen_gallery",
@@ -118,7 +119,7 @@ if version == "unknown":
 author = "Denis Anikiev"
 year = datetime.date.today().year
 project = "LayTracer"
-project_summary = "Fast two-point seismic ray tracing in 1-D layered media"
+project_summary = "Fast two-point seismic ray tracing in layered media"
 copyright = f"{year}, {author}"
 
 
@@ -132,8 +133,8 @@ html_static_path = ["_static"]
 html_last_updated_fmt = "%b %d, %Y"
 html_title = "LayTracer"
 html_short_title = "LayTracer"
-#html_logo = "_static/laytracer.png"
-#html_favicon = "_static/favicon.ico"
+html_logo = "_static/laytracer-logo-medium.svg"
+html_favicon = "_static/laytracer-icon-circle.svg"
 html_extra_path = []
 pygments_style = "default"
 add_function_parentheses = False
@@ -154,12 +155,10 @@ else:
 # Theme config
 html_theme = "pydata_sphinx_theme"
 html_theme_options = {
-#     "logo_only": True,
-#     "display_version": True,
-#     "logo": {
-#         "image_light": "logo.png",
-#         "image_dark": "logo.png",
-#     }
+    "logo": {
+        "image_light": "laytracer-logo-medium.svg",
+        "image_dark": "laytracer-logo-medium.svg",
+    },
     "icon_links": [        
         {         
             "name": "GitHub",         
@@ -219,11 +218,35 @@ def setup(app):
 bibtex_bibfiles = ["references.bib"]
 #bibtex_default_style = "unsrt"
 bibtex_reference_style = "author_year"
-suppress_warnings = ["bibtex.duplicate_label", "bibtex.duplicate_citation", "design.fa-build"]
+# ``sphinx_gallery_conf`` intentionally contains ``ExampleTitleSortKey``.  It
+# cannot be pickled by Sphinx's environment cache, but this does not affect the
+# rendered documentation or gallery ordering.
+suppress_warnings = [
+    "bibtex.duplicate_label",
+    "bibtex.duplicate_citation",
+    "design.fa-build",
+    "config.cache",
+]
 
 # Latex Setup for conversion to PDF
+latex_logo = "_static/laytracer-logo-full.pdf"
+
 latex_elements = {
     'releasename': 'version',
+    # The PDF is read on screen, so a chapter starts on the next page instead of the
+    # next right-hand one, which could leave a blank page before it
+    'extraclassoptions': 'openany',
+    # Sphinx 9.1.0 tables in the default 'colorrows' style stop the PDF build with
+    # "TeX capacity exceeded" since the June 2026 LaTeX release: with array v2.7,
+    # colortbl no longer keeps its own \everycr, which the Sphinx row colouring relies
+    # on (sphinx-doc/sphinx#14465). Where array v2.7 is installed, load the earlier
+    # array and longtable releases before sphinx.sty, as Sphinx 9.1.1 does itself.
+    'passoptionstopackages': r'''
+\IfFileExists{array-2024-06-01.sty}{%
+  \RequirePackage{array}[=v2.6]%
+  \RequirePackage{longtable}[=v4.13]%
+}{}
+''',
     'preamble': r'''
 \usepackage{csquotes}
 \usepackage[titles]{tocloft}
@@ -243,10 +266,14 @@ latex_elements = {
     'maketitle': rf'''
 \begin{{titlepage}}
 \centering
-\vspace*{{4cm}}
-{{\Huge {project} \par}}
+\vspace*{{2.2cm}}
+\begin{{center}}
+\sphinxincludegraphics[width=\textwidth]{{laytracer-logo-full.pdf}}\par
+\end{{center}}
+%\vspace{{1.2cm}}
+%{{\Huge {project} \par}}
 \vspace{{1.2cm}}
-{{\Large {project_summary} \par}}
+%{{\Large {project_summary} \par}}
 \vfill
 {{\Large {author} \par}}
 \vspace{{0.3cm}}

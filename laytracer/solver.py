@@ -11,12 +11,15 @@ Implements the method of :cite:t:`FangChen2019`:
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 
 import numpy as np
 import scipy.optimize as opt
 
 from .model import LayerStack, normalize_phase, q_factor_key
+
+_FLOAT_EPS = np.finfo(float).eps
 
 SOLVE_OUTPUTS = frozenset({
     "travel_times",
@@ -25,6 +28,8 @@ SOLVE_OUTPUTS = frozenset({
     "tstar",
     "spreading",
     "trans_product",
+    "complex_coefficient_product",
+    "diagnostics",
 })
 
 
@@ -50,9 +55,37 @@ def _psv_key_phase(phase: str) -> str:
     return "p" if normalize_phase(phase) == "P" else "s"
 
 
+def _normalize_transcoef_method(method: str) -> str:
+    """Return the canonical interface-coefficient convention.
+
+    ``"angle"`` was historically accepted as an undocumented spelling for
+    the unnormalised (standard Zoeppritz) convention.  Keeping the alias is
+    important for existing callers while making invalid values explicit.
+    """
+    method = str(method).lower()
+    if method == "angle":
+        return "standard"
+    if method not in {"standard", "normalized"}:
+        raise ValueError(
+            "transcoef_method must be 'standard', 'normalized', or the "
+            "legacy alias 'angle'."
+        )
+    return method
+
+
 # ═══════════════════════════════════════════════════════════════════════
 #  Offset equation and derivatives
 # ═══════════════════════════════════════════════════════════════════════
+
+def _offset_from_s(
+    q: float,
+    h: np.ndarray,
+    lmd: np.ndarray,
+    s: np.ndarray,
+) -> float:
+    """Evaluate the offset with model-only terms already computed."""
+    return float(np.sum(q * lmd * h / np.sqrt(1.0 + s * q * q)))
+
 
 def offset(q: float, h: np.ndarray, lmd: np.ndarray) -> float:
     r"""Total horizontal range :math:`X(q)`.
@@ -76,7 +109,17 @@ def offset(q: float, h: np.ndarray, lmd: np.ndarray) -> float:
     float
     """
     s = 1.0 - lmd * lmd          # (1 − λ²)
-    return float(np.sum(q * lmd * h / np.sqrt(1.0 + s * q * q)))
+    return _offset_from_s(q, h, lmd, s)
+
+
+def _offset_dq_from_s(
+    q: float,
+    h: np.ndarray,
+    lmd: np.ndarray,
+    s: np.ndarray,
+) -> float:
+    """Evaluate the first derivative with model-only terms precomputed."""
+    return float(np.sum(lmd * h / (1.0 + s * q * q) ** 1.5))
 
 
 def offset_dq(q: float, h: np.ndarray, lmd: np.ndarray) -> float:
@@ -89,7 +132,17 @@ def offset_dq(q: float, h: np.ndarray, lmd: np.ndarray) -> float:
                {\bigl[1 + (1 - \lambda_k^2)\,q^2\bigr]^{3/2}}
     """
     s = 1.0 - lmd * lmd
-    return float(np.sum(lmd * h / (1.0 + s * q * q) ** 1.5))
+    return _offset_dq_from_s(q, h, lmd, s)
+
+
+def _offset_dq2_from_s(
+    q: float,
+    h: np.ndarray,
+    lmd: np.ndarray,
+    s: np.ndarray,
+) -> float:
+    """Evaluate the second derivative with model-only terms precomputed."""
+    return float(-3.0 * q * np.sum(s * lmd * h / (1.0 + s * q * q) ** 2.5))
 
 
 def offset_dq2(q: float, h: np.ndarray, lmd: np.ndarray) -> float:
@@ -102,7 +155,7 @@ def offset_dq2(q: float, h: np.ndarray, lmd: np.ndarray) -> float:
                {\bigl[1 + (1 - \lambda_k^2)\,q^2\bigr]^{5/2}}
     """
     s = 1.0 - lmd * lmd
-    return float(-3.0 * q * np.sum(s * lmd * h / (1.0 + s * q * q) ** 2.5))
+    return _offset_dq2_from_s(q, h, lmd, s)
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -220,10 +273,22 @@ def newton_step(
     X_new : float
         Offset at ``q_new``.
     """
-    X_i = offset(q_i, h, lmd)
+    s = 1.0 - lmd * lmd
+    return _newton_step_from_s(q_i, X_target, h, lmd, s)
+
+
+def _newton_step_from_s(
+    q_i: float,
+    X_target: float,
+    h: np.ndarray,
+    lmd: np.ndarray,
+    s: np.ndarray,
+) -> tuple[float, float]:
+    """Perform one quadratic update using cached model-only terms."""
+    X_i = _offset_from_s(q_i, h, lmd, s)
     C = X_i - X_target
-    B = offset_dq(q_i, h, lmd)
-    A = 0.5 * offset_dq2(q_i, h, lmd)
+    B = _offset_dq_from_s(q_i, h, lmd, s)
+    A = 0.5 * _offset_dq2_from_s(q_i, h, lmd, s)
 
     # Linear fallback
     if abs(A) < 1e-15:
@@ -240,8 +305,8 @@ def newton_step(
             q1, q2 = q_i + dq1, q_i + dq2
             ok1, ok2 = q1 > 0, q2 > 0
             if ok1 and ok2:
-                e1 = abs(offset(q1, h, lmd) - X_target)
-                e2 = abs(offset(q2, h, lmd) - X_target)
+                e1 = abs(_offset_from_s(q1, h, lmd, s) - X_target)
+                e2 = abs(_offset_from_s(q2, h, lmd, s) - X_target)
                 dq = dq1 if e1 <= e2 else dq2
             elif ok1:
                 dq = dq1
@@ -253,12 +318,58 @@ def newton_step(
     q_new = q_i + dq
     if q_new <= 0:
         q_new = q_i * 0.5
-    return q_new, offset(q_new, h, lmd)
+    return q_new, _offset_from_s(q_new, h, lmd, s)
 
 
 # ═══════════════════════════════════════════════════════════════════════
 #  Result container
 # ═══════════════════════════════════════════════════════════════════════
+
+@dataclass(frozen=True)
+class SolveDiagnostics:
+    r"""Numerical certificate for one two-point solve.
+
+    Attributes
+    ----------
+    converged : bool
+        Whether the independently recomputed offset meets ``tol``.
+    method : str
+        ``"q_newton"`` for the quadratic iteration or ``"q_brentq"`` for
+        the safeguarded bracketed fallback.
+    iterations : int
+        Number of quadratic Newton updates attempted.
+    fallback_iterations : int
+        Number of bracketed iterations, or zero when no fallback was used.
+    initial_q, final_q : float
+        Initial and accepted dimensionless ray parameters.
+    initial_ray_parameter, ray_parameter : float
+        Initial and accepted physical horizontal slownesses (s/m).
+    signed_offset_residual, absolute_offset_residual : float
+        Recomputed offset minus requested offset, and its magnitude (m).
+    conditioning : float
+        Dimensionless logarithmic slope ``abs(q / X * dX/dq)``.  The
+        zero-offset limit is reported as one.
+    criticality_margin : float
+        ``1 - p * vmax``; values approaching zero indicate grazing
+        propagation in the fastest traversed leg.
+    failure_reason : str or None
+        Populated only when a numerical certificate cannot be produced.
+    """
+
+    converged: bool
+    method: str
+    iterations: int
+    initial_q: float
+    final_q: float
+    initial_ray_parameter: float
+    ray_parameter: float
+    signed_offset_residual: float
+    absolute_offset_residual: float
+    conditioning: float
+    criticality_margin: float
+    fallback_iterations: int = 0
+    failure_reason: str | None = None
+
 
 @dataclass
 class RayResult:
@@ -280,6 +391,10 @@ class RayResult:
     trans_product : float or None
         Product of transmission-coefficient magnitudes along the ray,
         if requested.
+    complex_coefficient_product : complex or None
+        Signed/complex cumulative interface coefficient, if requested.
+    diagnostics : SolveDiagnostics or None
+        Numerical certificate, if requested.
     """
 
     travel_time: float
@@ -288,6 +403,53 @@ class RayResult:
     tstar: float | None = None
     spreading: float | None = None
     trans_product: float | None = None
+    complex_coefficient_product: complex | None = None
+    diagnostics: SolveDiagnostics | None = None
+
+
+def _validate_dynamic_inputs(
+    segments: list[dict],
+    interactions: list[dict],
+    need_tstar: bool,
+    need_coefficients: bool,
+) -> None:
+    """Validate only properties needed by explicitly requested attributes."""
+    if need_tstar:
+        for seg in segments:
+            q_values = seg.get(q_factor_key(seg["phase"]))
+            if q_values is None:
+                raise ValueError(
+                    f"{q_factor_key(seg['phase']).upper()} is required when tstar is requested."
+                )
+            q_values = np.asarray(q_values, dtype=float)
+            if np.any(~np.isfinite(q_values)) or np.any(q_values <= 0.0):
+                raise ValueError("Requested tstar requires finite, positive Q values.")
+
+    if not need_coefficients:
+        return
+
+    interacting_segments = {int(inter["seg_idx"]) for inter in interactions}
+    for seg_i, seg in enumerate(segments):
+        crosses_interface = len(seg["h"]) > 1 or seg_i in interacting_segments
+        if not crosses_interface:
+            continue
+        rho = seg.get("rho")
+        if rho is None:
+            raise ValueError(
+                "Rho is required when interface coefficients are requested."
+            )
+        rho = np.asarray(rho, dtype=float)
+        if np.any(~np.isfinite(rho)) or np.any(rho <= 0.0):
+            raise ValueError(
+                "Requested interface coefficients require finite, positive density."
+            )
+
+    for inter in interactions:
+        rho_beyond = float(inter.get("rho_beyond", 0.0))
+        if not np.isfinite(rho_beyond) or rho_beyond <= 0.0:
+            raise ValueError(
+                "Rho is required on both sides of every requested interaction coefficient."
+            )
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -311,6 +473,8 @@ def solve(
     transcoef_method: str = "standard",
     tol: float = 1e-4,
     max_iter: int = 10,
+    need_complex_coefficient_product: bool = False,
+    need_diagnostics: bool = False,
 ) -> RayResult:
     r"""Solve the two-point ray tracing problem for an arbitrary path.
 
@@ -335,6 +499,19 @@ def solve(
         need_tstar = "tstar" in requested
         need_spreading = "spreading" in requested
         need_trans_product = "trans_product" in requested
+        need_complex_coefficient_product = "complex_coefficient_product" in requested
+        need_diagnostics = "diagnostics" in requested
+
+    need_coefficients = need_trans_product or need_complex_coefficient_product
+    if need_coefficients:
+        transcoef_method = _normalize_transcoef_method(transcoef_method)
+    if need_tstar or need_coefficients:
+        _validate_dynamic_inputs(
+            segments,
+            interactions,
+            need_tstar=need_tstar,
+            need_coefficients=need_coefficients,
+        )
 
     N = len(h)
 
@@ -350,15 +527,15 @@ def solve(
             pts = np.array(pts_list)
 
         tstar = None
-        trans_prod_val = None
+        trans_prod_val = 1.0 if need_trans_product else None
+        complex_prod_val = 1.0 + 0.0j if need_complex_coefficient_product else None
         spreading_val = None
         
-        if need_tstar or need_spreading or need_trans_product:
+        if need_tstar or need_spreading or need_coefficients:
             # Use the p -> 0 limit of the direct-wave spreading expression.
             # For a layered vertical ray this reduces to sum(h_k * v_k), i.e.
             # Vrms^2 * travel time along the traversed path.
             tstar_val = 0.0
-            trans_prod_val = 1.0 if need_trans_product else None
             spreading_val = float(np.sum(h * v)) if need_spreading else None
             
             # Since p=0 for vertical ray
@@ -367,11 +544,10 @@ def solve(
             for seg_i, seg in enumerate(segments):
                 ph = seg["phase"]
                 q_key = q_factor_key(ph)
-                # Handle missing Q
-                if need_tstar and seg[q_key] is not None:
-                     tstar_val += np.sum(seg["h"] / seg["v"] / seg[q_key])
+                if need_tstar:
+                    tstar_val += np.sum(seg["h"] / seg["v"] / seg[q_key])
 
-                if need_trans_product:
+                if need_coefficients:
                     n_lay = len(seg["h"])
                     z_start = seg["start_z"]
                     z_end = seg["end_z"]
@@ -382,19 +558,41 @@ def solve(
                         has_next_layer = (k < n_lay - 1) if going_down else (k > 0)
                         if has_next_layer:
                             k_next = (k + 1) if going_down else (k - 1)
-                            if seg["rho"] is not None:
-                                trans_prod_val *= _calc_intra_transmission(
-                                    p_vert, k, k_next, seg, transcoef_method
-                                )
+                            coeff = _calc_intra_transmission(
+                                p_vert, k, k_next, seg, transcoef_method,
+                                magnitude=False,
+                            )
+                            if need_trans_product:
+                                trans_prod_val *= abs(coeff)
+                            if need_complex_coefficient_product:
+                                complex_prod_val *= coeff
 
                     for inter in interactions:
                         if inter["seg_idx"] == seg_i:
                             coeff = _calc_interaction_coeff(
-                                p_vert, inter, segments, seg_i, transcoef_method
+                                p_vert, inter, segments, seg_i, transcoef_method,
+                                magnitude=False,
                             )
-                            trans_prod_val *= coeff
+                            if need_trans_product:
+                                trans_prod_val *= abs(coeff)
+                            if need_complex_coefficient_product:
+                                complex_prod_val *= coeff
 
             tstar = float(tstar_val) if need_tstar else None
+
+        diagnostics = SolveDiagnostics(
+            converged=True,
+            method="q_newton",
+            iterations=0,
+            initial_q=0.0,
+            final_q=0.0,
+            initial_ray_parameter=0.0,
+            ray_parameter=0.0,
+            signed_offset_residual=0.0,
+            absolute_offset_residual=0.0,
+            conditioning=1.0,
+            criticality_margin=1.0,
+        ) if need_diagnostics else None
 
         return RayResult(
             travel_time=tt,
@@ -403,6 +601,8 @@ def solve(
             tstar=tstar,
             spreading=spreading_val,
             trans_product=trans_prod_val,
+            complex_coefficient_product=complex_prod_val,
+            diagnostics=diagnostics,
         )
 
     # ── Same-layer (direct line) ──
@@ -417,56 +617,150 @@ def solve(
 
         tstar = None
         trans_prod = None
+        complex_prod = None
         spreading = None
-        if need_tstar or need_spreading or need_trans_product:
+        if need_tstar or need_spreading or need_coefficients:
              seg = segments[0]
              q_key = q_factor_key(seg["phase"])
-             if need_tstar and seg[q_key] is not None:
+             if need_tstar:
                  tstar = tt / seg[q_key][0]
              if need_spreading:
                  spreading = dist * v[-1]
              if need_trans_product:
                  trans_prod = 1.0
+             if need_complex_coefficient_product:
+                 complex_prod = 1.0 + 0.0j
+
+        pv = float(p * v[0])
+        q_direct = q_from_p(p, float(v[0])) if pv < 1.0 else np.inf
+        diagnostics = SolveDiagnostics(
+            converged=True,
+            method="q_newton",
+            iterations=0,
+            initial_q=float(q_direct),
+            final_q=float(q_direct),
+            initial_ray_parameter=float(p),
+            ray_parameter=float(p),
+            signed_offset_residual=0.0,
+            absolute_offset_residual=0.0,
+            conditioning=0.0 if not np.isfinite(q_direct) else 1.0,
+            criticality_margin=max(0.0, 1.0 - pv),
+        ) if need_diagnostics else None
 
         return RayResult(
-            tt,
-            pts,
-            p if need_ray_parameter else None,
-            tstar,
-            spreading,
-            trans_prod,
+            travel_time=tt,
+            ray_path=pts,
+            ray_parameter=p if need_ray_parameter else None,
+            tstar=tstar,
+            spreading=spreading,
+            trans_product=trans_prod,
+            complex_coefficient_product=complex_prod,
+            diagnostics=diagnostics,
         )
 
     # ── General multi-layer case ──
     vmax = float(np.max(v))
     lmd = v / vmax
+    offset_s = 1.0 - lmd * lmd
 
     # 1. Initial estimate
     q = initial_q(epicentral_dist, h, lmd)
+    q_initial = float(q) if need_diagnostics else None
 
     # 2. Newton iteration
     converged = False
-    for _ in range(max_iter):
-        q, X_new = newton_step(q, epicentral_dist, h, lmd)
+    iterations = 0
+    for iterations in range(1, max_iter + 1):
+        q, X_new = _newton_step_from_s(
+            q, epicentral_dist, h, lmd, offset_s
+        )
+        if not math.isfinite(q) or q <= 0.0 or not math.isfinite(X_new):
+            break
         if abs(X_new - epicentral_dist) < tol:
             converged = True
             break
 
-    # 3. Fallback to bounded minimisation
+    # 3. Safeguarded fallback.  X(q) is monotone and X(0)=0, while the
+    # fastest traversed leg guarantees X(q)->infinity as q->infinity.
+    method = "q_newton" if need_diagnostics else None
+    fallback_iterations = 0
     if not converged:
-        def _residual(qq):
-            return (offset(qq, h, lmd) - epicentral_dist) ** 2
+        if need_diagnostics:
+            method = "q_brentq"
 
-        res = opt.minimize_scalar(_residual, bounds=(1e-10, 1e8), method="bounded")
-        q = res.x
+        def _signed_residual(qq):
+            return _offset_from_s(qq, h, lmd, offset_s) - epicentral_dist
+
+        q_hi = max(1.0, float(q) if math.isfinite(q) and q > 0.0 else 1.0)
+        for _ in range(128):
+            f_hi = _signed_residual(q_hi)
+            if math.isfinite(f_hi) and f_hi >= 0.0:
+                break
+            q_hi *= 2.0
+        else:
+            raise RuntimeError("Could not bracket the transformed ray-parameter root.")
+
+        if need_diagnostics:
+            q, fallback_result = opt.brentq(
+                _signed_residual,
+                0.0,
+                q_hi,
+                xtol=1e-14,
+                rtol=4.0 * _FLOAT_EPS,
+                maxiter=200,
+                full_output=True,
+                disp=False,
+            )
+            fallback_iterations = int(fallback_result.iterations)
+        else:
+            q = opt.brentq(
+                _signed_residual,
+                0.0,
+                q_hi,
+                xtol=1e-14,
+                rtol=4.0 * _FLOAT_EPS,
+                maxiter=200,
+                disp=False,
+            )
 
     # 4. Convert to ray parameter
     p = p_from_q(q, vmax)
+    signed_residual = _offset_from_s(q, h, lmd, offset_s) - epicentral_dist
+    roundoff_tol = 64.0 * _FLOAT_EPS * (
+        epicentral_dist if epicentral_dist > 1.0 else 1.0
+    )
+    verification_tol = tol if tol >= roundoff_tol else roundoff_tol
+    if not math.isfinite(signed_residual) or abs(signed_residual) > verification_tol:
+        raise RuntimeError(
+            "Two-point ray solve did not meet the requested offset tolerance: "
+            f"residual={signed_residual:.6g} m, tolerance={verification_tol:.6g} m."
+        )
+
+    diagnostics = None
+    if need_diagnostics:
+        conditioning = abs(
+            q * _offset_dq_from_s(q, h, lmd, offset_s) / epicentral_dist
+        )
+        diagnostics = SolveDiagnostics(
+            converged=True,
+            method=method,
+            iterations=iterations,
+            initial_q=q_initial,
+            final_q=float(q),
+            initial_ray_parameter=float(p_from_q(q_initial, vmax)),
+            ray_parameter=float(p),
+            signed_offset_residual=float(signed_residual),
+            absolute_offset_residual=float(abs(signed_residual)),
+            conditioning=float(conditioning),
+            criticality_margin=float(max(0.0, 1.0 - p * vmax)),
+            fallback_iterations=fallback_iterations,
+        )
 
     # ── Propagate ray ──
     tt = 0.0
     tstar_val = 0.0
     trans_prod_val = 1.0 if need_trans_product else None
+    complex_prod_val = 1.0 + 0.0j if need_complex_coefficient_product else None
 
     pts_list = [[0.0, z_src]] if return_ray_path else None
     x_cum = 0.0
@@ -513,14 +807,14 @@ def solve(
             if return_ray_path:
                 pts_list.append([x_cum, z_cum])
 
-            if need_tstar and seg_q is not None:
+            if need_tstar:
                 tstar_val += dt_k / seg_q[k]
                 
             # Transmission logic within the segment
             # This handles standard transmission across interfaces INSIDE the monotonic stack.
             # If we are traversing indices k -> k+1 (Down) or k -> k-1 (Up):
             # Interface is between them.
-            if need_trans_product:
+            if need_coefficients:
                 # Identification of the interface
                 has_next_layer = (k < n_lay - 1) if going_down else (k > 0)
                 
@@ -528,24 +822,30 @@ def solve(
                     # Index of the next layer
                     k_next = (k + 1) if going_down else (k - 1)
                     
-                    # We need density to compute transmission
-                    # If density is None, we assume T=1.0
-                    if seg["rho"] is not None:
-                        # Call helper
-                        coeff = _calc_intra_transmission(
-                            p, k, k_next, seg, transcoef_method
-                        )
-                        trans_prod_val *= coeff
+                    coeff = _calc_intra_transmission(
+                        p, k, k_next, seg, transcoef_method,
+                        magnitude=False,
+                    )
+                    if need_trans_product:
+                        trans_prod_val *= abs(coeff)
+                    if need_complex_coefficient_product:
+                        complex_prod_val *= coeff
 
         # ── Explicit Interaction at End of Segment ──
         # Check if there is an interaction defined for this segment index
-        if need_trans_product:
+        if need_coefficients:
             # Find interaction where seg_idx == seg_i
             # (There should be at most one per segment end)
             for inter in interactions:
                 if inter["seg_idx"] == seg_i:
-                    coeff = _calc_interaction_coeff(p, inter, segments, seg_i, transcoef_method)
-                    trans_prod_val *= coeff
+                    coeff = _calc_interaction_coeff(
+                        p, inter, segments, seg_i, transcoef_method,
+                        magnitude=False,
+                    )
+                    if need_trans_product:
+                        trans_prod_val *= abs(coeff)
+                    if need_complex_coefficient_product:
+                        complex_prod_val *= coeff
 
     pts = np.array(pts_list) if return_ray_path else None
 
@@ -559,10 +859,12 @@ def solve(
             dqdp = vmax / denom_dp ** 1.5
             dXdp = dXdq * dqdp
 
-            # Geometric spreading depends on Source/Receiver velocities
-            # v[0] and v[-1] in the flattened array correspond to start/end of path            
-            v_sourceside = v[0] 
-            v_receiverside = v[-1]
+            first_seg = segments[0]
+            last_seg = segments[-1]
+            first_down = first_seg["end_z"] >= first_seg["start_z"]
+            last_down = last_seg["end_z"] >= last_seg["start_z"]
+            v_sourceside = float(first_seg["v"][0 if first_down else -1])
+            v_receiverside = float(last_seg["v"][-1 if last_down else 0])
             
             cos_is = np.sqrt(max(1.0 - (p * v_sourceside) ** 2, 0.0))
             cos_ir = np.sqrt(max(1.0 - (p * v_receiverside) ** 2, 0.0))
@@ -580,6 +882,8 @@ def solve(
         tstar=tstar_val if need_tstar else None,
         spreading=spreading_val,
         trans_product=trans_prod_val,
+        complex_coefficient_product=complex_prod_val,
+        diagnostics=diagnostics,
     )
 
 
@@ -589,8 +893,41 @@ def transmission_product(
     interactions: list[dict],
     transcoef_method: str = "standard",
 ) -> float:
-    """Return the product of interface coefficients for a solved path."""
-    trans_prod_val = 1.0
+    """Return the product of interface-coefficient magnitudes."""
+    magnitude_product, _ = _coefficient_products(
+        p, segments, interactions, transcoef_method
+    )
+    return magnitude_product
+
+
+def complex_coefficient_product(
+    p: float,
+    segments: list[dict],
+    interactions: list[dict],
+    transcoef_method: str = "standard",
+) -> complex:
+    """Return the signed/complex cumulative interface coefficient."""
+    _, complex_product = _coefficient_products(
+        p, segments, interactions, transcoef_method
+    )
+    return complex_product
+
+
+def _coefficient_products(
+    p: float,
+    segments: list[dict],
+    interactions: list[dict],
+    transcoef_method: str,
+) -> tuple[float, complex]:
+    method = _normalize_transcoef_method(transcoef_method)
+    _validate_dynamic_inputs(
+        segments,
+        interactions,
+        need_tstar=False,
+        need_coefficients=True,
+    )
+    magnitude_product = 1.0
+    complex_product = 1.0 + 0.0j
 
     for seg_i, seg in enumerate(segments):
         n_lay = len(seg["h"])
@@ -603,20 +940,25 @@ def transmission_product(
             has_next_layer = (k < n_lay - 1) if going_down else (k > 0)
             if has_next_layer:
                 k_next = (k + 1) if going_down else (k - 1)
-                if seg["rho"] is not None:
-                    trans_prod_val *= _calc_intra_transmission(
-                        p, k, k_next, seg, transcoef_method
-                    )
+                coeff = _calc_intra_transmission(
+                    p, k, k_next, seg, method, magnitude=False
+                )
+                magnitude_product *= abs(coeff)
+                complex_product *= coeff
 
         for inter in interactions:
             if inter["seg_idx"] == seg_i:
-                trans_prod_val *= _calc_interaction_coeff(
-                    p, inter, segments, seg_i, transcoef_method
+                coeff = _calc_interaction_coeff(
+                    p, inter, segments, seg_i, method, magnitude=False
                 )
+                magnitude_product *= abs(coeff)
+                complex_product *= coeff
 
-    return float(trans_prod_val)
+    return float(magnitude_product), complex(complex_product)
 
-def _calc_interaction_coeff(p, inter, segments, seg_idx, method):
+def _calc_interaction_coeff(
+    p, inter, segments, seg_idx, method, magnitude: bool = True,
+):
     from .amplitude import psv_rt_coefficients, sh_rt_coefficients, normalize_rt_coefficient
 
     # Current segment (incident side)
@@ -642,7 +984,7 @@ def _calc_interaction_coeff(p, inter, segments, seg_idx, method):
     rho2 = inter["rho_beyond"]
     
     if rho1 <= 0 or rho2 <= 0:
-        return 1.0 # Density missing, cannot compute dynamic amplitude
+        raise ValueError("Positive density is required for interface coefficients.")
     
     in_phase = normalize_phase(inter["in_phase"])
     out_phase = normalize_phase(inter["out_phase"])
@@ -667,9 +1009,11 @@ def _calc_interaction_coeff(p, inter, segments, seg_idx, method):
         if itype == "reflection":
             v_out = vp1 if out_phase == "P" else vs1
             rho2 = rho1
-        return float(abs(normalize_rt_coefficient(R_bar, p, v_in, rho1, v_out, rho2)))
-    
-    return float(abs(R_bar))
+        value = normalize_rt_coefficient(R_bar, p, v_in, rho1, v_out, rho2)
+    else:
+        value = R_bar
+
+    return float(abs(value)) if magnitude else complex(value)
 
 
 def _calc_intra_transmission(
@@ -678,7 +1022,8 @@ def _calc_intra_transmission(
     k_next: int,
     seg: dict,
     method: str,
-) -> float:
+    magnitude: bool = True,
+) -> float | complex:
     """Calculate transmission coefficient between two adjacent layers within a monotonic segment."""
     from .amplitude import psv_rt_coefficients, sh_rt_coefficients, normalize_rt_coefficient
 
@@ -703,9 +1048,11 @@ def _calc_intra_transmission(
     if method == "normalized":
         v_in = vp1 if ph == "P" else vs1
         v_out = vp2 if ph == "P" else vs2
-        return float(abs(normalize_rt_coefficient(R_bar, p, v_in, rho1, v_out, rho2)))
-    
-    return float(abs(R_bar))
+        value = normalize_rt_coefficient(R_bar, p, v_in, rho1, v_out, rho2)
+    else:
+        value = R_bar
+
+    return float(abs(value)) if magnitude else complex(value)
 
 
 

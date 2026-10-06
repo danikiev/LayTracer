@@ -1,13 +1,19 @@
-# LayTracer
+<p align="center">
+  <img src="docs/source/_static/laytracer-logo-full.svg" alt="LayTracer logo" width="720">
+</p>
 
 [![DOI](https://zenodo.org/badge/1160026484.svg)](https://zenodo.org/badge/latestdoi/1160026484)
 [![Pytest](https://github.com/danikiev/LayTracer/actions/workflows/pytest.yml/badge.svg)](https://github.com/danikiev/LayTracer/actions/workflows/pytest.yml)
 [![Docs](https://github.com/danikiev/LayTracer/actions/workflows/docs.yml/badge.svg)](https://github.com/danikiev/LayTracer/actions/workflows/docs.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellowgreen.svg)](https://github.com/danikiev/LayTracer/blob/main/LICENSE)
 
+# LayTracer
+
 **Fast two-point seismic ray tracing in layered media.**
 
-LayTracer is an open-source Python package for computing ray paths, travel times, and amplitude attributes in horizontally layered (1D) velocity models with constant layer velocities. It is based on the dimensionless ray parameter method of [Fang & Chen (2019)](https://doi.org/10.1111/1365-2478.12799), achieving rapid convergence.
+LayTracer is an open-source Python package for computing ray paths, travel times, and amplitude attributes in horizontally layered (1D) velocity models with constant layer velocities.
+It also computes sparse fixed-topology derivatives of traveltime and ray parameter with respect to layer velocities, interface depths, and source/receiver coordinates for sensitivity analysis and inversion.
+The ray tracing core algorithm is based on the dimensionless ray parameter method of [Fang & Chen (2019)](https://doi.org/10.1111/1365-2478.12799), achieving rapid convergence.
 
 Documentation: [https://danikiev.github.io/LayTracer](https://danikiev.github.io/LayTracer/)
 
@@ -17,11 +23,13 @@ Documentation: [https://danikiev.github.io/LayTracer](https://danikiev.github.io
 
 | Category | Capability |
 | :------- | :--------- |
-| **Ray tracing** | Second-order (quadratic) Newton solver using the dimensionless *q*-parameter for robust, singularity-free convergence |
+| **Ray tracing** | Second-order dimensionless-*q* iteration with a checked bracketed fallback and independently verified endpoint residual |
+| **Phase itineraries** | Explicit prescribed direct, reflected, transmitted, converted, and multiple P–SV/SH paths |
+| **Diagnostics** | Opt-in solve route, iterations, residual, conditioning, and criticality margin for every ray |
+| **Sensitivities** | Sparse fixed-topology derivatives of traveltime and physical ray parameter with respect to layer velocities, interface depths, and endpoints |
 | **Travel time** | Layer-by-layer travel time summation from the solved ray parameter |
 | **Attenuation** | Intrinsic absorption operator *t\** from quality factors *Q* |
-| **Spreading** | Relative geometrical spreading from the analytical ray-tube Jacobian ∂X/∂p |
-| **Reflection/Transmission** | Full angle-dependent P-SV coefficients and decoupled SH-SH coefficients with optional energy-flux normalization (Červený, 2001) |
+| **Relative amplitude attributes** | Geometrical spreading, attenuation, and angle-dependent P-SV/SH coefficient products; these are not complete synthetic amplitudes |
 | **Brewster angles** | Automatic detection of Brewster-like zeros in R/T coefficient curves |
 | **Parallel execution** | Multi-ray tracing with `joblib` / `loky` backend for large surveys |
 | **Visualisation** | 2-D ray path plots (matplotlib) and interactive 3-D viewer (Plotly) |
@@ -129,24 +137,85 @@ vel_df = pd.DataFrame({
 })
 ```
 
-### Trace a single 2-D ray
+### Trace a single ray
 
 ```python
-stack = laytracer.build_layer_stack(vel_df, z_src=3000.0, z_rcv=0.0)
-
-result = laytracer.solve(
-    stack,
-    epicentral_dist=5000.0,
-    z_src=3000.0,
-    z_rcv=0.0,
-    vel_type="Vp",
+source = np.array([0.0, 0.0, 3000.0])
+receiver = np.array([5000.0, 1000.0, 0.0])
+result = laytracer.trace_rays(
+    source,
+    receiver,
+    vel_df,
+    requested={"travel_times", "rays", "ray_parameters"},
 )
 
-print(f"Travel time:   {result.travel_time:.4f} s")
-print(f"Ray parameter: {result.ray_parameter:.6e} s/m")
+print(f"Travel time:   {result.travel_times[0]:.4f} s")
+print(f"Ray parameter: {result.ray_parameters[0]:.6e} s/m")
 ```
 
-### Trace multiple rays in 3-D (with amplitude)
+### Prescribe a converted reflection and request derivatives
+
+```python
+itinerary = laytracer.RayItinerary(
+    source_phase="P",
+    interactions=[
+        laytracer.Interaction(3500.0, "reflect", "SV"),
+    ],
+)
+
+converted = laytracer.trace_rays(
+    source,
+    receiver,
+    vel_df,
+    itinerary=itinerary,
+    requested={
+        "travel_times",
+        "rays",
+        "ray_parameters",
+        "diagnostics",
+        "sensitivities",
+    },
+)
+
+certificate = converted.diagnostics[0]
+kernel = converted.sensitivities[0]
+print(certificate.method, certificate.absolute_offset_residual)
+print(kernel.vp_layer_indices, kernel.dtravel_time_dvp)
+print(kernel.vs_layer_indices, kernel.dtravel_time_dvs)
+```
+
+The itinerary is fixed by the caller. LayTracer does not search for phase
+branches or guarantee a global first arrival. The legacy ``reflection=`` and
+``refraction=`` tuple arguments remain available; in that API ``refraction``
+means a prescribed transmission or mode conversion, not a head wave.
+
+### Approximate a dense traveltime table from exact anchors
+
+```python
+approximator = laytracer.TravelTimeApproximator.fit(
+    sources,
+    receivers,
+    vel_df,
+    source_max_distance=100.0,
+    receiver_max_distance=None,  # keep every receiver as an exact anchor
+    source_phase="P",
+)
+prediction = approximator.predict(order=2)
+
+times = prediction.travel_time_matrix
+valid = prediction.valid_matrix
+print(approximator.exact_ray_count, times.shape)
+```
+
+Anchor placement accepts arbitrary 3-D point clouds. Predictions use only
+nearby anchors with the same ordered layer, phase, and vertical-direction
+topology. Unsupported targets are returned as ``NaN`` with a validity mask and
+reason code; LayTracer does not silently retrace them. ``order=1`` is the
+default linear endpoint predictor. ``order=2`` adds analytic fixed-topology
+endpoint curvature and uses the exact straight-path expression when both
+endpoints lie in one homogeneous layer.
+
+### Trace multiple rays in 3-D (with relative amplitude attributes)
 
 ```python
 src = np.array([0.0, 0.0, 3000.0])
@@ -169,7 +238,7 @@ result = laytracer.trace_rays(
 print(result.travel_times)   # travel times (s)
 print(result.tstar)          # attenuation operator t*
 print(result.spreading)      # geometrical spreading
-print(result.trans_product)  # product of transmission coefficients
+print(result.trans_product)  # nonnegative coefficient-magnitude product
 ```
 
 ### Visualise results
@@ -202,8 +271,9 @@ fig.show()
 
 | Symbol | Description |
 | --- | --- |
-| `solve(stack, epicentral_dist, ...)` | Solve the two-point ray tracing problem for one source–receiver pair |
-| `RayResult` | Result container: travel time, ray path, ray parameter, *t\**, spreading, transmission product |
+| `solve(h, v, segments, interactions, ...)` | Low-level two-point solve for a compiled path |
+| `RayResult` | Result container: travel time, ray path, ray parameter, optional attributes, and diagnostics |
+| `SolveDiagnostics` | Solve route, iteration counts, transformed and physical parameters, endpoint residual, conditioning, and criticality margin |
 | `offset(q, h, lmd)` | Total horizontal offset *X(q)* |
 | `offset_dq(q, h, lmd)` | First derivative d*X*/d*q* |
 | `offset_dq2(q, h, lmd)` | Second derivative d²*X*/d*q*² |
@@ -225,7 +295,18 @@ fig.show()
 | Symbol | Description |
 | --- | --- |
 | `trace_rays(sources, receivers, velocity_df, ...)` | Trace all source–receiver pairs with optional parallelism; multi-phase input returns a phase-keyed result dictionary |
-| `TraceResult` | Container: source phase, travel times, ray paths, ray parameters, *t\**, spreading, transmission products |
+| `Interaction` / `RayItinerary` | Ordered, fixed-topology reflection and transmission/mode-conversion description |
+| `TraceResult` | Container: source phase, travel times, ray paths, ray parameters, optional attributes, diagnostics, and sensitivities |
+| `RaySensitivity` | Sparse fixed-topology derivatives with respect to layer velocities, interface depths, and endpoint coordinates |
+
+### Approximation
+
+| Symbol | Description |
+| --- | --- |
+| `linearized_ray_change(...)` | Apply one sparse sensitivity record to model and endpoint perturbations |
+| `select_anchors(points, max_distance, groups=None)` | Deterministic grouped point-cloud anchor coverage |
+| `TravelTimeApproximator` | Fit exact topology-compatible anchors and predict nearby traveltimes at first or second endpoint-Taylor order |
+| `TravelTimePrediction` | Predicted times, validity/reason arrays, and anchor-assignment diagnostics |
 
 ### Visualisation (`laytracer.plot`)
 
@@ -312,7 +393,7 @@ LayTracer implements the method of [Fang & Chen (2019)](https://doi.org/10.1111/
 
 2. **Offset equation** *X*(*q*) is a smooth, monotonically increasing function — ideal for Newton iteration.
 
-3. **Quadratic Newton solver** with asymptotic initial estimate converges in **2–3 iterations**.
+3. **Safeguarded transformed-parameter solver** attempts rapid Newton iteration, falls back to a checked bracketed solve when needed, and accepts a solution only after independently recomputing the endpoint offset.
 
 4. **Amplitude attributes** are computed inline:
    - Travel time from vertical slowness summation
@@ -322,7 +403,7 @@ LayTracer implements the method of [Fang & Chen (2019)](https://doi.org/10.1111/
 
 ### Key references
 
-- Fang, X. & Chen, X. (2019). *A fast and robust two-point ray tracing method in layered media.* Geophysical Prospecting, 67(7), 1648–1661. [doi:10.1111/1365-2478.12799](https://doi.org/10.1111/1365-2478.12799)
+- Fang, X. & Chen, X. (2019). *A fast and robust two-point ray tracing method in layered media with constant or linearly varying layer velocity.* Geophysical Prospecting, 67(7), 1811–1824. [doi:10.1111/1365-2478.12799](https://doi.org/10.1111/1365-2478.12799)
 - Aki, K. & Richards, P.G. (2002). *Quantitative Seismology.* 2nd ed., University Science Books.
 - Lay, T. & Wallace, T.C. (1995). *Modern Global Seismology.* Academic Press.
 - Červený, V. (2001). *Seismic Ray Theory.* Cambridge University Press. [doi:10.1017/CBO9780511529399](https://doi.org/10.1017/CBO9780511529399)
@@ -343,8 +424,10 @@ Test modules:
 - `test_solver.py` — Newton convergence, Snell's law, travel time accuracy
 - `test_amplitude.py` — Zoeppritz coefficients, energy-flux normalization, Brewster detection
 - `test_api.py` — multi-ray tracing interface
+- `test_sensitivity.py` — analytic traveltime and ray-parameter derivatives
 - `test_generalized.py` — generalized layered-media validation cases
 - `test_homogeneous_equivalence.py` — homogeneous-medium equivalence checks
+- `test_plot.py` — plotting helpers and visualisation options
 - `test_symmetry.py` — reciprocity and physical consistency checks
 
 ---
@@ -357,6 +440,7 @@ LayTracer/
 │   ├── __init__.py          # Public API exports
 │   ├── model.py             # LayerStack, ModelArrays, build_layer_stack
 │   ├── solver.py            # Core ray tracing solver (q-parameter + Newton)
+│   ├── sensitivity.py       # Sparse fixed-topology analytic sensitivities
 │   ├── amplitude.py         # Transmission coefficients, Zoeppritz, Brewster
 │   ├── api.py               # High-level multi-ray interface (trace_rays)
 │   └── plot.py              # Visualisation (2-D, 3-D, velocity profiles)
@@ -366,18 +450,23 @@ LayTracer/
 │   ├── 03_reflection_transmission.py
 │   ├── 04_amplitude_analysis.py
 │   ├── 05_homogeneous_equivalence.py
+│   ├── 06_visualizing_sensitivities.py
 │   └── README.txt
+├── branding/                # Branding assets and logo source
+│   └── logo/                # Logo generator, vendored Poppins font, and usage docs
 ├── pytests/                 # Test suite
 │   ├── test_solver.py
 │   ├── test_amplitude.py
 │   ├── test_api.py
+│   ├── test_sensitivity.py
 │   ├── test_generalized.py
 │   ├── test_homogeneous_equivalence.py
+│   ├── test_plot.py
 │   └── test_symmetry.py
 ├── docs/                    # Sphinx documentation
 │   └── source/
-|       ├── api/                  # Generated API reference pages
-│       |   └── index.rst         # API reference landing page
+|       ├── api/                # Generated API reference pages
+│       |   └── index.rst       # API reference landing page
 |       ├── changelog.rst       # Changelog page with a placeholder for changelog content generated from CHANGELOG.md
 │       ├── citing.rst          # Citation information and BibTeX entries
 │       ├── conf.py             # Sphinx configuration
@@ -389,7 +478,10 @@ LayTracer/
 ├── pyproject.toml           # Build configuration (setuptools + setuptools-scm)
 ├── environment.yml          # Conda environment specification
 ├── pytest.ini               # Pytest configuration
-└── LICENSE                  # MIT License file
+├── CHANGELOG.md             # Changelog
+├── LICENSE                  # MIT License file
+├── RELEASE.md               # Release guidelines and GitHub Actions workflow documentation
+└── README.md                # This README file 
 ```
 
 ---
@@ -430,9 +522,9 @@ If you use a specific version, please cite that version's DOI (available on the 
   title        = {{LayTracer}: {F}ast two-point seismic ray tracing in layered media},
   year         = {2026},
   publisher    = {Zenodo},
-  version      = {0.3.0},    
+  version      = {0.4.0},    
   license      = {MIT},
-  doi          = {10.5281/zenodo.19020694},
+  doi          = {10.5281/zenodo.19983599},
   url          = {https://github.com/danikiev/LayTracer}
 }
 ```

@@ -31,12 +31,6 @@ LayTracer relies on the following Python libraries:
 
 LayTracer builds upon the open-source ecosystem, and the author gratefully acknowledges these tools.
 
-Contributing
-------------
-
-Contributions, bug reports, and feature requests are welcome. 
-Please use the `GitHub repository <https://github.com/danikiev/LayTracer>`_ to open issues or submit pull requests.
-
 .. only:: html
 
    References

@@ -1,0 +1,40 @@
+name: Validate Zenodo Metadata
+
+on:
+  push:
+    branches: ["main", "dev"]
+  pull_request:
+    branches: ["main", "dev"]
+  workflow_call:
+    inputs:
+      ref:
+        required: false
+        type: string
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Optional branch, tag, or SHA to validate"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+        with:
+          # Only override the ref when one is supplied by workflow_call or
+          # workflow_dispatch. Leaving it empty for push and pull_request lets
+          # actions/checkout resolve the event itself, pinning github.sha as well
+          # as the ref name. Passing refs/pull/<n>/merge explicitly breaks as soon
+          # as the pull request is merged, because GitHub deletes that ref.
+          ref: ${{ inputs.ref }}
+
+      - name: Validate Zenodo Metadata
+        uses: vsoch/zenodo-validator@main
+        with:
+          path: ".zenodo.json"

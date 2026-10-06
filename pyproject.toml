@@ -53,3 +53,4 @@ exclude = ["pytests", "tests"]
 
 [tool.setuptools_scm]
 version_file = "laytracer/version.py"
+fallback_version = "0.5.0rc1"

@@ -14,13 +14,17 @@ for %%i in (%*) do (
 
 cd docs
 
+:: Inside a ( ) block %ERRORLEVEL% is expanded once, when the block is read, before any
+:: command in it runs, so the checks within blocks use "if errorlevel 1"; comments within
+:: blocks use rem, because a :: label there can break the block.
+
 :: Check if build exists
 if exist build (
     echo ##################################################################
     echo Cleaning...
     call make cleanall
-    :: Check
-    if %ERRORLEVEL% neq 0 (
+    rem Check
+    if errorlevel 1 (
         echo Error while cleaning!
         exit /b 1
     )
@@ -38,28 +42,30 @@ if %ERRORLEVEL% neq 0 (
 
 :: Check if PDF building is enabled
 if %BUILD_PDF%==1 (
-    :: Make PDF documentation
+    rem Make PDF documentation; on a LaTeX error, stop instead of waiting at the TeX prompt
     echo ##################################################################
     echo Building PDF...
+    set "LATEXMKOPTS=-interaction=nonstopmode -halt-on-error"
     call make latexpdf
-    :: Check
-    if %ERRORLEVEL% neq 0 (
+    rem Check
+    if errorlevel 1 (
         echo Error during build process!
         exit /b 1
     )
 
-    :: Copy PDF to HTML folder
+    rem Copy PDF to HTML folder
     echo ##################################################################
     if exist build\latex\laytracer.pdf (
         echo Copying PDF to HTML folder...
         copy build\latex\laytracer.pdf build\html\_static\laytracer.pdf
-        :: Check
-        if %ERRORLEVEL% neq 0 (
+        rem Check
+        if errorlevel 1 (
             echo Error while copying PDF!
             exit /b 2
         )
     ) else (
         echo PDF file not found!
+        echo See docs\build\latex\laytracer.log for the LaTeX output.
         exit /b 2
     )
 ) else (

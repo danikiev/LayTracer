@@ -191,6 +191,27 @@ def test_rays_2d_accepts_custom_layer_colors_and_linewidth():
     plt.close(fig)
 
 
+def test_rays_2d_adds_colorbar_without_module_name_error():
+    vel_df = pd.DataFrame({
+        "Depth": [0.0, 1000.0],
+        "Vp": [2000.0, 3000.0],
+    })
+    ray = np.array([[0.0, 0.0], [1000.0, 1000.0]])
+
+    fig, ax = plt.subplots()
+    laytracer.plot.rays_2d(
+        vel_df,
+        rays=[ray],
+        ax=ax,
+        xlim=(0.0, 1000.0),
+        ylim=(1200.0, 0.0),
+        add_colorbar=True,
+    )
+
+    assert len(fig.axes) == 2
+    plt.close(fig)
+
+
 def test_rays_2d_uses_ray_extent_without_x_padding():
     vel_df = pd.DataFrame({
         "Depth": [0.0, 1000.0],

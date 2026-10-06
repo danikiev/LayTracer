@@ -5,6 +5,48 @@ All notable changes to Laytracer will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- ordered ``Interaction`` and ``RayItinerary`` objects for prescribed direct, reflected, transmitted, converted, and multiple phase paths
+- opt-in per-ray ``SolveDiagnostics`` with accepted solve route, iteration counts, transformed and physical ray parameters, independently recomputed endpoint residual, conditioning, and criticality margin
+- sparse fixed-topology analytic derivatives of traveltime and physical ray parameter with respect to layer ``Vp``/``Vs``, interface depths, and source and receiver coordinates
+- reusable linearized-ray, point-cloud anchor-selection, and topology-safe dense traveltime approximation APIs
+- opt-in second-order endpoint traveltime prediction, including the zero-offset curvature limit and exact direct same-layer paths
+- a visual sensitivity example showing scaled traveltime and ray-parameter effects, local model prediction, dense endpoint prediction, and a vertical-well microseismic traveltime table approximated from sparse source anchors
+- optional ``complex_coefficient_product`` output alongside the established real coefficient-magnitude product
+- LayTracer logo and branding assets, including full, medium, icon, circular icon, and PDF-compatible logo variants (#12)
+- deterministic logo generation script under `branding/logo/` with vendored Poppins font assets and staleness checking (#12)
+- logo integration in the repository README, HTML documentation overview, Sphinx header, favicon, and LaTeX/PDF title page (#12)
+- branding documentation describing the logo design concept, color palette, generated outputs, usage locations, and regeneration commands (#12)
+- a Contributing page in the documentation, covering issue reports, the development setup, branches and releases, tests, the documentation build, and the changelog; it replaces the short contributing note in Credits
+
+### Changed
+
+- the transformed-parameter solver now uses a checked bracketed fallback and accepts a result only after independently verifying the endpoint offset
+- density and quality-factor columns are validated only when a requested output depends on them
+- legacy ``reflection`` and ``refraction`` tuples compile through the same fixed-itinerary representation; ``refraction`` continues to mean prescribed transmission or mode conversion rather than a head wave
+- new scientific outputs remain additive and opt-in; the 0.4 public ``trace_rays`` argument order, result flattening, phase dispatch, and default
+  allocations are unchanged
+- exact-endpoint anchor fitting and per-pair prediction bookkeeping are streamlined for dense traveltime tables
+- the documentation's project pages follow the main chapters in the order Citing, Contributing, Changelog, Credits, as do the panels on the overview, where the PDF download now spans the full width
+- chapters of the PDF start on the next page rather than the next right-hand one, so the PDF has no blank pages
+- the documentation workflow builds with Python 3.12, which Sphinx 9.1 requires; the test matrix is unchanged
+- the changelog page shows version headings without brackets, each followed by a link to its changes on GitHub, taken from the link definitions now at the end of ``CHANGELOG.md``; code written between double backticks there renders as code instead of showing stray backticks
+
+### Fixed
+
+- reflected and multiple-ray spreading now uses the actual source- and receiver-side phase velocities (#13)
+- coefficient products retain complex sign and phase when explicitly requested while ``trans_product`` remains a real, nonnegative magnitude for
+  existing workflows
+- 2-D ray plotting uses the public pyplot colormap accessor and remains compatible with Matplotlib 3.11, where ``matplotlib.cm.get_cmap`` was removed
+- the PDF builds with the June 2026 LaTeX release, where tables in the default ``colorrows`` style of Sphinx 9.1.0 exhausted the TeX input stack (sphinx-doc/sphinx#14465)
+- citations in the PDF link to its bibliography; they pointed at the reference lists that only the HTML pages contain
+- ``build-docs.bat`` detects failed steps inside its blocks, and both build scripts stop at a LaTeX error instead of waiting at the TeX prompt
+- ``make cleanall`` removes the generated example gallery in ``docs/source/examples``
+- a push to ``dev`` no longer cancels a running documentation build of ``main`` or of a release tag, and with it the Pages deployment
+
 ## [v0.4.0] - 2026-05-02
 
 ### Added
@@ -132,3 +174,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Files for initial release
 - This changelog
 - GitHub Actions CI for pytest, docs build, and release automation
+
+[Unreleased]: https://github.com/danikiev/LayTracer/compare/v0.4.0...HEAD
+[v0.4.0]: https://github.com/danikiev/LayTracer/compare/v0.3.1...v0.4.0
+[v0.3.1]: https://github.com/danikiev/LayTracer/compare/v0.3.0...v0.3.1
+[v0.3.0]: https://github.com/danikiev/LayTracer/compare/v0.2.1...v0.3.0
+[v0.2.1]: https://github.com/danikiev/LayTracer/compare/v0.2.0...v0.2.1
+[v0.2.0]: https://github.com/danikiev/LayTracer/compare/v0.1.0...v0.2.0
+[v0.1.0]: https://github.com/danikiev/LayTracer/releases/tag/v0.1.0

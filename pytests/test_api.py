@@ -1,8 +1,10 @@
 r"""Tests for the high-level trace_rays() API."""
 
+import inspect
 import numpy as np
 import pandas as pd
 import pytest
+from dataclasses import fields
 
 import laytracer
 from laytracer.api import _unpack_results
@@ -288,4 +290,231 @@ def test_unpack_results_handles_mixed_none_amplitudes():
     assert unpacked.spreading[1] == pytest.approx(4.5)
     assert unpacked.trans_product[0] == pytest.approx(1.0)
     assert np.isnan(unpacked.trans_product[1])
+
+
+def test_legacy_040_contract_is_preserved():
+    """Additive outputs do not change the legacy result layout or ordering."""
+    model = pd.DataFrame({
+        "Depth": [0.0],
+        "Vp": [2000.0],
+        "Vs": [1000.0],
+    })
+    sources = np.array([[0.0, 0.0, 100.0], [100.0, 0.0, 100.0]])
+    receivers = np.array([[300.0, 400.0, 100.0], [600.0, 800.0, 100.0]])
+
+    result = laytracer.trace_rays(sources, receivers, model, verbose=False)
+    legacy_fields = [
+        "travel_times",
+        "rays",
+        "ray_parameters",
+        "tstar",
+        "spreading",
+        "trans_product",
+        "source_phase",
+    ]
+    assert [field.name for field in fields(result)][:7] == legacy_fields
+    assert result.travel_times.dtype == np.float64
+    assert result.ray_parameters.dtype == np.float64
+    assert result.travel_times.shape == (4,)
+    assert result.ray_parameters.shape == (4,)
+    assert isinstance(result.rays, list)
+    assert all(ray.dtype == np.float64 and ray.shape == (2, 3) for ray in result.rays)
+    assert result.tstar is None
+    assert result.spreading is None
+    assert result.trans_product is None
+    assert result.complex_coefficient_product is None
+    assert result.diagnostics is None
+    assert result.sensitivities is None
+    assert result.source_phase == "P"
+
+    expected = np.array([500.0, 1000.0, np.sqrt(200.0**2 + 400.0**2),
+                         np.sqrt(500.0**2 + 800.0**2)]) / 2000.0
+    np.testing.assert_allclose(result.travel_times, expected, rtol=0.0, atol=1e-15)
+    for flat_index, ray in enumerate(result.rays):
+        source_index = flat_index // len(receivers)
+        receiver_index = flat_index % len(receivers)
+        np.testing.assert_array_equal(ray[0], sources[source_index])
+        np.testing.assert_array_equal(ray[-1], receivers[receiver_index])
+
+    scalar = laytracer.trace_rays(sources[0], receivers[0], model, source_phase="S")
+    sequence = laytracer.trace_rays(
+        sources[0], receivers[0], model, source_phase=["S"], verbose=False
+    )
+    assert isinstance(scalar, laytracer.TraceResult)
+    assert list(sequence) == ["SV"]
+    assert sequence["SV"].source_phase == "SV"
+
+    parameter_names = list(inspect.signature(laytracer.trace_rays).parameters)
+    assert parameter_names[:-1] == [
+        "sources",
+        "receivers",
+        "velocity_df",
+        "source_phase",
+        "reflection",
+        "refraction",
+        "requested",
+        "transcoef_method",
+        "n_jobs",
+        "backend",
+        "sequential_limit",
+        "rays_per_chunk",
+        "tol",
+        "max_iter",
+        "verbose",
+    ]
+    assert parameter_names[-1] == "itinerary"
+
+
+def test_explicit_itinerary_matches_legacy_reflection():
+    """The ordered API is additive over the established reflection path."""
+    model = _simple_model()
+    source = np.array([0.0, 0.0, 100.0])
+    receiver = np.array([1200.0, 300.0, 100.0])
+    itinerary = laytracer.RayItinerary(
+        "P", [laytracer.Interaction(1000.0, "reflect", "S")]
+    )
+    requested = {"travel_times", "rays", "ray_parameters"}
+
+    explicit = laytracer.trace_rays(
+        source, receiver, model, itinerary=itinerary,
+        requested=requested, tol=1e-10, max_iter=50, verbose=False,
+    )
+    legacy = laytracer.trace_rays(
+        source, receiver, model, reflection=[(1000.0, "S")],
+        requested=requested, tol=1e-10, max_iter=50, verbose=False,
+    )
+
+    assert explicit.source_phase == "P"
+    np.testing.assert_allclose(explicit.travel_times, legacy.travel_times, rtol=0.0, atol=1e-12)
+    np.testing.assert_allclose(explicit.ray_parameters, legacy.ray_parameters, rtol=0.0, atol=1e-15)
+    np.testing.assert_allclose(explicit.rays[0], legacy.rays[0], rtol=0.0, atol=1e-12)
+
+
+def test_itinerary_rejects_legacy_interactions_and_unreachable_order():
+    """An itinerary is exclusive and its vertical directions are explicit."""
+    model = _simple_model()
+    source = np.array([0.0, 0.0, 100.0])
+    receiver = np.array([1000.0, 0.0, 100.0])
+    itinerary = laytracer.RayItinerary(
+        "P", [laytracer.Interaction(1000.0, "reflect", "P")]
+    )
+    with pytest.raises(ValueError, match="cannot be combined"):
+        laytracer.trace_rays(
+            source, receiver, model, itinerary=itinerary,
+            reflection=[(1000.0, "P")], verbose=False,
+        )
+
+    unreachable = laytracer.RayItinerary(
+        "P",
+        [
+            laytracer.Interaction(1000.0, "transmit", "P"),
+            laytracer.Interaction(0.0, "transmit", "P"),
+        ],
+    )
+    with pytest.raises(ValueError, match="not reachable"):
+        laytracer.trace_rays(
+            source, np.array([1000.0, 0.0, 2500.0]), model,
+            itinerary=unreachable, verbose=False,
+        )
+
+
+def test_explicit_transmission_matches_legacy_mode_conversion():
+    """Legacy ``refraction`` remains a wrapper for prescribed transmission."""
+    model = _simple_model()
+    source = np.array([0.0, 0.0, 100.0])
+    receiver = np.array([1600.0, -200.0, 2500.0])
+    itinerary = laytracer.RayItinerary(
+        "P", [laytracer.Interaction(1000.0, "transmit", "SV")]
+    )
+    requested = {"travel_times", "rays", "ray_parameters"}
+
+    explicit = laytracer.trace_rays(
+        source,
+        receiver,
+        model,
+        itinerary=itinerary,
+        requested=requested,
+        tol=1e-10,
+        max_iter=50,
+        verbose=False,
+    )
+    legacy = laytracer.trace_rays(
+        source,
+        receiver,
+        model,
+        refraction=[(1000.0, "SV")],
+        requested=requested,
+        tol=1e-10,
+        max_iter=50,
+        verbose=False,
+    )
+
+    np.testing.assert_allclose(explicit.travel_times, legacy.travel_times, atol=1e-12)
+    np.testing.assert_allclose(explicit.ray_parameters, legacy.ray_parameters, atol=1e-15)
+    np.testing.assert_allclose(explicit.rays[0], legacy.rays[0], atol=1e-12)
+
+
+def test_converted_reflection_obeys_reverse_itinerary_reciprocity():
+    """Reversing endpoint phases and conversion direction preserves kinematics."""
+    model = _simple_model()
+    source = np.array([100.0, -300.0, 200.0])
+    receiver = np.array([2400.0, 500.0, 600.0])
+    forward = laytracer.RayItinerary(
+        "P", [laytracer.Interaction(2000.0, "reflect", "SV")]
+    )
+    reverse = laytracer.RayItinerary(
+        "SV", [laytracer.Interaction(2000.0, "reflect", "P")]
+    )
+    requested = {"travel_times", "ray_parameters", "rays"}
+    result_forward = laytracer.trace_rays(
+        source, receiver, model, itinerary=forward, requested=requested,
+        tol=1e-10, max_iter=50, verbose=False,
+    )
+    result_reverse = laytracer.trace_rays(
+        receiver, source, model, itinerary=reverse, requested=requested,
+        tol=1e-10, max_iter=50, verbose=False,
+    )
+
+    np.testing.assert_allclose(
+        result_forward.travel_times, result_reverse.travel_times, rtol=0.0, atol=1e-12
+    )
+    np.testing.assert_allclose(
+        result_forward.ray_parameters, result_reverse.ray_parameters, rtol=0.0, atol=1e-15
+    )
+    np.testing.assert_allclose(
+        result_forward.rays[0], result_reverse.rays[0][::-1], rtol=0.0, atol=1e-10
+    )
+
+
+def test_explicit_converted_multiple_keeps_endpoints_and_phase_topology():
+    """A prescribed converted down-and-up path supports repeated traversals."""
+    model = _simple_model()
+    source = np.array([0.0, 0.0, 100.0])
+    receiver = np.array([1800.0, 600.0, 100.0])
+    itinerary = laytracer.RayItinerary(
+        "P",
+        [
+            laytracer.Interaction(1000.0, "transmit", "SV"),
+            laytracer.Interaction(2000.0, "reflect", "SV"),
+            laytracer.Interaction(1000.0, "transmit", "P"),
+        ],
+    )
+    result = laytracer.trace_rays(
+        source,
+        receiver,
+        model,
+        itinerary=itinerary,
+        requested={"travel_times", "rays", "ray_parameters", "sensitivities"},
+        tol=1e-10,
+        max_iter=50,
+        verbose=False,
+    )
+
+    assert np.isfinite(result.travel_times[0])
+    assert np.isfinite(result.ray_parameters[0])
+    np.testing.assert_allclose(result.rays[0][0], source, atol=1e-12)
+    np.testing.assert_allclose(result.rays[0][-1], receiver, atol=1e-9)
+    assert result.sensitivities[0].valid
+    np.testing.assert_array_equal(result.sensitivities[0].vp_layer_indices, [0])
+    np.testing.assert_array_equal(result.sensitivities[0].vs_layer_indices, [1])
 

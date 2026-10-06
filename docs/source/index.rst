@@ -4,6 +4,15 @@
 Overview
 ========
 
+.. only:: html
+
+   .. container:: laytracer-index-logo
+
+      .. image:: _static/laytracer-logo-full.svg
+         :alt: LayTracer logo
+         :align: center
+         :width: 520px
+
 **LayTracer** is an open-source Python package for computing ray paths, travel times, and amplitude attributes in horizontally layered (1D) velocity models with constant layer velocities. It is based on the dimensionless ray parameter method of :cite:t:`FangChen2019`, achieving rapid convergence.
 
 **Current Version:** |release| (:ref:`changelog`)
@@ -25,17 +34,15 @@ Overview
 
 **Features:**
 
-* Fast two-point ray tracing via dimensionless ray parameter method
-* Second-order Newton iteration for rapid convergence
-* Refraction and reflection modes
-* Inline computation of travel time, attenuation operator :math:`t^*`, geometrical spreading, and reflection/transmission coefficients
+* Checked two-point solves using the dimensionless ray parameter
+* Explicit prescribed reflected, transmitted, converted, and multiple paths
+* Opt-in numerical diagnostics and sparse fixed-topology sensitivities
+* Travel time, attenuation, and relative spreading/coefficient attributes
 * Efficient parallel computations via `Joblib <https://joblib.readthedocs.io/>`_
 * Standalone `Matplotlib <https://matplotlib.org/>`_ / `Plotly <https://plotly.com/>`_ visualisation
 * Comprehensive `Sphinx <https://www.sphinx-doc.org/>`_ documentation with extensive theory available at `danikiev.github.io/LayTracer <https://danikiev.github.io/LayTracer>`_
 
 .. only:: html
-
-   ----
 
    **Quick Links:**
 
@@ -88,13 +95,13 @@ Overview
          Find citation information and BibTeX entries for referencing LayTracer in your research.
 
       .. grid-item-card::
-         :link: credits
+         :link: contributing
          :link-type: ref
-         :link-alt: credits
+         :link-alt: contributing
 
-         :fas:`users;pst-color-primary` **Credits**
+         :fas:`code-pull-request;pst-color-primary` **Contributing**
          ^^^
-         Acknowledge authors, contributors and used libraries in the development of LayTracer.
+         Report issues, propose changes and set up a development environment.
 
       .. grid-item-card::
          :link: changelog
@@ -106,7 +113,19 @@ Overview
          Review release notes and notable changes across versions.
 
       .. grid-item-card::
-         :link: _static/laytracer.pdf     
+         :link: credits
+         :link-type: ref
+         :link-alt: credits
+
+         :fas:`users;pst-color-primary` **Credits**
+         ^^^
+         Acknowledge authors, contributors and used libraries in the development of LayTracer.
+
+   .. grid:: 1
+      :gutter: 3
+
+      .. grid-item-card::
+         :link: _static/laytracer.pdf
          :link-alt: pdf
 
          :fas:`file-pdf;pst-color-primary` **Download as PDF**
@@ -126,5 +145,6 @@ Overview
    examples/index
    api/index
    citing
-   credits
+   contributing
    changelog
+   credits

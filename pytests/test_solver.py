@@ -1,10 +1,38 @@
 r"""Tests for the core solver: offset equation, Newton iteration, and solve()."""
 
+import inspect
 import numpy as np
 import pandas as pd
 import pytest
 
 import laytracer
+
+
+def test_solve_additive_arguments_follow_the_legacy_positional_contract():
+    """New controls are trailing so 0.4 positional calls retain their meaning."""
+    names = list(inspect.signature(laytracer.solve).parameters)
+    assert names[:15] == [
+        "h",
+        "v",
+        "segments",
+        "interactions",
+        "epicentral_dist",
+        "z_src",
+        "z_rcv",
+        "requested",
+        "return_ray_path",
+        "need_ray_parameter",
+        "need_tstar",
+        "need_spreading",
+        "need_trans_product",
+        "transcoef_method",
+        "tol",
+    ]
+    assert names[15:] == [
+        "max_iter",
+        "need_complex_coefficient_product",
+        "need_diagnostics",
+    ]
 
 
 # ── Helpers ──
@@ -241,7 +269,7 @@ class TestSolve:
         assert np.all(np.diff(res.ray_path[:, 0]) >= 0)
 
     def test_solve_fallback(self):
-        """solve() succeeds even if Newton fails (fallback to minimize_scalar)."""
+        """solve() certifies a bracketed root when Newton is disabled."""
         df = _simple_model()
         z_src, z_rcv = 0.0, 2500.0
         stack = laytracer.build_layer_stack(df, z_src=z_src, z_rcv=z_rcv)
@@ -255,9 +283,54 @@ class TestSolve:
             "start_z": z_src, "end_z": z_rcv
         }]
         
-        # Force fallback to minimize_scalar by disabling Newton
-        res = laytracer.solve(h, v, segments, [], epic, z_src=z_src, z_rcv=z_rcv, max_iter=0)
+        res = laytracer.solve(
+            h,
+            v,
+            segments,
+            [],
+            epic,
+            z_src=z_src,
+            z_rcv=z_rcv,
+            requested={"travel_times", "rays", "ray_parameters", "diagnostics"},
+            max_iter=0,
+        )
         assert res.ray_path[-1, 0] == pytest.approx(epic, rel=1e-3)
+        assert res.diagnostics.converged
+        assert res.diagnostics.method == "q_brentq"
+        assert res.diagnostics.iterations == 0
+        assert res.diagnostics.absolute_offset_residual < 1e-4
+
+    def test_newton_diagnostics_recompute_offset(self):
+        """The reported certificate agrees with an independent X(q) call."""
+        df = _simple_model()
+        stack = laytracer.build_layer_stack(df, z_src=200.0, z_rcv=2800.0)
+        h = stack.h
+        v = stack.vp
+        segments = [{
+            "h": h, "v": v, "vp": stack.vp, "vs": stack.vs,
+            "rho": stack.rho, "qp": stack.qp, "qs": stack.qs,
+            "phase": "P", "start_z": 200.0, "end_z": 2800.0,
+        }]
+        target = 7000.0
+        res = laytracer.solve(
+            h,
+            v,
+            segments,
+            [],
+            target,
+            z_src=200.0,
+            z_rcv=2800.0,
+            requested={"travel_times", "ray_parameters", "diagnostics"},
+        )
+
+        diag = res.diagnostics
+        independent_residual = laytracer.offset(diag.final_q, h, v / v.max()) - target
+        assert diag.converged
+        assert diag.method in {"q_newton", "q_brentq"}
+        assert diag.signed_offset_residual == pytest.approx(independent_residual, abs=1e-12)
+        assert diag.absolute_offset_residual == pytest.approx(abs(independent_residual))
+        assert diag.criticality_margin > 0.0
+        assert np.isfinite(diag.conditioning)
 
     def test_travel_time_positive(self):
         """Travel time is always positive."""

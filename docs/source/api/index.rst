@@ -26,6 +26,9 @@ Solver
 .. autoclass:: laytracer.RayResult
    :members:
 
+.. autoclass:: laytracer.SolveDiagnostics
+   :members:
+
 .. autofunction:: laytracer.offset
 
 .. autofunction:: laytracer.offset_dq
@@ -46,6 +49,34 @@ Multi-ray interface
 .. autofunction:: laytracer.trace_rays
 
 .. autoclass:: laytracer.TraceResult
+   :members:
+
+.. autoclass:: laytracer.Interaction
+   :members:
+
+.. autoclass:: laytracer.RayItinerary
+   :members:
+
+.. autoclass:: laytracer.RaySensitivity
+   :members:
+
+Traveltime approximation
+------------------------
+
+.. autofunction:: laytracer.linearized_ray_change
+
+.. autofunction:: laytracer.select_anchors
+
+.. autoclass:: laytracer.LinearizedRayChange
+   :members:
+
+.. autoclass:: laytracer.AnchorSelection
+   :members:
+
+.. autoclass:: laytracer.TravelTimeApproximator
+   :members:
+
+.. autoclass:: laytracer.TravelTimePrediction
    :members:
 
 Amplitude
