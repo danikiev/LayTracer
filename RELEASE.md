@@ -106,6 +106,7 @@ python -m twine upload -r pypi dist/*
 - `403 Forbidden`: wrong token or wrong repository (PyPI token vs TestPyPI token).
 - `File already exists`: this version is already uploaded; bump tag/version and rebuild.
 - Unexpected dev version: release tag missing or not fetched in current Git checkout.
+- Live docs show a dev version or an older release after a release: see [Deploying the docs manually](#deploying-the-docs-manually).
 
 ## 5. Tag-push docs automation (`push-tag.yml`)
 
@@ -113,14 +114,15 @@ This repository includes `.github/workflows/push-tag.yml`.
 
 Behavior:
 
-- Push `v*` tag -> validate tag -> build and deploy the documentation for that tag.
+- Push `v*` tag -> validate tag -> start a `Docs` run on `main` with `ref` set to the tag -> that run builds the documentation of the tag, deploys it, and checks that the live site shows its version.
 - Package publishing is intentionally not done here; it is handled by `release-on-published.yml`.
 - Tag validation is shared through `.github/workflows/validate-tag.yml`.
 
+Only `Docs` runs on `main` deploy. GitHub Pages ignores a deployment made from a tag when `main` has already deployed the same commit, and still reports it as successful ([actions/deploy-pages#383](https://github.com/actions/deploy-pages/issues/383)). A release tag sits on a commit that `main` deployed when it was merged, so while tags deployed their own docs, the v0.5.0 site kept showing `0.4.1.dev38+gf9703a9be` although the docs of the tag had built correctly.
+
 Required GitHub setup:
 
-1. Create repository environments:
-    - `github-pages`: in **Settings → Environments → github-pages → Deployment branches and tags**, add a tag rule with pattern `v*` so that tag-triggered releases can deploy docs with the correct version.
+1. Repository environment `github-pages`: deployments come only from `main`, which the environment allows by default. The `v*` tag rule in **Settings → Environments → github-pages → Deployment branches and tags**, which tag deployments needed, is no longer used.
 
 2. Trigger a docs deployment by tag:
 
@@ -136,7 +138,27 @@ Notes:
 - The workflow fetches tags so `setuptools_scm` can resolve the release version correctly.
 - Release tags must point to a commit contained in `main`; tags created from `dev` or any other branch are rejected by the workflow.
 - Only strict semver tags in the form `vMAJOR.MINOR.PATCH` are accepted (example: `v1.2.3`).
-- To manually rebuild docs for an existing tag, run the `Docs` workflow and set `ref` to `refs/tags/vX.Y.Z`.
+
+### Deploying the docs manually
+
+Use this when the live site shows the wrong version, for example when the `Check the deployed version` step of a `Docs` run failed, or to republish the docs of a release:
+
+1. On GitHub, open **Actions → Docs → Run workflow**.
+2. Keep **Use workflow from** at `main`. Runs on any other branch or on a tag build the docs but do not deploy them.
+3. Set **ref** to the release tag, for example `refs/tags/v0.5.0`, or leave it empty to publish the current `main`.
+4. Click **Run workflow**. The run builds the docs from **ref**, checks that the docs of a tag carry its version, deploys them and checks the live site.
+
+The same from a terminal, with the GitHub CLI:
+
+```powershell
+gh workflow run docs.yml --ref main -f ref=refs/tags/v0.5.0
+```
+
+To see which version the live site serves (the random query string bypasses the CDN cache):
+
+```powershell
+curl.exe -s "https://danikiev.github.io/LayTracer/_static/documentation_options.js?$(Get-Random)" | Select-String VERSION
+```
 
 ## 6. Release-event automation (`release-on-published.yml`)
 

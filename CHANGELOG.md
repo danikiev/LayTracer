@@ -5,6 +5,12 @@ All notable changes to Laytracer will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- the documentation of a release reaches GitHub Pages. After v0.5.0 the site kept showing ``0.4.1.dev38+gf9703a9be``, because Pages ignores a deployment made from a tag when ``main`` has already deployed the same commit ([actions/deploy-pages#383](https://github.com/actions/deploy-pages/issues/383)). Pushing a ``v*`` tag now starts a ``docs.yml`` run on ``main`` that builds and deploys the tag, only runs on ``main`` deploy, and each deployment checks that the live site shows the version it deployed
+
 ## [v0.5.0] - 2026-10-12
 
 ### Added
@@ -191,6 +197,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - This changelog
 - GitHub Actions CI for pytest, docs build, and release automation
 
+[Unreleased]: https://github.com/danikiev/LayTracer/compare/v0.5.0...HEAD
 [v0.5.0]: https://github.com/danikiev/LayTracer/compare/v0.4.0...v0.5.0
 [v0.4.0]: https://github.com/danikiev/LayTracer/compare/v0.3.1...v0.4.0
 [v0.3.1]: https://github.com/danikiev/LayTracer/compare/v0.3.0...v0.3.1

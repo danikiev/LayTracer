@@ -394,7 +394,10 @@ This repository includes a GitHub Actions workflow at `.github/workflows/docs.ym
 - builds the PDF (`laytracer.pdf`),
 - copies the PDF into the published site (`_static/laytracer.pdf`),
 - deploys HTML docs to GitHub Pages,
+- checks that the live site shows the version it deployed,
 - uploads the PDF as a workflow artifact.
+
+Pushing a release tag runs the same workflow on `main` for that tag. To deploy the docs by hand, see [Deploying the docs manually](https://github.com/danikiev/LayTracer/blob/main/RELEASE.md#deploying-the-docs-manually) in `RELEASE.md`.
 
 One-time GitHub setup:
 
