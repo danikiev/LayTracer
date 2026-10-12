@@ -552,12 +552,12 @@ def _assert_same_trace(actual, expected):
     ):
         np.testing.assert_array_equal(getattr(actual, name), getattr(expected, name))
     assert actual.source_phase == expected.source_phase
-    for ray, expected_ray in zip(actual.rays, expected.rays, strict=True):
+    assert len(actual.rays) == len(expected.rays)
+    for ray, expected_ray in zip(actual.rays, expected.rays):
         np.testing.assert_array_equal(ray, expected_ray)
     assert [repr(d) for d in actual.diagnostics] == [repr(d) for d in expected.diagnostics]
-    for sensitivity, expected_sensitivity in zip(
-        actual.sensitivities, expected.sensitivities, strict=True
-    ):
+    assert len(actual.sensitivities) == len(expected.sensitivities)
+    for sensitivity, expected_sensitivity in zip(actual.sensitivities, expected.sensitivities):
         for name, value in vars(expected_sensitivity).items():
             np.testing.assert_array_equal(getattr(sensitivity, name), value)
 
