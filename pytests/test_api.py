@@ -4,6 +4,7 @@ import inspect
 import pickle
 import numpy as np
 import pandas as pd
+import psutil
 import pytest
 from dataclasses import fields
 from types import SimpleNamespace
@@ -593,6 +594,28 @@ def test_tiled_tracing_matches_sequential(source_phase, n_jobs, backend, rays_pe
             _assert_same_trace(actual[phase], expected[phase])
     else:
         _assert_same_trace(actual, expected)
+
+
+def test_loky_workers_trace_with_one_blas_thread():
+    """Loky workers get one BLAS thread, since tracing makes no BLAS calls."""
+    df = _simple_model()
+    sources, receivers = _tile_geometry()
+    try:
+        laytracer.trace_rays(
+            sources, receivers, df, n_jobs=2, backend="loky",
+            sequential_limit=0, rays_per_chunk=4, verbose=False,
+        )
+    except PermissionError:
+        pytest.skip("Parallel worker creation is blocked in this environment")
+
+    # The reusable loky workers stay alive after the call; read their environment.
+    blas_threads = []
+    for child in psutil.Process().children(recursive=True):
+        try:
+            blas_threads.append(child.environ().get("OPENBLAS_NUM_THREADS"))
+        except psutil.Error:
+            continue
+    assert blas_threads.count("1") >= 2
 
 
 def test_tile_worker_returns_compact_columns():

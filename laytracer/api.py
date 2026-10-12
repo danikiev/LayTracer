@@ -18,7 +18,7 @@ from typing import Sequence
 import numpy as np
 import pandas as pd
 import psutil
-from joblib import Parallel, delayed
+from joblib import Parallel, delayed, parallel_config
 
 from .model import ModelArrays, build_layer_stack, normalize_phase, velocity_key
 from .sensitivity import RaySensitivity, compute_ray_sensitivity
@@ -1125,7 +1125,10 @@ def trace_rays(
     tiles of at most ``rays_per_chunk`` rays. Each task writes its rays into
     NumPy columns, and the columns are copied into the preallocated output
     as soon as the task finishes. Memory use is therefore the output itself
-    plus a few tiles per worker, independent of the number of rays.
+    plus a few tiles per worker, independent of the number of rays. With the
+    ``loky`` backend each worker gets one BLAS/OpenMP thread, because tracing
+    makes no BLAS calls and OpenBLAS on Windows commits a buffer for every
+    thread when NumPy is imported.
 
     The output size per ray is measured on a probe of up to 64 rays: exactly
     for array outputs and approximately for ray paths, diagnostics and
@@ -1346,32 +1349,34 @@ def trace_rays(
         )
 
     out = {phase: _empty_columns(n_rays, common_kw) for phase in source_phases}
+    # Tracing makes no BLAS calls, so loky workers get one BLAS/OpenMP thread:
+    # OpenBLAS on Windows commits a buffer per thread when NumPy is imported.
+    worker_threads = {"inner_max_num_threads": 1} if backend == "loky" else {}
     total_start = time.time()
-    tile_results = Parallel(
-        n_jobs=n_workers,
-        backend=backend,
-        return_as="generator_unordered",
-        max_nbytes=None,
-    )(
-        delayed(_trace_batch)(
-            tile, sources[tile[0]:tile[1]], receivers[tile[2]:tile[3]], common_kw
-        )
-        for tile in tiles
-    )
-
     n_done = 0
     reported = 0
-    for tile, columns in tile_results:
-        for phase, phase_columns in columns.items():
-            _scatter_tile(out[phase], phase_columns, tile, n_rcv)
-        n_done += (tile[1] - tile[0]) * (tile[3] - tile[2])
-        if verbose and 10 * n_done // n_rays > reported:
-            reported = 10 * n_done // n_rays
-            elapsed = time.time() - total_start
-            print(
-                f"  {10 * reported}% done ({_format_seconds(elapsed)}) - "
-                f"ETA: {_format_seconds(elapsed * (n_rays - n_done) / n_done)}"
+    with parallel_config(backend=backend, **worker_threads):
+        tile_results = Parallel(
+            n_jobs=n_workers,
+            return_as="generator_unordered",
+            max_nbytes=None,
+        )(
+            delayed(_trace_batch)(
+                tile, sources[tile[0]:tile[1]], receivers[tile[2]:tile[3]], common_kw
             )
+            for tile in tiles
+        )
+        for tile, columns in tile_results:
+            for phase, phase_columns in columns.items():
+                _scatter_tile(out[phase], phase_columns, tile, n_rcv)
+            n_done += (tile[1] - tile[0]) * (tile[3] - tile[2])
+            if verbose and 10 * n_done // n_rays > reported:
+                reported = 10 * n_done // n_rays
+                elapsed = time.time() - total_start
+                print(
+                    f"  {10 * reported}% done ({_format_seconds(elapsed)}) - "
+                    f"ETA: {_format_seconds(elapsed * (n_rays - n_done) / n_done)}"
+                )
 
     if verbose:
         print(f"All tasks complete. Total time: {_format_seconds(time.time() - total_start)}")

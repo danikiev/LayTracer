@@ -34,6 +34,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - ``n_jobs=1`` above ``sequential_limit`` uses the same bounded-memory path, in-process (#15)
 - verbose tracing prints the task plan and the estimated output size, then progress in 10% steps, instead of one line per chunk (#15)
 - ``joblib>=1.4`` is required, for results streamed back as tasks finish (#15)
+- loky workers trace with one BLAS/OpenMP thread each (joblib's ``inner_max_num_threads=1``), because tracing makes no BLAS calls. On Windows, OpenBLAS commits a buffer for every thread when NumPy is imported, about 135 MB per thread with conda-forge builds, so the default of CPUs divided by workers could cost a worker over 1 GB (#15)
 - LayTracer requires NumPy 2 (``numpy>=2``) and Python 3.9 or newer, without the previous upper bound of 3.13; continuous integration tests Python 3.9 to 3.14
 - dependencies are declared only in ``pyproject.toml``, as in PyNetDesign: a new ``dev`` extra adds pytest and setuptools_scm next to the existing ``docs`` extra, and ``install.bat`` and ``install.sh`` install ``".[dev]"``. Installs therefore take NumPy from its PyPI wheels, which bundle OpenBLAS
 - the documentation's project pages follow the main chapters in the order Citing, Contributing, Changelog, Credits, as do the panels on the overview, where the PDF download now spans the full width
