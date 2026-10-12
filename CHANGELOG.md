@@ -5,7 +5,7 @@ All notable changes to Laytracer will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [v0.5.0] - 2026-10-12
 
 ### Added
 
@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - logo integration in the repository README, HTML documentation overview, Sphinx header, favicon, and LaTeX/PDF title page (#12)
 - branding documentation describing the logo design concept, color palette, generated outputs, usage locations, and regeneration commands (#12)
 - a Contributing page in the documentation, covering issue reports, the development setup, branches and releases, tests, the documentation build, and the changelog; it replaces the short contributing note in Credits
+- a section in the README and in Getting Started on limiting NumPy's BLAS threads with ``OPENBLAS_NUM_THREADS``, because on Windows some OpenBLAS builds commit a buffer for every thread when NumPy is imported (#15)
 
 ### Changed
 
@@ -30,13 +31,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - new scientific outputs remain additive and opt-in; the 0.4 public ``trace_rays`` argument order, result flattening, phase dispatch, and default
   allocations are unchanged
 - exact-endpoint anchor fitting and per-pair prediction bookkeeping are streamlined for dense traveltime tables
+- ``rays_per_chunk`` now caps the rays per parallel task rather than per chunk. Left as ``None``, the task size follows from the number of rays and workers and from the output size per ray, measured on a probe of up to 64 rays; ``trace_rays`` issues a ``RuntimeWarning`` when the estimated output exceeds available memory (#15)
+- ``n_jobs=1`` above ``sequential_limit`` uses the same bounded-memory path, in-process (#15)
+- verbose tracing prints the task plan and the estimated output size, then progress in 10% steps, instead of one line per chunk (#15)
+- ``joblib>=1.4`` is required, for results streamed back as tasks finish (#15)
+- loky workers trace with one BLAS/OpenMP thread each (joblib's ``inner_max_num_threads=1``), because tracing makes no BLAS calls. On Windows, OpenBLAS commits a buffer for every thread when NumPy is imported, about 135 MB per thread with conda-forge builds, so the default of CPUs divided by workers could cost a worker over 1 GB (#15)
+- LayTracer requires NumPy 2 (``numpy>=2``) and Python 3.9 or newer, without the previous upper bound of 3.13; continuous integration tests Python 3.9 to 3.14
+- dependencies are declared only in ``pyproject.toml``, as in PyNetDesign: a new ``dev`` extra adds pytest and setuptools_scm next to the existing ``docs`` extra, and ``install.bat`` and ``install.sh`` install ``".[dev]"``. Installs therefore take NumPy from its PyPI wheels, which bundle OpenBLAS
 - the documentation's project pages follow the main chapters in the order Citing, Contributing, Changelog, Credits, as do the panels on the overview, where the PDF download now spans the full width
 - chapters of the PDF start on the next page rather than the next right-hand one, so the PDF has no blank pages
-- the documentation workflow builds with Python 3.12, which Sphinx 9.1 requires; the test matrix is unchanged
+- the documentation workflow builds with Python 3.12, which Sphinx 9.1 requires
 - the changelog page shows version headings without brackets, each followed by a link to its changes on GitHub, taken from the link definitions now at the end of ``CHANGELOG.md``; code written between double backticks there renders as code instead of showing stray backticks
+
+### Removed
+
+- support for Python 3.8 and for NumPy 1
+- the automatic ``rays_per_chunk`` value, 50% of available RAM divided by the number of workers at an assumed 64 bytes per ray, and its ``Auto-detected rays_per_chunk`` message. No parameter was removed: ``rays_per_chunk`` remains and now caps the rays per task, sized as described under Changed (#15)
+- the package list in ``environment.yml``, which now provides only Python and ``pip``; the runtime, test and documentation packages are installed from ``pyproject.toml``
+- the ``release.yml`` workflow that published packages when a tag was pushed; packages are now published only from a published GitHub Release, after the tag and the Zenodo metadata are validated
 
 ### Fixed
 
+- parallel ``trace_rays`` no longer runs out of memory on large grids, where it failed with ``MemoryError`` in a loky worker sending its results back. Tasks now return NumPy columns that are copied into the output as soon as each task finishes, instead of one Python tuple per ray held for a whole chunk, first in the workers and then in the main process. For travel times of two phases the 0.4 chunk size assumed 64 bytes per ray, while the tuples, their pickling and the indices needed close to 1 kB per ray; memory use is now the output plus a few tasks per worker (#15)
 - reflected and multiple-ray spreading now uses the actual source- and receiver-side phase velocities (#13)
 - coefficient products retain complex sign and phase when explicitly requested while ``trans_product`` remains a real, nonnegative magnitude for
   existing workflows
@@ -175,7 +191,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - This changelog
 - GitHub Actions CI for pytest, docs build, and release automation
 
-[Unreleased]: https://github.com/danikiev/LayTracer/compare/v0.4.0...HEAD
+[v0.5.0]: https://github.com/danikiev/LayTracer/compare/v0.4.0...v0.5.0
 [v0.4.0]: https://github.com/danikiev/LayTracer/compare/v0.3.1...v0.4.0
 [v0.3.1]: https://github.com/danikiev/LayTracer/compare/v0.3.0...v0.3.1
 [v0.3.0]: https://github.com/danikiev/LayTracer/compare/v0.2.1...v0.3.0

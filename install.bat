@@ -1,13 +1,14 @@
 :: Windows installer script for LayTracer
-:: This script creates a Conda environment based on the "environment.yml" and installs the package
+:: This script creates a Conda environment based on "environment.yml" and installs the package with development dependencies
 :: Run: install.bat from cmd
-:: D. Anikiev, 2026-02-17
+:: D. Anikiev, 2026-02-17 (updated 2026-10-12)
 
 @echo off
 
 set ENV_NAME=laytracer
 set PACKAGE_NAME=laytracer
 set ENV_YAML=environment.yml
+set PIP_EXTRAS=.[dev]
 
 :: Check for Conda Installation
 where conda >nul 2>nul
@@ -52,8 +53,8 @@ if %ERRORLEVEL% equ 0 (
     exit /b 5
 )
 
-echo Installing %PACKAGE_NAME%...
-call pip install -e .
+echo Installing %PACKAGE_NAME% with extras %PIP_EXTRAS%...
+call python -m pip install -e "%PIP_EXTRAS%"
 if %ERRORLEVEL% equ 0 (    
     echo Successfully installed %PACKAGE_NAME%.
 ) else (

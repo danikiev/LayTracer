@@ -1,13 +1,17 @@
 r"""Tests for the high-level trace_rays() API."""
 
 import inspect
+import pickle
 import numpy as np
 import pandas as pd
+import psutil
 import pytest
 from dataclasses import fields
+from types import SimpleNamespace
 
 import laytracer
-from laytracer.api import _unpack_results
+from laytracer.api import TRACE_OUTPUTS, _trace_batch, _unpack_results
+from laytracer.model import ModelArrays
 
 
 def _simple_model():
@@ -517,4 +521,165 @@ def test_explicit_converted_multiple_keeps_endpoints_and_phase_topology():
     assert result.sensitivities[0].valid
     np.testing.assert_array_equal(result.sensitivities[0].vp_layer_indices, [0])
     np.testing.assert_array_equal(result.sensitivities[0].vs_layer_indices, [1])
+
+
+def _tile_geometry():
+    """Three sources and seven receivers, so tiles of four rays are ragged."""
+    sources = np.array([
+        [0.0, 0.0, 500.0],
+        [300.0, -200.0, 1500.0],
+        [-400.0, 100.0, 2500.0],
+    ])
+    receivers = np.array([
+        [3000.0, 0.0, 0.0],
+        [5000.0, 1000.0, 100.0],
+        [-2000.0, 700.0, 800.0],
+        [1000.0, -3000.0, 1200.0],
+        [0.0, 0.0, 1800.0],
+        [2500.0, 2500.0, 2200.0],
+        [-1500.0, -500.0, 2900.0],
+    ])
+    return sources, receivers
+
+
+def _assert_same_trace(actual, expected):
+    for name in (
+        "travel_times",
+        "ray_parameters",
+        "tstar",
+        "spreading",
+        "trans_product",
+        "complex_coefficient_product",
+    ):
+        np.testing.assert_array_equal(getattr(actual, name), getattr(expected, name))
+    assert actual.source_phase == expected.source_phase
+    assert len(actual.rays) == len(expected.rays)
+    for ray, expected_ray in zip(actual.rays, expected.rays):
+        np.testing.assert_array_equal(ray, expected_ray)
+    assert [repr(d) for d in actual.diagnostics] == [repr(d) for d in expected.diagnostics]
+    assert len(actual.sensitivities) == len(expected.sensitivities)
+    for sensitivity, expected_sensitivity in zip(actual.sensitivities, expected.sensitivities):
+        for name, value in vars(expected_sensitivity).items():
+            np.testing.assert_array_equal(getattr(sensitivity, name), value)
+
+
+@pytest.mark.parametrize("source_phase", ["P", ["P", "SV", "SH"]])
+@pytest.mark.parametrize(
+    "n_jobs, backend, rays_per_chunk",
+    [(2, "threading", 4), (2, "threading", None), (1, "loky", 4), (2, "loky", 4)],
+)
+def test_tiled_tracing_matches_sequential(source_phase, n_jobs, backend, rays_per_chunk):
+    """Tiles copied into the output reproduce the sequential result exactly."""
+    df = _simple_model()
+    sources, receivers = _tile_geometry()
+    kwargs = dict(source_phase=source_phase, requested=TRACE_OUTPUTS, verbose=False)
+    expected = laytracer.trace_rays(sources, receivers, df, **kwargs)
+    try:
+        actual = laytracer.trace_rays(
+            sources,
+            receivers,
+            df,
+            n_jobs=n_jobs,
+            backend=backend,
+            sequential_limit=0,
+            rays_per_chunk=rays_per_chunk,
+            **kwargs,
+        )
+    except PermissionError:
+        pytest.skip("Parallel worker creation is blocked in this environment")
+
+    if isinstance(expected, dict):
+        assert list(actual) == list(expected)
+        for phase in expected:
+            _assert_same_trace(actual[phase], expected[phase])
+    else:
+        _assert_same_trace(actual, expected)
+
+
+def test_loky_workers_trace_with_one_blas_thread():
+    """Loky workers get one BLAS thread, since tracing makes no BLAS calls."""
+    df = _simple_model()
+    sources, receivers = _tile_geometry()
+    try:
+        laytracer.trace_rays(
+            sources, receivers, df, n_jobs=2, backend="loky",
+            sequential_limit=0, rays_per_chunk=4, verbose=False,
+        )
+    except PermissionError:
+        pytest.skip("Parallel worker creation is blocked in this environment")
+
+    # The reusable loky workers stay alive after the call; read their environment.
+    blas_threads = []
+    for child in psutil.Process().children(recursive=True):
+        try:
+            blas_threads.append(child.environ().get("OPENBLAS_NUM_THREADS"))
+        except psutil.Error:
+            continue
+    assert blas_threads.count("1") >= 2
+
+
+def test_tile_worker_returns_compact_columns():
+    """A task returns NumPy columns, not one Python object per ray."""
+    df = _simple_model()
+    sources = np.column_stack([np.zeros(4), np.zeros(4), np.linspace(500.0, 2500.0, 4)])
+    receivers = np.column_stack(
+        [np.linspace(-3000.0, 3000.0, 100), np.zeros(100), np.full(100, 100.0)]
+    )
+    kw = dict(
+        ma=ModelArrays.from_dataframe(df),
+        source_phases=("P", "SV"),
+        return_dict=True,
+        refl_list=[],
+        refr_list=[],
+        ordered_interactions=None,
+        need_rays=False,
+        need_ray_parameters=False,
+        need_tstar=False,
+        need_spreading=False,
+        need_trans_product=False,
+        need_complex_coefficient_product=False,
+        need_diagnostics=False,
+        need_sensitivities=False,
+        transcoef_method="standard",
+        tol=1e-4,
+        max_iter=10,
+    )
+    tile = (0, 4, 0, 100)
+
+    returned_tile, columns = _trace_batch(tile, sources, receivers, kw)
+
+    assert returned_tile == tile
+    n_rays = len(sources) * len(receivers)
+    for phase in ("P", "SV"):
+        assert columns[phase]["tt"].dtype == np.float64
+        assert columns[phase]["tt"].shape == (n_rays,)
+        assert np.all(np.isfinite(columns[phase]["tt"]))
+    # About 8 bytes per ray and phase plus a fixed pickle overhead; the 0.4
+    # per-ray tuples pickled to roughly 60 bytes per ray for two phases.
+    assert len(pickle.dumps(columns)) < 2 * 8 * n_rays + 2048
+
+
+def test_warns_when_output_exceeds_available_memory(monkeypatch):
+    """The estimated output size is checked against available memory up front."""
+    monkeypatch.setattr(
+        laytracer.api.psutil, "virtual_memory", lambda: SimpleNamespace(available=1)
+    )
+    df = _simple_model()
+    sources, receivers = _tile_geometry()
+    with pytest.warns(RuntimeWarning, match="memory is available"):
+        laytracer.trace_rays(
+            sources, receivers, df, n_jobs=1, sequential_limit=0, verbose=False
+        )
+
+
+def test_verbose_reports_task_plan_and_progress(capsys):
+    """Verbose tracing prints the task plan and reaches 100 percent."""
+    df = _simple_model()
+    sources, receivers = _tile_geometry()
+    laytracer.trace_rays(
+        sources, receivers, df, n_jobs=1, sequential_limit=0, rays_per_chunk=4
+    )
+    out = capsys.readouterr().out
+    assert "Tracing 21 rays in 8 tasks of up to 4 rays" in out
+    assert "100% done" in out
 

@@ -41,21 +41,23 @@ Documentation: [https://danikiev.github.io/LayTracer](https://danikiev.github.io
 
 ### Prerequisites
 
-- Python 3.8–3.12 and `pip`
+- Python 3.9 or newer and `pip`
 - [Conda](https://conda.io) package manager (recommended for full reproducible setup via [miniforge](https://github.com/conda-forge/miniforge))
 
 ### Install with conda
 
 ```bash
-# 1. Create environment with all dependencies
+# 1. Create the environment base (Python and pip) from environment.yml
 conda env create -f environment.yml
 
 # 2. Activate it
 conda activate laytracer
 
-# 3. Install LayTracer in editable mode
-pip install -e .
+# 3. Install LayTracer in editable mode with the development dependencies defined in pyproject.toml
+python -m pip install -e ".[dev]"
 ```
+
+For a minimal runtime-only installation, use `python -m pip install -e .` instead.
 
 ### Install from PyPI (stable releases only)
 
@@ -107,14 +109,26 @@ python -m pip install --upgrade pip
 pip install -e .
 ```
 
-`pip`-only installation is suitable for running LayTracer. For a full pre-configured environment (including docs tooling), prefer the conda workflow.
+`pip`-only installation is suitable for running LayTracer. In either workflow, add the optional extras defined in `pyproject.toml` for development (`".[dev]"`), documentation (`".[docs]"`) or both (`".[dev,docs]"`).
 
 ### Dependencies
 
-- Python ≥ 3.8, < 3.13
-- NumPy (< 2), SciPy, Pandas
+- Python ≥ 3.9
+- NumPy (≥ 2), SciPy, Pandas
 - Matplotlib, Plotly, cmcrameri
-- psutil, joblib
+- psutil, joblib (≥ 1.4)
+
+### NumPy's BLAS threads and memory
+
+When NumPy is imported, its OpenBLAS library may reserve a working buffer for every thread it can use. On Windows this memory is committed at once. With conda-forge's OpenBLAS it is about 135 MB per thread, so on a machine with 22 logical CPUs a Python process commits about 3 GB before doing any work. LayTracer's parallel workers already use one BLAS thread each, because ray tracing makes no BLAS calls. For your own Python process, limit the threads, for example to four:
+
+```bash
+conda env config vars set OPENBLAS_NUM_THREADS=4 -n laytracer
+conda deactivate
+conda activate laytracer
+```
+
+The setting applies whenever the environment is activated. Remove it with `conda env config vars unset OPENBLAS_NUM_THREADS -n laytracer`. Without conda, set the environment variable `OPENBLAS_NUM_THREADS` before Python starts.
 
 ---
 
@@ -329,6 +343,15 @@ Full documentation is built with [Sphinx](https://www.sphinx-doc.org) and includ
 
 ### Build the docs
 
+Install the optional documentation dependencies defined in `pyproject.toml` first:
+
+```bash
+conda activate laytracer
+python -m pip install -e ".[docs]"
+```
+
+Then build:
+
 ```bash
 conda activate laytracer
 # Windows
@@ -476,7 +499,7 @@ LayTracer/
 │       ├── methodology.rst     # Full mathematical derivations
 │       └── references.bib      # Bibliography for the docs
 ├── pyproject.toml           # Build configuration (setuptools + setuptools-scm)
-├── environment.yml          # Conda environment specification
+├── environment.yml          # Conda environment base (Python and pip)
 ├── pytest.ini               # Pytest configuration
 ├── CHANGELOG.md             # Changelog
 ├── LICENSE                  # MIT License file

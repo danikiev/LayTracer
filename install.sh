@@ -1,15 +1,16 @@
 #!/usr/bin/env bash
 
 # Linux/macOS installer script for LayTracer
-# This script creates a Conda environment based on environment.yml and installs the package
+# This script creates a Conda environment based on environment.yml and installs the package with development dependencies
 # Run: ./install.sh
-# D. Anikiev, 2026-03-03
+# D. Anikiev, 2026-03-03 (updated 2026-10-12)
 
 set -u
 
 ENV_NAME="laytracer"
 PACKAGE_NAME="laytracer"
 ENV_YAML="environment.yml"
+PIP_EXTRAS=".[dev]"
 
 if ! command -v conda >/dev/null 2>&1; then
     echo "Conda is not installed or not found in PATH."
@@ -48,8 +49,8 @@ if [ $? -ne 0 ]; then
     exit 5
 fi
 
-echo "Installing $PACKAGE_NAME..."
-pip install -e .
+echo "Installing $PACKAGE_NAME with extras $PIP_EXTRAS..."
+python -m pip install -e "$PIP_EXTRAS"
 if [ $? -ne 0 ]; then
     echo "Failed to install $PACKAGE_NAME."
     exit 6
