@@ -8,7 +8,10 @@ optional parallel execution using the ``loky`` backend.
 
 from __future__ import annotations
 
+import math
+import sys
 import time
+import warnings
 from dataclasses import dataclass
 from typing import Sequence
 
@@ -34,6 +37,18 @@ TRACE_OUTPUTS = frozenset({
     "sensitivities",
 })
 DEFAULT_REQUESTED = ("travel_times", "rays", "ray_parameters")
+
+# Parallel task sizing (see the Notes of trace_rays). Tasks return compact
+# columns that are copied into the output as soon as they finish, so these
+# bound the transient memory and the scheduling granularity, not the output.
+_TASKS_PER_WORKER = 16
+_MAX_RAYS_PER_TASK = 65_536
+_MAX_BYTES_PER_TASK = 16 * 2**20
+
+# Per-ray result tuple layout shared by _trace_one and _trace_one_many.
+_COLUMNS = (
+    "tt", "rays", "p", "tstar", "spread", "trans", "complex", "diagnostics", "sensitivities",
+)
 
 
 @dataclass(frozen=True)
@@ -181,80 +196,121 @@ def _validate_sh_coupling(source_phase: str, interactions: list[tuple[float, str
             raise ValueError("SH is decoupled from P-SV in isotropic 1-D media.")
 
 
-def _trace_batch(batch):
-    """Worker function for parallel ray computation."""
-    (
-        batch_indices,
-        source_coords,
-        receiver_coords,
-        model_arrays,
-        source_phases,
-        return_dict,
-        refl_list,
-        refr_list,
-        ordered_interactions,
-        need_rays,
-        need_ray_parameters,
-        need_tstar,
-        need_spreading,
-        need_trans_product,
-        need_complex_coefficient_product,
-        need_diagnostics,
-        need_sensitivities,
-        transcoef_method,
-        tol,
-        max_iter,
-    ) = batch
+def _empty_columns(n: int, kw: dict) -> dict:
+    """Allocate NaN- or None-filled result columns for ``n`` rays of one phase."""
 
-    results = []
-    for isrc, ircv in batch_indices:
-        if return_dict:
-            results.append(
-                _trace_one_many(
-                    ma=model_arrays,
-                    src=source_coords[isrc],
-                    rcv=receiver_coords[ircv],
-                    source_phases=source_phases,
-                    refl_list=refl_list,
-                    refr_list=refr_list,
-                    ordered_interactions=ordered_interactions,
-                    need_rays=need_rays,
-                    need_ray_parameters=need_ray_parameters,
-                    need_tstar=need_tstar,
-                    need_spreading=need_spreading,
-                    need_trans_product=need_trans_product,
-                    need_complex_coefficient_product=need_complex_coefficient_product,
-                    need_diagnostics=need_diagnostics,
-                    need_sensitivities=need_sensitivities,
-                    transcoef_method=transcoef_method,
-                    tol=tol,
-                    max_iter=max_iter,
-                )
-            )
+    def _floats(flag):
+        return np.full(n, np.nan) if flag else None
+
+    def _objects(flag):
+        return [None] * n if flag else None
+
+    return {
+        "tt": np.full(n, np.nan),
+        "rays": _objects(kw["need_rays"]),
+        "p": _floats(kw["need_ray_parameters"]),
+        "tstar": _floats(kw["need_tstar"]),
+        "spread": _floats(kw["need_spreading"]),
+        "trans": _floats(kw["need_trans_product"]),
+        "complex": (
+            np.full(n, np.nan + 0.0j) if kw["need_complex_coefficient_product"] else None
+        ),
+        "diagnostics": _objects(kw["need_diagnostics"]),
+        "sensitivities": _objects(kw["need_sensitivities"]),
+    }
+
+
+def _store_ray(columns: dict, k: int, values: tuple) -> None:
+    """Write one per-ray result tuple into position ``k`` of ``columns``."""
+    for key, value in zip(_COLUMNS, values):
+        column = columns[key]
+        if column is not None and value is not None:
+            column[k] = value
+
+
+def _scatter_tile(out: dict, columns: dict, tile: tuple, n_rcv: int) -> None:
+    """Copy one task's columns into the source-major output columns."""
+    s0, s1, r0, r1 = tile
+    width = r1 - r0
+    for key, column in columns.items():
+        if column is None:
+            continue
+        if isinstance(column, np.ndarray):
+            out[key].reshape(-1, n_rcv)[s0:s1, r0:r1] = column.reshape(s1 - s0, width)
         else:
-            results.append(
-                _trace_one(
-                    ma=model_arrays,
-                    src=source_coords[isrc],
-                    rcv=receiver_coords[ircv],
-                    source_phase=source_phases[0],
-                    refl_list=refl_list,
-                    refr_list=refr_list,
-                    ordered_interactions=ordered_interactions,
-                    need_rays=need_rays,
-                    need_ray_parameters=need_ray_parameters,
-                    need_tstar=need_tstar,
-                    need_spreading=need_spreading,
-                    need_trans_product=need_trans_product,
-                    need_complex_coefficient_product=need_complex_coefficient_product,
-                    need_diagnostics=need_diagnostics,
-                    need_sensitivities=need_sensitivities,
-                    transcoef_method=transcoef_method,
-                    tol=tol,
-                    max_iter=max_iter,
+            for row, isrc in enumerate(range(s0, s1)):
+                start = isrc * n_rcv + r0
+                out[key][start:start + width] = column[row * width:(row + 1) * width]
+
+
+def _deep_sizeof(obj) -> int:
+    """Approximate in-memory bytes of a result object and the objects it owns."""
+    size = sys.getsizeof(obj)
+    if isinstance(obj, dict):
+        return size + sum(_deep_sizeof(value) for value in obj.values())
+    if isinstance(obj, (list, tuple)):
+        return size + sum(_deep_sizeof(value) for value in obj)
+    if hasattr(obj, "__dict__"):
+        return size + _deep_sizeof(vars(obj))
+    return size
+
+
+def _column_bytes(column) -> int:
+    """In-memory bytes of one result column."""
+    if column is None:
+        return 0
+    if isinstance(column, np.ndarray):
+        return column.nbytes
+    return 8 * len(column) + sum(_deep_sizeof(value) for value in column if value is not None)
+
+
+def _format_seconds(seconds: float) -> str:
+    """Format a duration for progress messages."""
+    if seconds >= 3600:
+        return f"{seconds / 3600:.1f}h"
+    if seconds >= 60:
+        return f"{seconds / 60:.1f}m"
+    return f"{seconds:.1f}s"
+
+
+def _format_bytes(n_bytes: float) -> str:
+    """Format a memory size for messages."""
+    if n_bytes >= 1e9:
+        return f"{n_bytes / 1e9:.1f} GB"
+    return f"{n_bytes / 1e6:.1f} MB"
+
+
+def _trace_batch(tile, src_tile, rcv_tile, kw):
+    """Worker function: trace every source-receiver pair of one tile.
+
+    Results are written straight into NumPy columns per phase, so a task
+    returns (and pickles to) about 8 bytes per ray and requested float
+    output, plus any requested ray paths, diagnostics or sensitivities,
+    instead of one Python tuple per ray. Returns ``(tile, columns)``.
+    """
+    kw = dict(kw)
+    source_phases = kw.pop("source_phases")
+    return_dict = kw.pop("return_dict")
+    n = len(src_tile) * len(rcv_tile)
+    columns = {phase: _empty_columns(n, kw) for phase in source_phases}
+
+    k = 0
+    for src in src_tile:
+        for rcv in rcv_tile:
+            if return_dict:
+                per_phase = _trace_one_many(
+                    src=src, rcv=rcv, source_phases=source_phases, **kw
                 )
-            )
-    return results
+            else:
+                per_phase = {
+                    source_phases[0]: _trace_one(
+                        src=src, rcv=rcv, source_phase=source_phases[0], **kw
+                    )
+                }
+            for phase, values in per_phase.items():
+                _store_ray(columns[phase], k, values)
+            k += 1
+    return tile, columns
 
 
 def _project_ray_to_3d(
@@ -1042,13 +1098,17 @@ def trace_rays(
         If the total number of rays is below this threshold, run
         sequentially to avoid parallel overhead.
     rays_per_chunk : int or None
-        Maximum number of rays to process per memory-bounded chunk.
+        Maximum number of rays per task above ``sequential_limit``. It
+        bounds the memory a task holds while it runs, not the size of the
+        output. If *None*, it is chosen from the number of rays and workers
+        and from the measured output size per ray (see Notes).
     tol : float
         Newton convergence tolerance (m).
     max_iter : int
         Maximum Newton iterations.
     verbose : bool
-        If *True*, print progress information for chunked processing.
+        If *True*, print the task plan, the estimated output size and the
+        progress of tracing above ``sequential_limit``.
     itinerary : RayItinerary, optional
         Explicit ordered interaction sequence. It cannot be combined with
         legacy ``reflection`` or ``refraction`` arguments. The itinerary's
@@ -1058,6 +1118,21 @@ def trace_rays(
     Returns
     -------
     TraceResult or dict of TraceResult
+
+    Notes
+    -----
+    Above ``sequential_limit`` the source-receiver matrix is split into
+    tiles of at most ``rays_per_chunk`` rays. Each task writes its rays into
+    NumPy columns, and the columns are copied into the preallocated output
+    as soon as the task finishes. Memory use is therefore the output itself
+    plus a few tiles per worker, independent of the number of rays.
+
+    The output size per ray is measured on a probe of up to 64 rays: exactly
+    for array outputs and approximately for ray paths, diagnostics and
+    sensitivities. With ``rays_per_chunk=None`` a tile holds at most 65,536
+    rays and 16 MiB of results, and each worker gets at least 16 tasks. A
+    ``RuntimeWarning`` is issued if the estimated output exceeds the
+    available memory.
     """
     ordered_interactions: tuple[Interaction, ...] | None = None
     if itinerary is not None:
@@ -1162,7 +1237,7 @@ def trace_rays(
         max_iter=max_iter,
     )
 
-    if n_rays <= sequential_limit or n_jobs == 1:
+    if n_rays <= sequential_limit:
         if return_dict:
             results = [
                 _trace_one_many(
@@ -1223,229 +1298,97 @@ def trace_rays(
     else:
         n_workers = n_jobs
 
+    # Measure the output size per ray on a small probe: exact for arrays,
+    # approximate for ray paths, diagnostics and sensitivities.
+    probe_src = sources[np.unique(np.linspace(0, n_src - 1, min(n_src, 8)).astype(int))]
+    probe_rcv = receivers[np.unique(np.linspace(0, n_rcv - 1, min(n_rcv, 8)).astype(int))]
+    _, probe = _trace_batch(None, probe_src, probe_rcv, common_kw)
+    bytes_per_ray = sum(
+        _column_bytes(column) for columns in probe.values() for column in columns.values()
+    ) / (len(probe_src) * len(probe_rcv))
+
     if rays_per_chunk is None:
-        available_mem = psutil.virtual_memory().available
-        bytes_per_ray = 64
-        if need_rays:
-            bytes_per_ray += 200
-        if need_ray_parameters:
-            bytes_per_ray += 8
-        if need_tstar:
-            bytes_per_ray += 8
-        if need_spreading:
-            bytes_per_ray += 8
-        if need_trans_product:
-            bytes_per_ray += 8
-        if need_complex_coefficient_product:
-            bytes_per_ray += 16
-        if need_diagnostics:
-            bytes_per_ray += 96
-        if need_sensitivities:
-            bytes_per_ray += 256
-        usable_mem = available_mem * 0.5 / n_workers
-        rays_per_chunk = max(100_000, int(usable_mem / bytes_per_ray))
-        if verbose:
-            print(
-                f"Auto-detected rays_per_chunk: {rays_per_chunk:,} "
-                f"(based on {available_mem / 1e9:.1f} GB available RAM)"
-            )
-
-    def _make_batches(index_pairs, src_arr, rcv_arr):
-        batch_size = max(1, len(index_pairs) // n_workers)
-        batches = []
-        for i in range(0, len(index_pairs), batch_size):
-            chunk = index_pairs[i:i + batch_size]
-            batches.append((
-                chunk,
-                src_arr,
-                rcv_arr,
-                ma,
-                source_phases,
-                return_dict,
-                refl_list,
-                refr_list,
-                ordered_interactions,
-                need_rays,
-                need_ray_parameters,
-                need_tstar,
-                need_spreading,
-                need_trans_product,
-                need_complex_coefficient_product,
-                need_diagnostics,
-                need_sensitivities,
-                transcoef_method,
-                tol,
-                max_iter,
-            ))
-        return batches
-
-    if n_rays > rays_per_chunk:
-        rcv_per_chunk = max(1, rays_per_chunk // n_src)
-        n_chunks = (n_rcv + rcv_per_chunk - 1) // rcv_per_chunk
-
-        if verbose:
-            print(
-                f"Total rays: {n_rays:,} - processing in {n_chunks} chunks "
-                f"({rcv_per_chunk:,} receivers per chunk)..."
-            )
-
-        def _empty_arrays():
-            return {
-                "tt": np.empty(n_rays, dtype=np.float64),
-                "rays": [None] * n_rays if need_rays else None,
-                "p": np.full(n_rays, np.nan, dtype=np.float64) if need_ray_parameters else None,
-                "tstar": np.full(n_rays, np.nan, dtype=np.float64) if need_tstar else None,
-                "spread": np.full(n_rays, np.nan, dtype=np.float64) if need_spreading else None,
-                "trans": np.full(n_rays, np.nan, dtype=np.float64) if need_trans_product else None,
-                "complex": np.full(n_rays, np.nan + 0.0j, dtype=np.complex128)
-                if need_complex_coefficient_product else None,
-                "diagnostics": [None] * n_rays if need_diagnostics else None,
-                "sensitivities": [None] * n_rays if need_sensitivities else None,
-            }
-
-        phase_arrays = (
-            {phase: _empty_arrays() for phase in source_phases}
-            if return_dict else None
+        rays_per_task = min(
+            _MAX_RAYS_PER_TASK,
+            -(-n_rays // (_TASKS_PER_WORKER * n_workers)),
+            max(1, int(_MAX_BYTES_PER_TASK // bytes_per_ray)),
         )
-        arrays = _empty_arrays() if not return_dict else None
+    else:
+        rays_per_task = max(1, int(rays_per_chunk))
 
-        chunk_times: list[float] = []
-        total_start = time.time()
+    # Near-square tiles keep the source and receiver slices sent to workers small.
+    src_per_tile = min(n_src, max(1, math.isqrt(rays_per_task)))
+    rcv_per_tile = min(n_rcv, max(1, rays_per_task // src_per_tile))
+    src_per_tile = min(n_src, max(1, rays_per_task // rcv_per_tile))
+    tiles = [
+        (s0, min(s0 + src_per_tile, n_src), r0, min(r0 + rcv_per_tile, n_rcv))
+        for s0 in range(0, n_src, src_per_tile)
+        for r0 in range(0, n_rcv, rcv_per_tile)
+    ]
 
-        for chunk_idx in range(n_chunks):
-            chunk_start = time.time()
-
-            rcv_start = chunk_idx * rcv_per_chunk
-            rcv_end = min((chunk_idx + 1) * rcv_per_chunk, n_rcv)
-            chunk_rcv = receivers[rcv_start:rcv_end]
-            chunk_nrcv = rcv_end - rcv_start
-
-            chunk_pairs = [(i, j) for i in range(n_src) for j in range(chunk_nrcv)]
-            batches = _make_batches(chunk_pairs, sources, chunk_rcv)
-
-            batch_results = Parallel(
-                n_jobs=n_workers, backend=backend, pre_dispatch="all"
-            )(delayed(_trace_batch)(b) for b in batches)
-
-            flat_idx = 0
-            for batch_result in batch_results:
-                for res in batch_result:
-                    local_isrc = flat_idx // chunk_nrcv
-                    local_ircv = flat_idx % chunk_nrcv
-                    global_ircv = rcv_start + local_ircv
-                    global_idx = local_isrc * n_rcv + global_ircv
-
-                    if return_dict:
-                        for phase in source_phases:
-                            phase_res = res[phase]
-                            arr = phase_arrays[phase]
-                            arr["tt"][global_idx] = phase_res[0]
-                            if arr["rays"] is not None:
-                                arr["rays"][global_idx] = phase_res[1]
-                            if arr["p"] is not None and phase_res[2] is not None:
-                                arr["p"][global_idx] = phase_res[2]
-                            if arr["tstar"] is not None and phase_res[3] is not None:
-                                arr["tstar"][global_idx] = phase_res[3]
-                            if arr["spread"] is not None and phase_res[4] is not None:
-                                arr["spread"][global_idx] = phase_res[4]
-                            if arr["trans"] is not None and phase_res[5] is not None:
-                                arr["trans"][global_idx] = phase_res[5]
-                            if arr["complex"] is not None and phase_res[6] is not None:
-                                arr["complex"][global_idx] = phase_res[6]
-                            if arr["diagnostics"] is not None:
-                                arr["diagnostics"][global_idx] = phase_res[7]
-                            if arr["sensitivities"] is not None:
-                                arr["sensitivities"][global_idx] = phase_res[8]
-                    else:
-                        arrays["tt"][global_idx] = res[0]
-                        if arrays["rays"] is not None:
-                            arrays["rays"][global_idx] = res[1]
-                        if arrays["p"] is not None and res[2] is not None:
-                            arrays["p"][global_idx] = res[2]
-                        if arrays["tstar"] is not None and res[3] is not None:
-                            arrays["tstar"][global_idx] = res[3]
-                        if arrays["spread"] is not None and res[4] is not None:
-                            arrays["spread"][global_idx] = res[4]
-                        if arrays["trans"] is not None and res[5] is not None:
-                            arrays["trans"][global_idx] = res[5]
-                        if arrays["complex"] is not None and res[6] is not None:
-                            arrays["complex"][global_idx] = res[6]
-                        if arrays["diagnostics"] is not None:
-                            arrays["diagnostics"][global_idx] = res[7]
-                        if arrays["sensitivities"] is not None:
-                            arrays["sensitivities"][global_idx] = res[8]
-                    flat_idx += 1
-
-            chunk_elapsed = time.time() - chunk_start
-            chunk_times.append(chunk_elapsed)
-            if verbose:
-                avg_t = sum(chunk_times) / len(chunk_times)
-                remaining = avg_t * (n_chunks - chunk_idx - 1)
-                if remaining >= 3600:
-                    eta = f"{remaining / 3600:.1f}h"
-                elif remaining >= 60:
-                    eta = f"{remaining / 60:.1f}m"
-                else:
-                    eta = f"{remaining:.0f}s"
-                print(
-                    f"  Chunk {chunk_idx + 1}/{n_chunks} done "
-                    f"({chunk_elapsed:.1f}s) - ETA: {eta}"
-                )
-
-            del chunk_pairs, batches, batch_results
-
-        if verbose:
-            total = time.time() - total_start
-            if total >= 3600:
-                ts = f"{total / 3600:.1f}h"
-            elif total >= 60:
-                ts = f"{total / 60:.1f}m"
-            else:
-                ts = f"{total:.1f}s"
-            print(f"All chunks complete. Total time: {ts}")
-
-        if return_dict:
-            return {
-                phase: TraceResult(
-                    travel_times=arr["tt"],
-                    rays=arr["rays"],
-                    ray_parameters=arr["p"],
-                    tstar=arr["tstar"],
-                    spreading=arr["spread"],
-                    trans_product=arr["trans"],
-                    source_phase=phase,
-                    complex_coefficient_product=arr["complex"],
-                    diagnostics=arr["diagnostics"],
-                    sensitivities=arr["sensitivities"],
-                )
-                for phase, arr in phase_arrays.items()
-            }
-
-        return TraceResult(
-            travel_times=arrays["tt"],
-            rays=arrays["rays"],
-            ray_parameters=arrays["p"],
-            tstar=arrays["tstar"],
-            spreading=arrays["spread"],
-            trans_product=arrays["trans"],
-            source_phase=source_phases[0],
-            complex_coefficient_product=arrays["complex"],
-            diagnostics=arrays["diagnostics"],
-            sensitivities=arrays["sensitivities"],
+    output_bytes = n_rays * bytes_per_ray
+    transient_bytes = (2 * n_workers + 1) * rays_per_task * bytes_per_ray
+    available_mem = psutil.virtual_memory().available
+    if output_bytes + transient_bytes > available_mem:
+        warnings.warn(
+            f"trace_rays: the requested outputs for {n_rays:,} rays need about "
+            f"{_format_bytes(output_bytes)}, but only {_format_bytes(available_mem)} "
+            "of memory is available; expect heavy swapping or a MemoryError. "
+            "Request fewer outputs or trace the receivers in parts.",
+            RuntimeWarning,
+            stacklevel=2,
+        )
+    if verbose:
+        print(
+            f"Tracing {n_rays:,} rays in {len(tiles):,} tasks of up to "
+            f"{rays_per_task:,} rays (n_jobs={n_workers}; output "
+            f"{_format_bytes(output_bytes)}, {_format_bytes(available_mem)} available)..."
         )
 
-    all_pairs = [(i, j) for i in range(n_src) for j in range(n_rcv)]
-    batches = _make_batches(all_pairs, sources, receivers)
+    out = {phase: _empty_columns(n_rays, common_kw) for phase in source_phases}
+    total_start = time.time()
+    tile_results = Parallel(
+        n_jobs=n_workers,
+        backend=backend,
+        return_as="generator_unordered",
+        max_nbytes=None,
+    )(
+        delayed(_trace_batch)(
+            tile, sources[tile[0]:tile[1]], receivers[tile[2]:tile[3]], common_kw
+        )
+        for tile in tiles
+    )
 
-    batch_results = Parallel(
-        n_jobs=n_workers, backend=backend, pre_dispatch="all"
-    )(delayed(_trace_batch)(b) for b in batches)
+    n_done = 0
+    reported = 0
+    for tile, columns in tile_results:
+        for phase, phase_columns in columns.items():
+            _scatter_tile(out[phase], phase_columns, tile, n_rcv)
+        n_done += (tile[1] - tile[0]) * (tile[3] - tile[2])
+        if verbose and 10 * n_done // n_rays > reported:
+            reported = 10 * n_done // n_rays
+            elapsed = time.time() - total_start
+            print(
+                f"  {10 * reported}% done ({_format_seconds(elapsed)}) - "
+                f"ETA: {_format_seconds(elapsed * (n_rays - n_done) / n_done)}"
+            )
 
-    results: list = []
-    for br in batch_results:
-        results.extend(br)
+    if verbose:
+        print(f"All tasks complete. Total time: {_format_seconds(time.time() - total_start)}")
 
-    if return_dict:
-        return _unpack_multi_results(results, requested_set, source_phases)
-
-    return _unpack_results(results, requested_set, source_phases[0])
+    results = {
+        phase: TraceResult(
+            travel_times=arr["tt"],
+            rays=arr["rays"],
+            ray_parameters=arr["p"],
+            tstar=arr["tstar"],
+            spreading=arr["spread"],
+            trans_product=arr["trans"],
+            source_phase=phase,
+            complex_coefficient_product=arr["complex"],
+            diagnostics=arr["diagnostics"],
+            sensitivities=arr["sensitivities"],
+        )
+        for phase, arr in out.items()
+    }
+    return results if return_dict else results[source_phases[0]]

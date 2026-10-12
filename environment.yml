@@ -4,22 +4,5 @@ channels:
   - plotly
   - defaults
 dependencies:
-  - python>=3.8, <3.13
+  - python>=3.9
   - pip
-  - numpy<2
-  - scipy
-  - pandas
-  - psutil
-  - joblib
-  - matplotlib
-  - plotly::plotly  
-  - cmcrameri    
-  - pytest
-  - sphinx
-  - pydata-sphinx-theme
-  - sphinx-gallery
-  - sphinxcontrib-bibtex
-  - sphinx-design
-  - numpydoc  
-  - pip:
-    - setuptools_scm

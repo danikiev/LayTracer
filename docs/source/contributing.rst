@@ -28,9 +28,10 @@ Development setup
    cd LayTracer
    conda env create -f environment.yml
    conda activate laytracer
-   pip install -e .
+   python -m pip install -e ".[dev,docs]"
 
-The ``laytracer`` environment already includes the test and documentation tools.
+``environment.yml`` provides only Python and ``pip``; the ``dev`` and ``docs`` extras in
+``pyproject.toml`` add the test and documentation tools.
 
 Branches and releases
 =====================
@@ -49,7 +50,7 @@ Run the suite from the repository root:
 
    python -m pytest pytests/
 
-Continuous integration runs the same suite on Python 3.8 to 3.12, validates the Zenodo
+Continuous integration runs the same suite on Python 3.9 to 3.14, validates the Zenodo
 metadata, and builds this documentation.
 
 Please add tests with any change to the solver or to the amplitude attributes. The

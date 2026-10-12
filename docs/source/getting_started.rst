@@ -32,17 +32,17 @@ Dependencies
 LayTracer leverages numerous Python packages. 
 Below are the key dependencies:
 
-* `Python <https://www.python.org>`_ (3.8 to 3.12)
-* `NumPy <https://www.numpy.org>`_ (<2)
+* `Python <https://www.python.org>`_ (3.9 or newer)
+* `NumPy <https://www.numpy.org>`_ (2 or newer)
 * `SciPy <https://www.scipy.org>`_
 * `Pandas <https://pandas.pydata.org/>`_
 * `psutil <https://pypi.org/project/psutil/>`_
-* `joblib <https://joblib.readthedocs.io/>`_
+* `joblib <https://joblib.readthedocs.io/>`_ (1.4 or newer)
 * `Matplotlib <https://matplotlib.org/>`_
 * `Plotly <https://plotly.com/python/>`_
 * `cmcrameri <https://pypi.org/project/cmcrameri/>`_
 
-Optional dependencies used to build documentation include:
+All dependencies are declared in ``pyproject.toml``. The optional ``dev`` extra adds pytest and setuptools_scm, and the optional ``docs`` extra adds the packages used to build the documentation:
 
 * `Sphinx <https://www.sphinx-doc.org>`_
 * `pydata-sphinx-theme <https://pydata-sphinx-theme.readthedocs.io/>`_
@@ -58,7 +58,7 @@ The authors are incredibly grateful to the developers of these packages.
 Install using conda
 -------------------
 
-The best way to install is by creating a new conda environment with all required packages:
+The best way to install is by creating a new conda environment. Its base, Python and ``pip``, is defined in ``environment.yml``:
 
 .. code-block:: bash
 
@@ -72,11 +72,13 @@ Then activate the newly created environment:
 
     conda activate laytracer
 
-Finally, install the package:
+Finally, install the package in editable mode with the optional development dependencies defined in ``pyproject.toml``:
 
 .. code-block:: bash
 
-    pip install -e .
+    python -m pip install -e ".[dev]"
+
+For a minimal runtime-only installation, use ``python -m pip install -e .`` instead.
 
 .. _install_from_pypi:
 
@@ -117,7 +119,7 @@ On Windows (PowerShell):
     python -m pip install --upgrade pip
     pip install -e .
 
-The pip-only approach is appropriate for package usage. For a pre-configured environment including documentation tooling, prefer the Conda workflow.
+The pip-only approach is appropriate for package usage. In either workflow, add the optional extras for development (``".[dev]"``), documentation (``".[docs]"``) or both (``".[dev,docs]"``).
 
 .. _install_using_script:
 
@@ -143,6 +145,12 @@ On Linux / macOS, from the repository root run:
 
 Build documentation using script
 --------------------------------
+
+Building the documentation needs the optional documentation dependencies defined in ``pyproject.toml``:
+
+.. code-block:: bash
+
+    python -m pip install -e ".[docs]"
 
 To build and serve the documentation quickly, use the platform-specific scripts.
 
