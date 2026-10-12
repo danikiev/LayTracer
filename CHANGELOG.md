@@ -5,7 +5,7 @@ All notable changes to Laytracer will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [v0.5.0] - 2026-10-12
 
 ### Added
 
@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - logo integration in the repository README, HTML documentation overview, Sphinx header, favicon, and LaTeX/PDF title page (#12)
 - branding documentation describing the logo design concept, color palette, generated outputs, usage locations, and regeneration commands (#12)
 - a Contributing page in the documentation, covering issue reports, the development setup, branches and releases, tests, the documentation build, and the changelog; it replaces the short contributing note in Credits
+- a section in the README and in Getting Started on limiting NumPy's BLAS threads with ``OPENBLAS_NUM_THREADS``, because on Windows some OpenBLAS builds commit a buffer for every thread when NumPy is imported (#15)
 
 ### Changed
 
@@ -190,7 +191,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - This changelog
 - GitHub Actions CI for pytest, docs build, and release automation
 
-[Unreleased]: https://github.com/danikiev/LayTracer/compare/v0.4.0...HEAD
+[v0.5.0]: https://github.com/danikiev/LayTracer/compare/v0.4.0...v0.5.0
 [v0.4.0]: https://github.com/danikiev/LayTracer/compare/v0.3.1...v0.4.0
 [v0.3.1]: https://github.com/danikiev/LayTracer/compare/v0.3.0...v0.3.1
 [v0.3.0]: https://github.com/danikiev/LayTracer/compare/v0.2.1...v0.3.0

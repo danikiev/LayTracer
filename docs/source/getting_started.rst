@@ -141,6 +141,21 @@ On Linux / macOS, from the repository root run:
     chmod +x install.sh
     ./install.sh
 
+.. _blas_threads:
+
+Limit NumPy's BLAS threads
+--------------------------
+
+When NumPy is imported, its OpenBLAS library may reserve a working buffer for every thread it can use. On Windows this memory is committed at once. With conda-forge's OpenBLAS it is about 135 MB per thread, so on a machine with 22 logical CPUs a Python process commits about 3 GB before doing any work. LayTracer's parallel workers already use one BLAS thread each, because ray tracing makes no BLAS calls (see :func:`laytracer.trace_rays`). For your own Python process, limit the threads, for example to four:
+
+.. code-block:: bash
+
+    conda env config vars set OPENBLAS_NUM_THREADS=4 -n laytracer
+    conda deactivate
+    conda activate laytracer
+
+The setting applies whenever the environment is activated. Remove it with ``conda env config vars unset OPENBLAS_NUM_THREADS -n laytracer``. Without Conda, set the environment variable ``OPENBLAS_NUM_THREADS`` before Python starts.
+
 .. _build_docs_using_script:
 
 Build documentation using script
