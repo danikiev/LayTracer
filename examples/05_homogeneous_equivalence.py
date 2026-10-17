@@ -171,7 +171,7 @@ ax = lt.plot.rays_2d(
     discrete_colorbar=True,
     unit="km",
 )
-ax.set_title("(b) Homogeneous model ??? single layer")
+ax.set_title("(b) Homogeneous model — single layer")
 ax.legend(loc="upper right")
 plt.show()
 

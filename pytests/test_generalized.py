@@ -281,7 +281,7 @@ def test_transmission_normalized():
 def test_normalized_vertical_ray():
     """At normal incidence (p=0), normalized T equals standard T * sqrt(Z_out/Z_in).
     
-    The ??erven?? (2001) normalization factor at p=0 simplifies to
+    The Červený (2001) normalization factor at p=0 simplifies to
     sqrt(v_out * rho_out / (v_in * rho_in)) = sqrt(Z_out / Z_in).
     """
 

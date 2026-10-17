@@ -20,7 +20,7 @@ def _simple_model():
 
 class TestSymmetry:
     def test_traveltime_reciprocity(self):
-        """tt(A???B) = tt(B???A)."""
+        """tt(A→B) = tt(B→A)."""
         df = _simple_model()
         src = np.array([0.0, 0.0, 500.0])
         rcv = np.array([5000.0, 0.0, 2500.0])
@@ -58,7 +58,7 @@ class TestSymmetry:
         assert r_fwd.tstar[0] == pytest.approx(r_rev.tstar[0], rel=1e-6)
 
     def test_spreading_reciprocity(self):
-        """L(S,R) = L(R,S) (??erven??-style invariant)."""
+        """L(S,R) = L(R,S) (Červený-style invariant)."""
         # Spreading is invariant under source-receiver swap
         df = pd.DataFrame({
             "Depth": [0.0, 1000.0, 2000.0, 3500.0],
@@ -75,7 +75,7 @@ class TestSymmetry:
         assert r_fwd.spreading[0] == pytest.approx(r_rev.spreading[0], rel=1e-5)
 
     def test_ray_path_reversal(self):
-        """Forward ray ??? flipped reverse ray (geometry invariance)."""
+        """Forward ray ≈ flipped reverse ray (geometry invariance)."""
         df = _simple_model()
         src = np.array([0.0, 0.0, 500.0])
         rcv = np.array([5000.0, 0.0, 2500.0])
@@ -155,7 +155,7 @@ class TestSymmetry:
         assert r1.ray_parameters[0] == pytest.approx(r3.ray_parameters[0], rel=1e-6)
 
     def test_translation_invariance(self):
-        """In 1D models, absolute x/y doesn't matter???only relative offset."""
+        """In 1D models, absolute x/y doesn't matter—only relative offset."""
         df = _simple_model()
         src = np.array([0.0, 0.0, 500.0])
         rcv = np.array([5000.0, 0.0, 2500.0])

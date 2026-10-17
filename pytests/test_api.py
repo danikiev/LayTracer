@@ -28,7 +28,7 @@ def _simple_model():
 
 class TestTraceRays:
     def test_single_pair(self):
-        """One source ??? one receiver."""
+        """One source → one receiver."""
         df = _simple_model()
         src = np.array([0.0, 0.0, 500.0])
         rcv = np.array([5000.0, 0.0, 2500.0])
@@ -175,7 +175,7 @@ class TestTraceRays:
             laytracer.trace_rays(src, rcv, df, source_phase="X")
 
     def test_multiple_receivers(self):
-        """One source ??? multiple receivers."""
+        """One source → multiple receivers."""
         df = _simple_model()
         src = np.array([0.0, 0.0, 500.0])
         rcvs = np.array([
@@ -188,12 +188,12 @@ class TestTraceRays:
         assert len(result.rays) == 3
 
     def test_multiple_sources(self):
-        """Multiple sources ?? multiple receivers."""
+        """Multiple sources × multiple receivers."""
         df = _simple_model()
         srcs = np.array([[0.0, 0.0, 2500.0], [1000.0, 0.0, 1500.0]])
         rcvs = np.array([[3000.0, 0.0, 0.0], [6000.0, 0.0, 0.0]])
         result = laytracer.trace_rays(srcs, rcvs, df)
-        # 2 sources ?? 2 receivers = 4 rays
+        # 2 sources × 2 receivers = 4 rays
         assert result.travel_times.shape == (4,)
         assert len(result.rays) == 4
 
@@ -251,7 +251,7 @@ class TestTraceRays:
         assert np.isfinite(result.trans_product[0])
         # Spreading = epic * v for homogeneous medium
         assert result.spreading[0] == pytest.approx(5000.0 * 3000.0, rel=1e-6)
-        # No interface crossed ??? T = 1
+        # No interface crossed → T = 1
         assert result.trans_product[0] == pytest.approx(1.0)
 
     def test_same_depth_no_amplitude(self):

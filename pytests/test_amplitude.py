@@ -608,7 +608,7 @@ class TestBrewsterAngles:
         assert result == {}
 
     def test_p_incident_rps_brewster(self):
-        """For Ammon model, |Rps| has a Brewster angle near 37.9??."""
+        """For Ammon model, |Rps| has a Brewster angle near 37.9°."""
         RT_P, angle_P, _, _ = _ammon_model_rt()
         result = laytracer.find_brewster_angles(RT_P, angle_P, keys=["Rps"])
         assert "Rps" in result
@@ -616,7 +616,7 @@ class TestBrewsterAngles:
         assert result["Rps"][0] == pytest.approx(37.9, abs=0.5)
 
     def test_sv_incident_rss_brewster(self):
-        """For Ammon model, |Rss| has a Brewster angle near 19.8??."""
+        """For Ammon model, |Rss| has a Brewster angle near 19.8°."""
         _, _, RT_SV, angle_SV = _ammon_model_rt()
         result = laytracer.find_brewster_angles(RT_SV, angle_SV, keys=["Rss"])
         assert "Rss" in result
@@ -624,7 +624,7 @@ class TestBrewsterAngles:
         assert result["Rss"][0] == pytest.approx(19.8, abs=0.5)
 
     def test_sv_incident_rsp_two_brewsters(self):
-        """For Ammon model, |Rsp| has two Brewster angles near 21?? and 40??."""
+        """For Ammon model, |Rsp| has two Brewster angles near 21° and 40°."""
         _, _, RT_SV, angle_SV = _ammon_model_rt()
         result = laytracer.find_brewster_angles(RT_SV, angle_SV, keys=["Rsp"])
         assert "Rsp" in result
@@ -649,7 +649,7 @@ class TestBrewsterAngles:
         assert abs(RT["Rshsh"]) == pytest.approx(0.0, abs=1e-12)
 
     def test_sh_reflection_brewster_detected(self):
-        """For Ammon model, |Rshsh| has a Brewster-like zero near 35.17??."""
+        """For Ammon model, |Rshsh| has a Brewster-like zero near 35.17°."""
         vs1, rho1 = 2.9e3, 2667.0
         vs2, rho2 = 4.6e3, 3380.0
         p = np.linspace(0, 1.0 / vs1, 5000 + 1)

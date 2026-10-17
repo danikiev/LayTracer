@@ -22,13 +22,13 @@ import laytracer
 
 VP = 5000.0          # P-wave velocity  (m/s)
 VS = VP / 1.732      # S-wave velocity   (m/s)
-RHO = 2700.0         # density           (kg/m??)
+RHO = 2700.0         # density           (kg/m³)
 QP = 500.0           # P-wave quality factor
 QS = 250.0           # S-wave quality factor
 
 # Geometry
-SRC = np.array([0.0, 0.0, 500.0])       # source  (x, y, z) ??? 500 m depth
-RCV = np.array([5000.0, 0.0, 2500.0])   # receiver (x, y, z) ??? 2500 m depth
+SRC = np.array([0.0, 0.0, 500.0])       # source  (x, y, z) — 500 m depth
+RCV = np.array([5000.0, 0.0, 2500.0])   # receiver (x, y, z) — 2500 m depth
 
 EPIC = np.sqrt((RCV[0] - SRC[0]) ** 2 + (RCV[1] - SRC[1]) ** 2)  # 5000 m
 DZ = abs(RCV[2] - SRC[2])                                          # 2000 m
@@ -79,14 +79,14 @@ def _analytical_solution():
     # t* (attenuation operator)
     tstar = tt / QP
 
-    # Ray parameter  p = sin(??) / V = X / (V * R)
+    # Ray parameter  p = sin(θ) / V = X / (V * R)
     p = EPIC / (VP * R)
 
-    # Geometrical spreading (relative, ??erven?? convention used in LayTracer)
+    # Geometrical spreading (relative, Červený convention used in LayTracer)
     #   For a homogeneous medium: L = R * V
     spreading = R * VP
 
-    # Transmission coefficient product (no interfaces ??? 1.0)
+    # Transmission coefficient product (no interfaces → 1.0)
     trans_product = 1.0
 
     # Combined amplitude factor  (T / L) * exp(-pi * f * tstar)
