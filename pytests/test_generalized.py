@@ -284,7 +284,6 @@ def test_normalized_vertical_ray():
     The ??erven?? (2001) normalization factor at p=0 simplifies to
     sqrt(v_out * rho_out / (v_in * rho_in)) = sqrt(Z_out / Z_in).
     """
-    from laytracer.amplitude import psv_rt_coefficients, normalize_rt_coefficient
 
     df = pd.DataFrame({
         "Depth": [0.0, 1000.0],

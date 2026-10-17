@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - optional ``q`` and ``vmax`` keyword arguments of ``psv_rt_coefficients``, ``sh_rt_coefficients`` and ``normalize_rt_coefficient``: given the transformed ray parameter of a ray and its maximum velocity, the vertical slownesses are evaluated without cancellation near grazing incidence (#18)
 - ``RayResult.q``, the transformed ray parameter of the solved ray (#18)
 
+### Removed
+
+- the private helper ``solver._interface_transmission``, which no released version called and which still evaluated vertical slownesses from the ray parameter, together with the ``LayerStack`` import in ``solver.py`` that only it used and the unused ``dataclasses.field`` import. ``LayerStack`` remains available as ``laytracer.LayerStack`` and ``laytracer.model.LayerStack`` (#20)
+
 ### Fixed
 
 - the documentation of a release reaches GitHub Pages. After v0.5.0 the site kept showing ``0.4.1.dev38+gf9703a9be``, because Pages ignores a deployment made from a tag when ``main`` has already deployed the same commit ([actions/deploy-pages#383](https://github.com/actions/deploy-pages/issues/383)). Pushing a ``v*`` tag now starts a ``docs.yml`` run on ``main`` that builds and deploys the tag, only runs on ``main`` deploy, and each deployment checks that the live site shows the version it deployed

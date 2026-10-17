@@ -107,7 +107,7 @@ L_a   = dist * VP
 T_a   = 1.0
 C_a   = T_a / L_a                # combined deterministic amplitude factor
 
-print(f"\n--- Analytical ---")
+print("\n--- Analytical ---")
 print(f"Travel time:      {tt_a:.8f} s")
 print(f"Ray parameter:    {p_a:.10e} s/m")
 print(f"t*:               {ts_a:.10e} s")
@@ -148,7 +148,7 @@ L_h   = float(res_h.spreading[0])
 T_h   = float(res_h.trans_product[0])
 C_h   = T_h / L_h
 
-print(f"\n--- Homogeneous code ---")
+print("\n--- Homogeneous code ---")
 print(f"Travel time:      {tt_h:.8f} s")
 print(f"Ray parameter:    {p_h:.10e} s/m")
 print(f"t*:               {ts_h:.10e} s")
@@ -211,7 +211,7 @@ L_l   = float(res_l.spreading[0])
 T_l   = float(res_l.trans_product[0])
 C_l   = T_l / L_l
 
-print(f"\n--- Layered code (identical layers) ---")
+print("\n--- Layered code (identical layers) ---")
 print(f"Travel time:      {tt_l:.8f} s")
 print(f"Ray parameter:    {p_l:.10e} s/m")
 print(f"t*:               {ts_l:.10e} s")

@@ -508,7 +508,8 @@ def rays_2d(
             else:
                 # Last layer (half-space) extension
                 span = (depths[-1] - depths[0]) / scale
-                if span == 0: span = 1000.0 / scale
+                if span == 0:
+                    span = 1000.0 / scale
                 
                 z_def = z_top + span * 0.3
                 # Extend to cover the deepest data point (with 10 % padding)

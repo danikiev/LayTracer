@@ -12,12 +12,12 @@ Implements the method of :cite:t:`FangChen2019`:
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 import numpy as np
 import scipy.optimize as opt
 
-from .model import LayerStack, normalize_phase, q_factor_key
+from .model import normalize_phase, q_factor_key
 
 _FLOAT_EPS = np.finfo(float).eps
 
@@ -1110,49 +1110,3 @@ def _calc_intra_transmission(
         value = R_bar
 
     return float(abs(value)) if magnitude else complex(value)
-
-
-
-# ── Transmission helper ──
-
-def _interface_transmission(
-    p: float,
-    k_above: int,
-    k_below: int,
-    stack: LayerStack,
-    vel_type: str,
-    method: str,
-) -> float:
-    """Transmission coefficient at the interface between layers *k_above* and *k_below*."""
-    from .amplitude import psv_rt_coefficients, sh_rt_coefficients, normalize_rt_coefficient
-
-    v_above = stack.v(vel_type)[k_above]
-    v_below = stack.v(vel_type)[k_below]
-
-    if stack.rho is None:
-        return 1.0  # can't compute without density
-
-    rho_above = stack.rho[k_above]
-    rho_below = stack.rho[k_below]
-
-    vel_type_norm = str(vel_type).lower()
-    if vel_type_norm in ("vp", "vs"):
-        ph = "P" if vel_type_norm == "vp" else "SV"
-    else:
-        ph = normalize_phase(vel_type)
-    vp_a, vs_a = stack.vp[k_above], stack.vs[k_above]
-    vp_b, vs_b = stack.vp[k_below], stack.vs[k_below]
-    if ph == "SH":
-        RT = sh_rt_coefficients(p, vs_a, rho_above, vs_b, rho_below)
-        R_bar = RT["Tshsh"]
-    else:
-        RT = psv_rt_coefficients(p, vp_a, vs_a, rho_above, vp_b, vs_b, rho_below)
-        key = "Tpp" if ph == "P" else "Tss"
-        R_bar = RT[key]
-
-    if method == "normalized":
-        v_in = float(v_above)
-        v_out = float(v_below)
-        return float(abs(normalize_rt_coefficient(R_bar, p, v_in, rho_above, v_out, rho_below)))
-
-    return float(abs(R_bar))

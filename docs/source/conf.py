@@ -17,7 +17,7 @@ PROJECT_ROOT = DOCS_SOURCE.parents[1]
 sys.path.insert(0, str(DOCS_SOURCE))
 sys.path.insert(0, os.path.abspath("../../laytracer"))
 
-from _ext.changelog import generate_changelog_include
+from _ext.changelog import generate_changelog_include  # noqa: E402
 
 generate_changelog_include(PROJECT_ROOT, DOCS_SOURCE)
 

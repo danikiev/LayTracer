@@ -15,6 +15,7 @@ import laytracer as lt
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+from laytracer.model import discretize_gradient_layer
 
 # sphinx_gallery_thumbnail_number = 2
 
@@ -279,8 +280,6 @@ plt.show()
 #    singularity. In 1D flat media, :math:`dx/dp` remains positive for 
 #    reflections, meaning we see no caustics, only varying rates of 
 #    wavefield divergence.
-
-from laytracer.model import discretize_gradient_layer
 
 # --- 1. Define Models & Trace Rays ---
 
