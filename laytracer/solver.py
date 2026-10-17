@@ -73,9 +73,9 @@ def _normalize_transcoef_method(method: str) -> str:
     return method
 
 
-# ═══════════════════════════════════════════════════════════════════════
+# =======================================================================
 #  Offset equation and derivatives
-# ═══════════════════════════════════════════════════════════════════════
+# =======================================================================
 
 def _offset_from_s(
     q: float,
@@ -108,7 +108,7 @@ def offset(q: float, h: np.ndarray, lmd: np.ndarray) -> float:
     -------
     float
     """
-    s = 1.0 - lmd * lmd          # (1 − λ²)
+    s = 1.0 - lmd * lmd          # (1 - lambda^2)
     return _offset_from_s(q, h, lmd, s)
 
 
@@ -187,9 +187,9 @@ def offset_dq2(q: float, h: np.ndarray, lmd: np.ndarray) -> float:
     return _offset_dq2_from_s(q, h, lmd, s)
 
 
-# ═══════════════════════════════════════════════════════════════════════
+# =======================================================================
 #  Parameter conversions
-# ═══════════════════════════════════════════════════════════════════════
+# =======================================================================
 
 def q_from_p(p: float, vmax: float) -> float:
     r"""Convert horizontal slowness *p* to dimensionless parameter *q*.
@@ -255,9 +255,9 @@ def _criticality_margin(q: float) -> float:
     return 1.0 / (root * (root + q))
 
 
-# ═══════════════════════════════════════════════════════════════════════
+# =======================================================================
 #  Initial estimate
-# ═══════════════════════════════════════════════════════════════════════
+# =======================================================================
 
 def initial_q(
     X_target: float,
@@ -327,9 +327,9 @@ def initial_q(
     return max(q0, 1e-10)
 
 
-# ═══════════════════════════════════════════════════════════════════════
+# =======================================================================
 #  Second-order Newton iteration
-# ═══════════════════════════════════════════════════════════════════════
+# =======================================================================
 
 def newton_step(
     q_i: float,
@@ -419,9 +419,9 @@ def _newton_step_from_s(
     return q_new, _offset_from_s(q_new, h, lmd, s)
 
 
-# ═══════════════════════════════════════════════════════════════════════
+# =======================================================================
 #  Result container
-# ═══════════════════════════════════════════════════════════════════════
+# =======================================================================
 
 @dataclass(frozen=True)
 class SolveDiagnostics:
@@ -561,9 +561,9 @@ def _validate_dynamic_inputs(
             )
 
 
-# ═══════════════════════════════════════════════════════════════════════
+# =======================================================================
 #  Main solver
-# ═══════════════════════════════════════════════════════════════════════
+# =======================================================================
 
 def solve(
     h: np.ndarray,
@@ -681,7 +681,7 @@ def solve(
 
     N = len(h)
 
-    # ── Vertical / zero-offset ray ──
+    # -- Vertical / zero-offset ray --
     if epicentral_dist < 1e-10:
         tt = float(np.sum(h / v))
         pts = None
@@ -772,7 +772,7 @@ def solve(
             q=0.0,
         )
 
-    # ── Same-layer (direct line) ──
+    # -- Same-layer (direct line) --
     if N == 1:
         # Simple straight line in one uniform block
         # dZ is total vertical distance traversed
@@ -826,7 +826,7 @@ def solve(
             q=float(q_direct),
         )
 
-    # ── General multi-layer case ──
+    # -- General multi-layer case --
     vmax = float(np.max(v))
     lmd = v / vmax
     offset_s = 1.0 - lmd * lmd
@@ -924,7 +924,7 @@ def solve(
             fallback_iterations=fallback_iterations,
         )
 
-    # ── Propagate ray ──
+    # -- Propagate ray --
     tt = 0.0
     tstar_val = 0.0
     trans_prod_val = 1.0 if need_trans_product else None
@@ -1003,7 +1003,7 @@ def solve(
                     if need_complex_coefficient_product:
                         complex_prod_val *= coeff
 
-        # ── Explicit Interaction at End of Segment ──
+        # -- Explicit Interaction at End of Segment --
         # Check if there is an interaction defined for this segment index
         if need_coefficients:
             # Find interaction where seg_idx == seg_i
@@ -1021,7 +1021,7 @@ def solve(
 
     pts = np.array(pts_list) if return_ray_path else None
 
-    # ── Geometrical spreading ──
+    # -- Geometrical spreading --
     spreading_val = None
     if need_spreading:
         dXdq = offset_dq(q, h, lmd)

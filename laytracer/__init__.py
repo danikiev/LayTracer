@@ -1,5 +1,5 @@
 r"""
-LayTracer — fast two-point ray tracing in 1-D layered media.
+LayTracer: fast two-point ray tracing in 1-D layered media.
 
 Public API
 ----------

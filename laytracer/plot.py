@@ -263,7 +263,7 @@ def velocity_profile(
     unit: str = "m",
     **kwargs,
 ):
-    r"""Plot a 1-D model parameter–depth step profile.
+    r"""Plot a 1-D model parameter-depth step profile.
 
     Parameters
     ----------
@@ -325,7 +325,7 @@ def velocity_profile(
     if param in ("Vp", "Vs"):
         xlabel_str = f"{param} (m/s)"
     elif param == "Rho":
-        xlabel_str = r"$\rho$ (kg/m³)"
+        xlabel_str = r"$\rho$ (kg/m$^3$)"
     elif param in ("Qp", "Qs"):
         xlabel_str = f"{param}"
     else:
@@ -384,7 +384,7 @@ def rays_2d(
         Each element is shape ``(M, 2)`` or ``(M, 3)``.  If 3-D, the
         first two columns are treated as horizontal/depth.
     vel_type : str
-        ``'Vp'`` or ``'Vs'`` — used for layer colouring.
+        ``'Vp'`` or ``'Vs'``, used for layer colouring.
     sources, receivers : numpy.ndarray, optional
         Coordinate arrays for plotting markers.
     ax : matplotlib.axes.Axes, optional
@@ -472,7 +472,7 @@ def rays_2d(
             cmap = layer_cmap or plt.get_cmap("viridis", len(unique_vels))
             norm = BoundaryNorm(bounds, cmap.N)
         elif discrete_colorbar and len(unique_vels) == 1:
-            # Single unique velocity — one discrete colour, tick at exact value
+            # Single unique velocity: one discrete colour, tick at exact value
             bounds = np.array([vmin - 0.5, vmax + 0.5])
             cmap = layer_cmap or plt.get_cmap("viridis", 1)
             norm = BoundaryNorm(bounds, cmap.N)

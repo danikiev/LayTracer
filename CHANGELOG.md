@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - optional ``q`` and ``vmax`` keyword arguments of ``psv_rt_coefficients``, ``sh_rt_coefficients`` and ``normalize_rt_coefficient``: given the transformed ray parameter of a ray and its maximum velocity, the vertical slownesses are evaluated without cancellation near grazing incidence (#18)
 - ``RayResult.q``, the transformed ray parameter of the solved ray (#18)
 
+### Changed
+
+- the package source is plain ASCII. The decorative box-drawing separators in the comments of ``solver.py``, ``amplitude.py`` and ``model.py`` are now ``=`` and ``-`` rules of the same width, and units, dashes, arrows and Greek letters in docstrings and comments are spelled in ASCII. The density axis label of ``plot.velocity_profile`` uses mathtext, ``kg/m$^3$``, which renders as before, and the ``normalize_rt_coefficient`` summary cites ``Cerveny2001``, so the rendered documentation keeps the accented name. A test checks that every file in ``laytracer/`` stays ASCII (#22)
+
 ### Removed
 
 - the private helper ``solver._interface_transmission``, which no released version called and which still evaluated vertical slownesses from the ray parameter, together with the ``LayerStack`` import in ``solver.py`` that only it used and the unused ``dataclasses.field`` import. ``LayerStack`` remains available as ``laytracer.LayerStack`` and ``laytracer.model.LayerStack`` (#20)

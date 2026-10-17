@@ -50,7 +50,7 @@ class LayerStack:
     vs : numpy.ndarray
         S-wave velocities (m/s), shape ``(N,)``.
     rho : numpy.ndarray or None
-        Densities (kg/m³), shape ``(N,)``, or *None*.
+        Densities (kg/m^3), shape ``(N,)``, or *None*.
     qp : numpy.ndarray or None
         P-wave quality factors, shape ``(N,)``, or *None*.
     qs : numpy.ndarray or None
@@ -223,7 +223,7 @@ def build_layer_stack(
     i_top = _layer_index(z_top, depths)
     i_bot = _layer_index(z_bot, depths)
 
-    # ── Single-layer case ──
+    # -- Single-layer case --
     if i_top == i_bot:
         h_arr = np.array([z_bot - z_top])
         slc = slice(i_top, i_top + 1)
@@ -236,17 +236,17 @@ def build_layer_stack(
             qs=qs_all[slc].copy() if has_qs else None,
         )
 
-    # ── Multi-layer case ──
+    # -- Multi-layer case --
     n = i_bot - i_top + 1
     h_arr = np.empty(n)
 
-    # First (shallowest) layer — partial
+    # First (shallowest) layer: partial
     if i_top + 1 < len(depths):
         h_arr[0] = depths[i_top + 1] - z_top
     else:
         h_arr[0] = z_bot - z_top  # only layer
 
-    # Middle layers — full thickness
+    # Middle layers: full thickness
     for k in range(1, n - 1):
         idx = i_top + k
         if idx + 1 < len(depths):
@@ -254,7 +254,7 @@ def build_layer_stack(
         else:
             h_arr[k] = z_bot - depths[idx]
 
-    # Last (deepest) layer — partial
+    # Last (deepest) layer: partial
     h_arr[n - 1] = z_bot - depths[i_bot]
 
     slc = slice(i_top, i_bot + 1)

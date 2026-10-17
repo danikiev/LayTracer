@@ -43,9 +43,9 @@ def _check_q_vmax(q, vmax) -> None:
         raise ValueError("q and vmax must be given together.")
 
 
-# ═══════════════════════════════════════════════════════════════════════
+# =======================================================================
 #  Transmission coefficients
-# ═══════════════════════════════════════════════════════════════════════
+# =======================================================================
 
 def transmission_normal(
     v1: float,
@@ -61,7 +61,7 @@ def transmission_normal(
     Parameters
     ----------
     v1, rho1 : float
-        Velocity (m/s) and density (kg/m³) on the incident side.
+        Velocity (m/s) and density (kg/m^3) on the incident side.
     v2, rho2 : float
         Velocity and density on the transmitted side.
 
@@ -147,9 +147,9 @@ def sh_rt_coefficients(
     return dict(Rshsh=Rshsh, Tshsh=Tshsh)
 
 
-# ═══════════════════════════════════════════════════════════════════════
+# =======================================================================
 #  Full P-SV reflection / transmission matrix
-# ═══════════════════════════════════════════════════════════════════════
+# =======================================================================
 
 def psv_rt_coefficients(
     p,
@@ -224,7 +224,7 @@ def psv_rt_coefficients(
 
     D = E * F + G * H * p * p
 
-    # At exactly critical or grazing angles D → 0, producing 0/0 (NaN).
+    # At exactly critical or grazing angles D -> 0, producing 0/0 (NaN).
     # Suppress the resulting numpy warnings; the NaN values are correct
     # (the coefficients are singular at those isolated ray parameters).
     with np.errstate(invalid="ignore", divide="ignore"):
@@ -326,9 +326,9 @@ def find_critical_angles(
     return result
 
 
-# ═══════════════════════════════════════════════════════════════════════
+# =======================================================================
 #  Brewster-angle detection
-# ═══════════════════════════════════════════════════════════════════════
+# =======================================================================
 
 def find_brewster_angles(
     rt_coefficients: dict,
@@ -343,13 +343,13 @@ def find_brewster_angles(
     at which a reflection or transmission coefficient passes through
     zero or a deep minimum.  Unlike critical angles, which depend only
     on velocity ratios, Brewster angles depend on *all six* elastic
-    parameters (Vp, Vs, ρ in both media) and arise from destructive
+    parameters (Vp, Vs and density in both media) and arise from destructive
     interference between displacement potentials at the interface.
 
     Parameters
     ----------
     rt_coefficients : dict
-        Output of :func:`psv_rt_coefficients` — each value is a 1-D
+        Output of :func:`psv_rt_coefficients`; each value is a 1-D
         array of complex coefficients.
     angles : array_like
         Incidence angles (degrees) corresponding to the ray-parameter
@@ -387,9 +387,9 @@ def find_brewster_angles(
     return result
 
 
-# ═══════════════════════════════════════════════════════════════════════
-#  Červený normalized displacement coefficients
-# ═══════════════════════════════════════════════════════════════════════
+# =======================================================================
+#  Cerveny (2001) normalized displacement coefficients
+# =======================================================================
 
 def normalize_rt_coefficient(
     R_bar,
@@ -402,7 +402,7 @@ def normalize_rt_coefficient(
     q=None,
     vmax=None,
 ):
-    r"""Apply Červený (2001) normalization to a displacement R/T coefficient.
+    r"""Apply the :cite:t:`Cerveny2001` normalization to a displacement R/T coefficient.
 
     Eq. 5.3.10:
 
@@ -424,11 +424,11 @@ def normalize_rt_coefficient(
     v_in : float
         Phase velocity of the incident wave (m/s).
     rho_in : float
-        Density of the incident medium (kg/m³).
+        Density of the incident medium (kg/m^3).
     v_out : float
         Phase velocity of the outgoing (reflected/transmitted) wave (m/s).
     rho_out : float
-        Density of the outgoing medium (kg/m³).
+        Density of the outgoing medium (kg/m^3).
     q, vmax : float or array_like, optional
         Transformed ray parameter
         :math:`q = p\,v_{\max}/\sqrt{1 - p^2 v_{\max}^2}` and the largest
