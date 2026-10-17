@@ -9,27 +9,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- optional ``q`` and ``vmax`` keyword arguments of ``psv_rt_coefficients``, ``sh_rt_coefficients`` and ``normalize_rt_coefficient``: given the transformed ray parameter of a ray and its maximum velocity, the vertical slownesses are evaluated without cancellation near grazing incidence (#18)
+- optional ``q`` and ``vmax`` keyword arguments of ``psv_rt_coefficients``, ``sh_rt_coefficients`` and ``normalize_rt_coefficient``, which evaluate the coefficients without cancellation near grazing incidence (#18)
 - ``RayResult.q``, the transformed ray parameter of the solved ray (#18)
-- release tags may carry a PEP 440 pre-release segment, for example ``v1.0.0rc1``. The shared tag validation accepts ``aN``, ``bN`` and ``rcN`` after ``vMAJOR.MINOR.PATCH``, so a pre-release deploys its documentation and is published to TestPyPI and PyPI like a final release. ``RELEASE.md`` describes pre-releases (#23)
+- support for PEP 440 pre-release tags such as ``v1.0.0rc1`` in the release workflows, described in ``RELEASE.md`` (#23)
 
 ### Changed
 
-- the package source is plain ASCII. The decorative box-drawing separators in the comments of ``solver.py``, ``amplitude.py`` and ``model.py`` are now ``=`` and ``-`` rules of the same width, and units, dashes, arrows and Greek letters in docstrings and comments are spelled in ASCII. The density axis label of ``plot.velocity_profile`` uses mathtext, ``kg/m$^3$``, which renders as before, and the ``normalize_rt_coefficient`` summary cites ``Cerveny2001``, so the rendered documentation keeps the accented name. A test checks that every file in ``laytracer/`` stays ASCII (#22)
+- the package source is plain ASCII, which a test enforces; plot labels and the rendered documentation look as before (#22)
 
 ### Removed
 
-- the private helper ``solver._interface_transmission``, which no released version called and which still evaluated vertical slownesses from the ray parameter, together with the ``LayerStack`` import in ``solver.py`` that only it used and the unused ``dataclasses.field`` import. ``LayerStack`` remains available as ``laytracer.LayerStack`` and ``laytracer.model.LayerStack`` (#20)
+- the unused private helper ``solver._interface_transmission`` and unused imports in ``solver.py``; ``LayerStack`` remains available from ``laytracer`` and ``laytracer.model`` (#20)
 
 ### Fixed
 
-- the documentation of a release reaches GitHub Pages. After v0.5.0 the site kept showing ``0.4.1.dev38+gf9703a9be``, because Pages ignores a deployment made from a tag when ``main`` has already deployed the same commit ([actions/deploy-pages#383](https://github.com/actions/deploy-pages/issues/383)). Pushing a ``v*`` tag now starts a ``docs.yml`` run on ``main`` that builds and deploys the tag, only runs on ``main`` deploy, and each deployment checks that the live site shows the version it deployed
-- the quadratic Newton step in q no longer stalls at large offsets. Its small root came from the textbook formula, which cancels to a zero step once ``4|AC|`` drops below machine precision relative to ``B**2``; the bracketed fallback then finished the solve, and the diagnostics reported ``q_brentq`` for rays that are not ill-conditioned. In a seeded benchmark this affected 5% of rays at the default tolerance and 14% at ``tol=1e-6``, almost all beyond ten times the source depth. The roots are now evaluated in cancellation-free form, so these rays converge in the quadratic step; travel times at offsets below ten times the source depth change by less than 1e-7 s (#17)
-- travel times, t*, ray paths, geometrical spreading, interface coefficients and sensitivities keep full precision for near-grazing rays. Each leg was evaluated from the ray parameter through ``sqrt(1/v**2 - p**2)`` or ``1 - (p*v)**2``, which cancels as ``p*vmax`` approaches 1, with a relative error growing like ``eps*q**2``. A source just below an interface into a faster layer makes the fastest leg thin and ``q`` large even at moderate offsets: 1 mm below such an interface, travel times were off by up to 0.14 ms at 3 km offset, and 1 µm below they were NaN with only a ``RuntimeWarning``. Returned ray paths did not end at the receiver, and spreading was not returned once ``1 - (p*vmax)**2`` fell below 1e-15. These quantities are now evaluated from ``q``, and the straight single-leg path uses the exact ``q = offset / depth`` (#18)
-- ``SolveDiagnostics.criticality_margin`` keeps its precision for near-grazing rays. It was computed as ``1 - p*vmax``, which cancels as ``p*vmax`` approaches 1: its relative error reached 4.6% at ``q = 2e7``, and beyond ``q`` of about 7e7 it read exactly 0 for rays that still propagate. It is now evaluated from ``q`` as ``1 / (sqrt(1 + q**2) * (sqrt(1 + q**2) + q))`` (#19)
-- the title of the single-layer ray plot in example 5 has shown question marks in place of an em dash since v0.4.0, because each byte of some non-ASCII characters had been replaced by ``?``; test docstrings and comments had the same damage. The original characters are restored
-- the documentation states when a sensitivity record is invalid. The methodology chapter said that records are marked invalid when a perturbation reaches a critical or evanescent path; they are marked invalid only when the solved ray itself cannot be differentiated, and near-critical rays are identified with ``criticality_margin`` and ``conditioning``. The ``SolveDiagnostics`` docstring now says that returned diagnostics always have ``converged=True``, ``q_from_p`` notes its precision limit near grazing incidence, and the solver module names Fang and Chen (2019) instead of "the paper" (#21)
-- ``solve``, ``offset_dq``, ``offset_dq2``, ``q_from_p``, ``p_from_q`` and ``initial_q`` document all their parameters and their return values (``solve`` documented 4 of its 18 parameters), and ``ModelArrays``, ``RayItinerary``, ``RaySensitivity`` and ``TravelTimeApproximator`` document all their fields (#21)
+- the live documentation shows the released version. GitHub Pages ignores a deployment from a tag when ``main`` has already deployed the same commit ([actions/deploy-pages#383](https://github.com/actions/deploy-pages/issues/383)), so a pushed ``v*`` tag now starts a ``docs.yml`` run on ``main`` that deploys the tag and checks the live site
+- the quadratic Newton step in q no longer stalls at large offsets: its roots are evaluated without cancellation, so the rays that fell back to the bracketed solver, about 5% at the default tolerance, converge in the quadratic step (#17)
+- travel times, t*, ray paths, geometrical spreading, interface coefficients and sensitivities keep full precision for near-grazing rays, which are now evaluated from ``q`` instead of the ray parameter; for a source just below a faster interface, travel times were off by up to 0.14 ms or were NaN (#18)
+- ``SolveDiagnostics.criticality_margin`` is evaluated from ``q`` and no longer reads 0 for near-grazing rays that still propagate (#19)
+- the example 5 plot title and the test docstrings show their non-ASCII characters again; an encoding error had replaced them with question marks since v0.4.0
+- the documentation states correctly when sensitivity records are marked invalid, and every public function and dataclass documents its parameters, return values and fields (#21)
 
 ## [v0.5.0] - 2026-10-12
 
