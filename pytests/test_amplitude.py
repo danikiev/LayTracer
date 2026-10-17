@@ -258,6 +258,59 @@ class TestTransmission:
         transmitted_flux_ratio = np.real(zeta2) / np.real(zeta1) * abs(RT["Tshsh"]) ** 2
         assert transmitted_flux_ratio == pytest.approx(0.0, abs=1e-14)
 
+    def test_q_form_matches_p_form_away_from_grazing(self):
+        """Coefficients evaluated from q agree with the p form where p does not cancel."""
+        vp1, vs1, rho1 = 5000.0, 2900.0, 2600.0
+        vp2, vs2, rho2 = 3500.0, 2000.0, 2300.0
+        vmax = vp1
+        q = np.array([0.0, 0.1, 1.0, 10.0])
+        p = q / (vmax * np.sqrt(1.0 + q * q))
+
+        RT_p = laytracer.psv_rt_coefficients(p, vp1, vs1, rho1, vp2, vs2, rho2)
+        RT_q = laytracer.psv_rt_coefficients(
+            p, vp1, vs1, rho1, vp2, vs2, rho2, q=q, vmax=vmax
+        )
+        for key in RT_p:
+            np.testing.assert_allclose(RT_q[key], RT_p[key], rtol=1e-12, atol=1e-15)
+
+        SH_p = laytracer.sh_rt_coefficients(p, vs1, rho1, vs2, rho2)
+        SH_q = laytracer.sh_rt_coefficients(p, vs1, rho1, vs2, rho2, q=q, vmax=vmax)
+        for key in SH_p:
+            np.testing.assert_allclose(SH_q[key], SH_p[key], rtol=1e-12, atol=1e-15)
+
+        N_p = laytracer.normalize_rt_coefficient(RT_p["Tps"], p, vp1, rho1, vs2, rho2)
+        N_q = laytracer.normalize_rt_coefficient(
+            RT_q["Tps"], p, vp1, rho1, vs2, rho2, q=q, vmax=vmax
+        )
+        np.testing.assert_allclose(N_q, N_p, rtol=1e-12, atol=1e-15)
+
+    @pytest.mark.parametrize("q", [1e3, 1e6, 1e8])
+    def test_psv_normalized_energy_conservation_near_grazing(self, q):
+        """Normalized P-SV coefficients from q conserve energy flux near grazing."""
+        vp1, vs1, rho1 = 5000.0, 2900.0, 2600.0  # fastest medium, grazing P
+        vp2, vs2, rho2 = 3500.0, 2000.0, 2300.0
+        p = q / (vp1 * np.sqrt(1.0 + q * q))
+        kw = {"q": q, "vmax": vp1}
+
+        RT = laytracer.psv_rt_coefficients(p, vp1, vs1, rho1, vp2, vs2, rho2, **kw)
+        normalized = [
+            laytracer.normalize_rt_coefficient(RT["Rpp"], p, vp1, rho1, vp1, rho1, **kw),
+            laytracer.normalize_rt_coefficient(RT["Rps"], p, vp1, rho1, vs1, rho1, **kw),
+            laytracer.normalize_rt_coefficient(RT["Tpp"], p, vp1, rho1, vp2, rho2, **kw),
+            laytracer.normalize_rt_coefficient(RT["Tps"], p, vp1, rho1, vs2, rho2, **kw),
+        ]
+        energy_sum = sum(abs(value) ** 2 for value in normalized)
+        assert energy_sum == pytest.approx(1.0, abs=1e-12)
+
+    def test_q_and_vmax_must_be_given_together(self):
+        """q without vmax, or vmax without q, is rejected."""
+        with pytest.raises(ValueError, match="together"):
+            laytracer.psv_rt_coefficients(
+                1e-4, 5000.0, 2900.0, 2600.0, 3500.0, 2000.0, 2300.0, q=1.0
+            )
+        with pytest.raises(ValueError, match="together"):
+            laytracer.sh_rt_coefficients(1e-4, 2900.0, 2600.0, 2000.0, 2300.0, vmax=5000.0)
+
 
 # =====================================================================================================================================================================================================================
 #  t* computation

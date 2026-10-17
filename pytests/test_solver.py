@@ -1,9 +1,11 @@
 r"""Tests for the core solver: offset equation, Newton iteration, and solve()."""
 
 import inspect
+import warnings
 import numpy as np
 import pandas as pd
 import pytest
+from scipy.optimize import brentq
 
 import laytracer
 
@@ -59,6 +61,51 @@ def _homo_model(v=5000.0, depth=5000.0):
         "Qp":    [500.0],
         "Qs":    [250.0],
     })
+
+
+def _grazing_model():
+    """Three-layer model whose half-space is the fastest layer."""
+    return pd.DataFrame({
+        "Depth": [0.0, 1000.0, 2000.0],
+        "Vp":    [1500.0, 5000.0, 7000.0],
+        "Vs":    [857.0, 2857.0, 4000.0],
+        "Rho":   [2000.0, 2400.0, 2700.0],
+        "Qp":    [100.0, 200.0, 400.0],
+        "Qs":    [50.0, 100.0, 200.0],
+    })
+
+
+def _direct_solve(df, z_src, z_rcv, offset, **kwargs):
+    """Solve one direct P ray through the layer stack between two depths."""
+    stack = laytracer.build_layer_stack(df, z_src=z_src, z_rcv=z_rcv)
+    segments = [{
+        "h": stack.h, "v": stack.vp, "vp": stack.vp, "vs": stack.vs, "rho": stack.rho,
+        "qp": stack.qp, "qs": stack.qs, "phase": "P",
+        "start_z": z_src, "end_z": z_rcv
+    }]
+    res = laytracer.solve(
+        stack.h, stack.vp, segments, [], offset, z_src=z_src, z_rcv=z_rcv, **kwargs
+    )
+    return res, stack
+
+
+def _q_reference(h, v, offset):
+    """Cancellation-free direct ray: solve X(q) = offset, evaluate the legs in q.
+
+    Returns q, the leg cosines and the relative geometrical spreading.
+    """
+    vmax = v.max()
+    lmd = v / vmax
+    s = 1.0 - lmd**2
+    q = brentq(
+        lambda q: np.sum(h * lmd * q / np.sqrt(1.0 + s * q * q)) - offset,
+        0.0, 1e15, xtol=1e-300, rtol=4 * np.finfo(float).eps, maxiter=500,
+    )
+    c = np.sqrt((1.0 + s * q * q) / (1.0 + q * q))
+    p = q / (vmax * np.sqrt(1.0 + q * q))
+    dxdp = np.sum(lmd * h / (1.0 + s * q * q) ** 1.5) * vmax * (1.0 + q * q) ** 1.5
+    spreading = np.sqrt(offset * dxdp * c[0] * c[-1] / p)
+    return q, c, spreading
 
 
 
@@ -519,3 +566,80 @@ class TestSolve:
             assert res.diagnostics.method == "q_newton", (
                 f"fallback for {n} layers at offset/depth {target / z:.1f}"
             )
+
+    def test_grazing_ray_outputs_match_q_evaluation(self):
+        """Travel time, t*, spreading and path end stay exact for a grazing ray."""
+        offset = 21000.0
+        res, stack = _direct_solve(
+            _grazing_model(), 2000.1, 0.0, offset,
+            requested={"travel_times", "rays", "tstar", "spreading"}, tol=1e-9,
+        )
+        h, v = stack.h, stack.vp
+        q, c, spreading = _q_reference(h, v, offset)
+        assert q > 1e5
+
+        assert res.travel_time == pytest.approx(np.sum(h / (v * c)), rel=1e-11)
+        assert res.tstar == pytest.approx(np.sum(h / (v * c * stack.qp)), rel=1e-11)
+        assert res.spreading == pytest.approx(spreading, rel=1e-11)
+        assert res.ray_path[-1, 0] == pytest.approx(offset, abs=1e-8)
+
+    @pytest.mark.parametrize("below", [1e-6, 1e-3, 0.1, 1.0])
+    def test_source_just_below_fast_interface(self, below):
+        """A source just below a faster interface gives finite, exact travel times."""
+        tops = np.arange(0.0, 1801.0, 200.0)
+        vp = np.array(
+            [1320.5, 1777.0, 2164.0, 2588.5, 2913.0, 3203.5, 3550.5, 3754.0, 3887.0, 5820.0]
+        )
+        df = pd.DataFrame({"Depth": tops, "Vp": vp, "Vs": vp / 1.75})
+        for z_rcv in (15.0, 455.0):
+            with warnings.catch_warnings():
+                warnings.simplefilter("error")
+                res, stack = _direct_solve(
+                    df, 1800.0 + below, z_rcv, 3000.0,
+                    requested={"travel_times"}, tol=1e-9,
+                )
+            _, c, _ = _q_reference(stack.h, stack.vp, 3000.0)
+            assert res.travel_time == pytest.approx(
+                np.sum(stack.h / (stack.vp * c)), rel=1e-12
+            )
+
+    def test_spreading_returned_at_very_large_q(self):
+        """Spreading stays defined when 1 - (p vmax)^2 is far below 1e-15."""
+        offset = 21000.0
+        res, stack = _direct_solve(
+            _grazing_model(), 2000.0 + 1e-4, 0.0, offset,
+            requested={"travel_times", "spreading", "diagnostics"}, tol=1e-9,
+        )
+        _, _, spreading = _q_reference(stack.h, stack.vp, offset)
+        assert res.diagnostics.final_q > 1e8
+        assert res.spreading == pytest.approx(spreading, rel=1e-11)
+
+    def test_large_offset_travel_times_match_q_evaluation(self):
+        """Seeded rays at 10-100 times the depth: exact travel times and path ends."""
+        rng = np.random.default_rng(18)
+        for _ in range(100):
+            n = int(rng.integers(2, 21))
+            h = np.exp(rng.uniform(np.log(20.0), np.log(1000.0), n))
+            v = rng.uniform(1500.0, 7000.0, n)
+            z = float(np.sum(h))
+            segments = [{
+                "h": h, "v": v, "vp": v, "vs": v / 1.8, "rho": np.ones(n),
+                "qp": None, "qs": None, "phase": "P",
+                "start_z": z, "end_z": 0.0,
+            }]
+            target = 10.0 ** rng.uniform(1.0, 2.0) * z
+
+            res = laytracer.solve(
+                h,
+                v,
+                segments,
+                [],
+                target,
+                z_src=z,
+                z_rcv=0.0,
+                requested={"travel_times", "rays"},
+                tol=1e-9,
+            )
+            _, c, _ = _q_reference(h, v, target)
+            assert res.travel_time == pytest.approx(np.sum(h / (v * c)), rel=1e-11)
+            assert res.ray_path[-1, 0] == pytest.approx(target, rel=1e-12, abs=1e-8)

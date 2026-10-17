@@ -204,6 +204,20 @@ each layer is
 where :math:`\eta_k = \sqrt{1/v_k^2 - p^2}` is the vertical slowness in
 layer :math:`k`.  The total travel time is :math:`t = \sum_k \Delta t_k`.
 
+Near grazing incidence, where :math:`p\,v_{\max} \to 1`, the difference under
+the root cancels.  Each leg is therefore evaluated from :math:`q`, with
+:math:`\lambda_k = v_k/v_{\max}` and
+
+.. math::
+   1 - p^2 v_k^2 = \frac{1 + (1-\lambda_k^2)\,q^2}{1 + q^2},
+   \qquad
+   \Delta t_k = \frac{h_k\sqrt{1+q^2}}{v_k\sqrt{1 + (1-\lambda_k^2)\,q^2}}.
+
+The horizontal step of the leg, :math:`h_k\lambda_k q/\sqrt{1 + (1-\lambda_k^2)\,q^2}`,
+is the corresponding term of :math:`X(q)`, so the ray path ends at the solved
+offset.  The same cosines are used for :math:`t^*`, the geometrical spreading,
+the interface coefficients and the sensitivities below.
+
 ----
 
 Fixed-topology analytic sensitivities
@@ -244,7 +258,8 @@ is perturbed so that the ray still joins the same endpoints.  For atomic leg
    c_j=\sqrt{1-p^2v_j^2},\qquad
    X_p=\sum_j\frac{h_jv_j}{c_j^3}.
 
-Here :math:`p` is the physical horizontal slowness, :math:`h_j` and :math:`v_j`
+Here :math:`p` is the physical horizontal slowness (the cosines :math:`c_j` are
+evaluated from :math:`q` as in the travel-time section), :math:`h_j` and :math:`v_j`
 are the leg thickness and phase velocity, and :math:`X_p` measures the local
 change in offset with ray parameter.  If :math:`X_m` and :math:`T_m` denote the
 partial offset and travel-time changes at fixed :math:`p`, implicit
@@ -423,6 +438,10 @@ analytically via the chain rule:
    \qquad
    \frac{\mathrm{d}q}{\mathrm{d}p}
    = \frac{v_{\max}}{(1 - p^2\,v_{\max}^2)^{3/2}}
+   = v_{\max}\,(1 + q^2)^{3/2},
+
+which is evaluated in its :math:`q` form, as are :math:`\cos\theta_s` and
+:math:`\cos\theta_r`.
 
 ----
 
@@ -443,9 +462,13 @@ For horizontal slowness (ray parameter) :math:`p`, the vertical slownesses are
 .. math::
    \eta_{\alpha i} = \sqrt{\frac{1}{v_{Pi}^2} - p^2},
    \qquad
-   \eta_{\beta i} = \sqrt{\frac{1}{v_{Si}^2} - p^2},
+   \eta_{\beta i} = \sqrt{\frac{1}{v_{Si}^2} - p^2}.
 
-and the auxiliary quantities
+Along a traced ray, they are evaluated from :math:`q` as in the travel-time
+section, :math:`\eta = v^{-1}\sqrt{(1 + (1 - v^2/v_{\max}^2)\,q^2)/(1 + q^2)}`;
+:func:`~laytracer.psv_rt_coefficients`, :func:`~laytracer.sh_rt_coefficients`
+and :func:`~laytracer.normalize_rt_coefficient` accept ``q`` and ``vmax`` for
+this purpose.  The auxiliary quantities are
 
 .. math::
    a = \rho_2\!\left(1-2v_{S2}^2p^2\right)-\rho_1\!\left(1-2v_{S1}^2p^2\right),

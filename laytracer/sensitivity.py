@@ -215,11 +215,16 @@ def compute_ray_sensitivity(
     source_phase: str,
     segments: Sequence[dict],
     ray_parameter: float | None,
+    q: float | None = None,
 ) -> RaySensitivity:
     r"""Differentiate one solved ray at fixed horizontal offset.
 
-    For leg :math:`j`, let :math:`c_j=\sqrt{1-p^2v_j^2}`. The offset
-    derivative is
+    For leg :math:`j`, let :math:`c_j=\sqrt{1-p^2v_j^2}`. When the
+    transformed ray parameter :math:`q` of the solved ray is given, the
+    cosines are evaluated as
+    :math:`c_j=\sqrt{(1+(1-v_j^2/v_{\max}^2)\,q^2)/(1+q^2)}`, which keeps
+    full precision near grazing incidence, where :math:`p\,v_{\max}\to 1`.
+    The offset derivative is
 
     .. math::
 
@@ -241,11 +246,14 @@ def compute_ray_sensitivity(
     p = float(ray_parameter)
     h = np.array([leg.thickness for leg in legs], dtype=np.float64)
     v = np.array([leg.velocity for leg in legs], dtype=np.float64)
-    pv = p * v
-    if np.any(np.abs(pv) >= 1.0):
-        return _empty_sensitivity(False, "The ray is critical or evanescent.")
-
-    c = np.sqrt(1.0 - pv * pv)
+    if q is not None and np.isfinite(q):
+        s = 1.0 - (v / np.max(v)) ** 2
+        c = np.sqrt((1.0 + s * q * q) / (1.0 + q * q))
+    else:
+        pv = p * v
+        if np.any(np.abs(pv) >= 1.0):
+            return _empty_sensitivity(False, "The ray is critical or evanescent.")
+        c = np.sqrt(1.0 - pv * pv)
     x_p = float(np.sum(h * v / c**3))
     if not np.isfinite(x_p) or x_p <= 0.0:
         return _empty_sensitivity(False, "The offset derivative is not positive and finite.")

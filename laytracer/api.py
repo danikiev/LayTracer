@@ -371,13 +371,15 @@ def _direct_trans_product(
     source_phase: str,
     ray_parameter: float | None,
     transcoef_method: str,
+    q: float | None = None,
 ) -> float:
     """Compute direct-path transmission product for a solved ray."""
     segments = _direct_segments_for_phase(ma, z_src, z_rcv, source_phase)
     if segments is None:
         return 1.0
     p = 0.0 if ray_parameter is None or not np.isfinite(ray_parameter) else float(ray_parameter)
-    return transmission_product(p, segments, [], transcoef_method)
+    q = float(q) if q is not None and np.isfinite(q) else None
+    return transmission_product(p, segments, [], transcoef_method, q=q)
 
 
 def _segment_between(
@@ -532,9 +534,10 @@ def _trace_one_many(
         family = velocity_key(source_phase)
 
         if can_share_direct and family in cache:
-            tt, ray3d, p_val, tstar, spreading, _, complex_product, diagnostics, sensitivity = cache[family]
+            base, q_val = cache[family]
+            tt, ray3d, p_val, tstar, spreading, _, complex_product, diagnostics, sensitivity = base
             trans = (
-                _direct_trans_product(ma, sz, rz, source_phase, p_val, transcoef_method)
+                _direct_trans_product(ma, sz, rz, source_phase, p_val, transcoef_method, q_val)
                 if need_trans_product else None
             )
             results[source_phase] = (
@@ -571,13 +574,15 @@ def _trace_one_many(
             transcoef_method=transcoef_method,
             tol=tol,
             max_iter=max_iter,
+            return_q=can_share_direct,
         )
 
         if can_share_direct:
             cache[family] = base
+            base, q_val = base
             tt, ray3d, p_val, tstar, spreading, _, complex_product, diagnostics, sensitivity = base
             trans = (
-                _direct_trans_product(ma, sz, rz, source_phase, p_val, transcoef_method)
+                _direct_trans_product(ma, sz, rz, source_phase, p_val, transcoef_method, q_val)
                 if need_trans_product else None
             )
             results[source_phase] = (
@@ -616,8 +621,17 @@ def _trace_one(
     transcoef_method: str,
     tol: float,
     max_iter: int,
+    return_q: bool = False,
 ) -> tuple:
-    """Trace a single source->receiver ray."""
+    """Trace a single source->receiver ray.
+
+    With ``return_q=True`` the per-ray tuple is returned together with the
+    transformed ray parameter *q* of the solved ray, as ``(values, q)``.
+    """
+
+    def _result(values: tuple, q: float | None) -> tuple:
+        return (values, q) if return_q else values
+
     source_phase = normalize_phase(source_phase)
     _validate_sh_coupling(source_phase, refl_list + refr_list)
     sx, sy, sz = float(src[0]), float(src[1]), float(src[2])
@@ -654,7 +668,7 @@ def _trace_one(
                     )
                     if need_sensitivities else None
                 )
-                return (
+                return _result((
                     0.0,
                     ray3d,
                     0.0 if need_ray_parameters else None,
@@ -664,7 +678,7 @@ def _trace_one(
                     1.0 + 0.0j if need_complex_coefficient_product else None,
                     diagnostics,
                     sensitivity,
-                )
+                ), 0.0)
 
             v_hz = float(vel[0])
             tt_hz = epic / v_hz
@@ -708,7 +722,7 @@ def _trace_one(
                 if need_sensitivities else None
             )
 
-            return (
+            return _result((
                 tt_hz,
                 ray3d,
                 p_hz if need_ray_parameters else None,
@@ -718,7 +732,7 @@ def _trace_one(
                 complex_hz,
                 diagnostics_hz,
                 sensitivity_hz,
-            )
+            ), np.inf)
 
         h_f = stack.h[valid]
         v_f = vel[valid]
@@ -759,11 +773,11 @@ def _trace_one(
         ray3d = _project_ray_to_3d(res.ray_path, sx, sy, dx, dy, epic)
         sensitivity = (
             compute_ray_sensitivity(
-                ma, src, rcv, source_phase, [seg], res.ray_parameter
+                ma, src, rcv, source_phase, [seg], res.ray_parameter, q=res.q
             )
             if need_sensitivities else None
         )
-        return (
+        return _result((
             res.travel_time,
             ray3d,
             res.ray_parameter,
@@ -773,7 +787,7 @@ def _trace_one(
             res.complex_coefficient_product,
             res.diagnostics,
             sensitivity,
-        )
+        ), res.q)
 
     if ordered_interactions:
         ray_segments, inter_meta = _compile_ordered_itinerary(
@@ -806,11 +820,11 @@ def _trace_one(
         ray3d = _project_ray_to_3d(res.ray_path, sx, sy, dx, dy, epic)
         sensitivity = (
             compute_ray_sensitivity(
-                ma, src, rcv, source_phase, ray_segments, res.ray_parameter
+                ma, src, rcv, source_phase, ray_segments, res.ray_parameter, q=res.q
             )
             if need_sensitivities else None
         )
-        return (
+        return _result((
             res.travel_time,
             ray3d,
             res.ray_parameter,
@@ -820,7 +834,7 @@ def _trace_one(
             res.complex_coefficient_product,
             res.diagnostics,
             sensitivity,
-        )
+        ), res.q)
 
     ray_segments = []
     curr_z = sz
@@ -922,7 +936,7 @@ def _trace_one(
     if len(ray_segments) == 0:
         ray3d = np.array([[sx, sy, sz], [rx, ry, rz]]) if need_rays else None
         is_same_point = epic < 1e-10 and abs(sz - rz) < 1e-10
-        return (
+        return _result((
             0.0 if is_same_point else np.nan,
             ray3d,
             np.nan if need_ray_parameters else None,
@@ -933,7 +947,7 @@ def _trace_one(
             None,
             compute_ray_sensitivity(ma, src, rcv, source_phase, [], np.nan)
             if need_sensitivities else None,
-        )
+        ), None)
 
     all_h = np.concatenate([s["h"] for s in ray_segments])
     all_v = np.concatenate([s["v"] for s in ray_segments])
@@ -961,11 +975,11 @@ def _trace_one(
     ray3d = _project_ray_to_3d(res.ray_path, sx, sy, dx, dy, epic)
     sensitivity = (
         compute_ray_sensitivity(
-            ma, src, rcv, source_phase, ray_segments, res.ray_parameter
+            ma, src, rcv, source_phase, ray_segments, res.ray_parameter, q=res.q
         )
         if need_sensitivities else None
     )
-    return (
+    return _result((
         res.travel_time,
         ray3d,
         res.ray_parameter,
@@ -975,7 +989,7 @@ def _trace_one(
         res.complex_coefficient_product,
         res.diagnostics,
         sensitivity,
-    )
+    ), res.q)
 
 
 def _unpack_results(

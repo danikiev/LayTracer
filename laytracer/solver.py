@@ -402,6 +402,11 @@ class RayResult:
         Signed/complex cumulative interface coefficient, if requested.
     diagnostics : SolveDiagnostics or None
         Numerical certificate, if requested.
+    q : float or None
+        Transformed ray parameter
+        :math:`q = p\,v_{\max}/\sqrt{1 - p^2 v_{\max}^2}` of the solved ray.
+        Leg cosines evaluated from *q* keep full precision near grazing
+        incidence, where :math:`p\,v_{\max} \to 1`.
     """
 
     travel_time: float
@@ -412,6 +417,7 @@ class RayResult:
     trans_product: float | None = None
     complex_coefficient_product: complex | None = None
     diagnostics: SolveDiagnostics | None = None
+    q: float | None = None
 
 
 def _validate_dynamic_inputs(
@@ -610,6 +616,7 @@ def solve(
             trans_product=trans_prod_val,
             complex_coefficient_product=complex_prod_val,
             diagnostics=diagnostics,
+            q=0.0,
         )
 
     # ── Same-layer (direct line) ──
@@ -639,7 +646,8 @@ def solve(
                  complex_prod = 1.0 + 0.0j
 
         pv = float(p * v[0])
-        q_direct = q_from_p(p, float(v[0])) if pv < 1.0 else np.inf
+        # q = tan(theta) of the straight leg; q_from_p(p) would cancel near grazing
+        q_direct = float(epicentral_dist / dz) if dz > 0.0 else np.inf
         diagnostics = SolveDiagnostics(
             converged=True,
             method="q_newton",
@@ -663,6 +671,7 @@ def solve(
             trans_product=trans_prod,
             complex_coefficient_product=complex_prod,
             diagnostics=diagnostics,
+            q=float(q_direct),
         )
 
     # ── General multi-layer case ──
@@ -772,6 +781,7 @@ def solve(
     pts_list = [[0.0, z_src]] if return_ray_path else None
     x_cum = 0.0
     z_cum = z_src
+    root_q = math.sqrt(1.0 + q * q)
     
     # We iterate over SEGMENTS to reconstruct the path logic
     # The solver treated 'h' and 'v' as one giant array.
@@ -798,9 +808,12 @@ def solve(
             val_v = seg_v[k]
             val_h = seg_h[k]
             
-            eta_k = np.sqrt(1.0 / (val_v ** 2) - p ** 2)
-            dx_k = val_h * p / eta_k
-            dt_k = val_h / (val_v ** 2 * eta_k)
+            # Evaluate the leg in q: sqrt(1/v^2 - p^2) cancels as p*vmax -> 1.
+            # dx_k are the terms of X(q), so the path ends at the solved offset.
+            lmd_k = val_v / vmax
+            root_k = math.sqrt(1.0 + (1.0 - lmd_k * lmd_k) * q * q)
+            dx_k = val_h * lmd_k * q / root_k
+            dt_k = val_h * root_q / (val_v * root_k)
             
             tt += dt_k
             x_cum += dx_k
@@ -831,7 +844,7 @@ def solve(
                     
                     coeff = _calc_intra_transmission(
                         p, k, k_next, seg, transcoef_method,
-                        magnitude=False,
+                        magnitude=False, q=q, vmax=vmax,
                     )
                     if need_trans_product:
                         trans_prod_val *= abs(coeff)
@@ -847,7 +860,7 @@ def solve(
                 if inter["seg_idx"] == seg_i:
                     coeff = _calc_interaction_coeff(
                         p, inter, segments, seg_i, transcoef_method,
-                        magnitude=False,
+                        magnitude=False, q=q, vmax=vmax,
                     )
                     if need_trans_product:
                         trans_prod_val *= abs(coeff)
@@ -860,27 +873,26 @@ def solve(
     spreading_val = None
     if need_spreading:
         dXdq = offset_dq(q, h, lmd)
-        pv = p * vmax
-        denom_dp = (1.0 - pv * pv)
-        if denom_dp > 1e-15:
-            dqdp = vmax / denom_dp ** 1.5
-            dXdp = dXdq * dqdp
+        # dq/dp = vmax / (1 - p^2 vmax^2)^1.5 = vmax (1 + q^2)^1.5, and the
+        # source- and receiver-side cosines are taken from q, without cancellation.
+        dqdp = vmax * root_q ** 3
+        dXdp = dXdq * dqdp
 
-            first_seg = segments[0]
-            last_seg = segments[-1]
-            first_down = first_seg["end_z"] >= first_seg["start_z"]
-            last_down = last_seg["end_z"] >= last_seg["start_z"]
-            v_sourceside = float(first_seg["v"][0 if first_down else -1])
-            v_receiverside = float(last_seg["v"][-1 if last_down else 0])
-            
-            cos_is = np.sqrt(max(1.0 - (p * v_sourceside) ** 2, 0.0))
-            cos_ir = np.sqrt(max(1.0 - (p * v_receiverside) ** 2, 0.0))
+        first_seg = segments[0]
+        last_seg = segments[-1]
+        first_down = first_seg["end_z"] >= first_seg["start_z"]
+        last_down = last_seg["end_z"] >= last_seg["start_z"]
+        v_sourceside = float(first_seg["v"][0 if first_down else -1])
+        v_receiverside = float(last_seg["v"][-1 if last_down else 0])
 
-            if p > 1e-15 and abs(dXdp) > 0:
-                # Relative geometrical spreading (Cerveny, 2001)
-                spreading_val = float(
-                    np.sqrt(epicentral_dist * abs(dXdp) * cos_is * cos_ir / p)
-                )
+        cos_is = math.sqrt(1.0 + (1.0 - (v_sourceside / vmax) ** 2) * q * q) / root_q
+        cos_ir = math.sqrt(1.0 + (1.0 - (v_receiverside / vmax) ** 2) * q * q) / root_q
+
+        if p > 1e-15 and abs(dXdp) > 0:
+            # Relative geometrical spreading (Cerveny, 2001)
+            spreading_val = float(
+                np.sqrt(epicentral_dist * abs(dXdp) * cos_is * cos_ir / p)
+            )
 
     return RayResult(
         travel_time=tt,
@@ -891,6 +903,7 @@ def solve(
         trans_product=trans_prod_val,
         complex_coefficient_product=complex_prod_val,
         diagnostics=diagnostics,
+        q=float(q),
     )
 
 
@@ -899,10 +912,16 @@ def transmission_product(
     segments: list[dict],
     interactions: list[dict],
     transcoef_method: str = "standard",
+    q: float | None = None,
 ) -> float:
-    """Return the product of interface-coefficient magnitudes."""
+    """Return the product of interface-coefficient magnitudes.
+
+    When the transformed ray parameter *q* of the ray is given, vertical
+    slownesses are evaluated from it, which keeps full precision near
+    grazing incidence.
+    """
     magnitude_product, _ = _coefficient_products(
-        p, segments, interactions, transcoef_method
+        p, segments, interactions, transcoef_method, q
     )
     return magnitude_product
 
@@ -912,10 +931,14 @@ def complex_coefficient_product(
     segments: list[dict],
     interactions: list[dict],
     transcoef_method: str = "standard",
+    q: float | None = None,
 ) -> complex:
-    """Return the signed/complex cumulative interface coefficient."""
+    """Return the signed/complex cumulative interface coefficient.
+
+    *q* is used as in :func:`transmission_product`.
+    """
     _, complex_product = _coefficient_products(
-        p, segments, interactions, transcoef_method
+        p, segments, interactions, transcoef_method, q
     )
     return complex_product
 
@@ -925,6 +948,7 @@ def _coefficient_products(
     segments: list[dict],
     interactions: list[dict],
     transcoef_method: str,
+    q: float | None = None,
 ) -> tuple[float, complex]:
     method = _normalize_transcoef_method(transcoef_method)
     _validate_dynamic_inputs(
@@ -933,6 +957,9 @@ def _coefficient_products(
         need_tstar=False,
         need_coefficients=True,
     )
+    vmax = None
+    if q is not None:
+        vmax = max(float(np.max(seg["v"])) for seg in segments if len(seg["v"]))
     magnitude_product = 1.0
     complex_product = 1.0 + 0.0j
 
@@ -948,7 +975,7 @@ def _coefficient_products(
             if has_next_layer:
                 k_next = (k + 1) if going_down else (k - 1)
                 coeff = _calc_intra_transmission(
-                    p, k, k_next, seg, method, magnitude=False
+                    p, k, k_next, seg, method, magnitude=False, q=q, vmax=vmax
                 )
                 magnitude_product *= abs(coeff)
                 complex_product *= coeff
@@ -956,7 +983,7 @@ def _coefficient_products(
         for inter in interactions:
             if inter["seg_idx"] == seg_i:
                 coeff = _calc_interaction_coeff(
-                    p, inter, segments, seg_i, method, magnitude=False
+                    p, inter, segments, seg_i, method, magnitude=False, q=q, vmax=vmax
                 )
                 magnitude_product *= abs(coeff)
                 complex_product *= coeff
@@ -965,6 +992,7 @@ def _coefficient_products(
 
 def _calc_interaction_coeff(
     p, inter, segments, seg_idx, method, magnitude: bool = True,
+    q: float | None = None, vmax: float | None = None,
 ):
     from .amplitude import psv_rt_coefficients, sh_rt_coefficients, normalize_rt_coefficient
 
@@ -1002,12 +1030,12 @@ def _calc_interaction_coeff(
 
     prefix = "R" if itype == "reflection" else "T"
     if in_phase == "SH":
-        RT = sh_rt_coefficients(p, vs1, rho1, vs2, rho2)
+        RT = sh_rt_coefficients(p, vs1, rho1, vs2, rho2, q=q, vmax=vmax)
         key = f"{prefix}shsh"
         R_bar = RT.get(key, 0.0)
     else:
         key = f"{prefix}{_psv_key_phase(in_phase)}{_psv_key_phase(out_phase)}"
-        RT = psv_rt_coefficients(p, vp1, vs1, rho1, vp2, vs2, rho2)
+        RT = psv_rt_coefficients(p, vp1, vs1, rho1, vp2, vs2, rho2, q=q, vmax=vmax)
         R_bar = RT.get(key, 0.0)
     
     if method == "normalized":
@@ -1016,7 +1044,9 @@ def _calc_interaction_coeff(
         if itype == "reflection":
             v_out = vp1 if out_phase == "P" else vs1
             rho2 = rho1
-        value = normalize_rt_coefficient(R_bar, p, v_in, rho1, v_out, rho2)
+        value = normalize_rt_coefficient(
+            R_bar, p, v_in, rho1, v_out, rho2, q=q, vmax=vmax
+        )
     else:
         value = R_bar
 
@@ -1030,6 +1060,8 @@ def _calc_intra_transmission(
     seg: dict,
     method: str,
     magnitude: bool = True,
+    q: float | None = None,
+    vmax: float | None = None,
 ) -> float | complex:
     """Calculate transmission coefficient between two adjacent layers within a monotonic segment."""
     from .amplitude import psv_rt_coefficients, sh_rt_coefficients, normalize_rt_coefficient
@@ -1045,17 +1077,19 @@ def _calc_intra_transmission(
     
     ph = normalize_phase(seg["phase"])
     if ph == "SH":
-        RT = sh_rt_coefficients(p, vs1, rho1, vs2, rho2)
+        RT = sh_rt_coefficients(p, vs1, rho1, vs2, rho2, q=q, vmax=vmax)
         R_bar = RT.get("Tshsh", 0.0)
     else:
         key = "Tpp" if ph == "P" else "Tss"
-        RT = psv_rt_coefficients(p, vp1, vs1, rho1, vp2, vs2, rho2)
+        RT = psv_rt_coefficients(p, vp1, vs1, rho1, vp2, vs2, rho2, q=q, vmax=vmax)
         R_bar = RT.get(key, 0.0)
     
     if method == "normalized":
         v_in = vp1 if ph == "P" else vs1
         v_out = vp2 if ph == "P" else vs2
-        value = normalize_rt_coefficient(R_bar, p, v_in, rho1, v_out, rho2)
+        value = normalize_rt_coefficient(
+            R_bar, p, v_in, rho1, v_out, rho2, q=q, vmax=vmax
+        )
     else:
         value = R_bar
 

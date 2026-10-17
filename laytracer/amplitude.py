@@ -12,7 +12,35 @@ References
 
 from __future__ import annotations
 
+import cmath
+
 import numpy as np
+
+
+def _cosine_from_q(v, q, vmax):
+    r"""Return :math:`\sqrt{1 - p^2 v^2}` from the transformed ray parameter.
+
+    With :math:`q = p\,v_{\max}/\sqrt{1 - p^2 v_{\max}^2}`,
+
+    .. math::
+        1 - p^2 v^2 = \frac{1 + (1 - v^2/v_{\max}^2)\,q^2}{1 + q^2},
+
+    which keeps its precision as :math:`p\,v_{\max} \to 1`, where the direct
+    expression cancels.  The root is imaginary (evanescent) for
+    :math:`v > 1/p`.
+    """
+    s = 1.0 - (v / vmax) ** 2
+    if np.ndim(q) == 0:
+        # Scalar fast path for ray tracing; same branch as scimath.sqrt.
+        q = float(q)
+        return cmath.sqrt((1.0 + s * q * q) / (1.0 + q * q))
+    q = np.asarray(q, dtype=float)
+    return np.asarray(np.lib.scimath.sqrt((1.0 + s * q * q) / (1.0 + q * q)), dtype=complex)
+
+
+def _check_q_vmax(q, vmax) -> None:
+    if (q is None) != (vmax is None):
+        raise ValueError("q and vmax must be given together.")
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -56,6 +84,9 @@ def sh_rt_coefficients(
     rho1: float,
     vs2: float,
     rho2: float,
+    *,
+    q=None,
+    vmax=None,
 ) -> dict:
     r"""Compute SH-SH reflection and transmission coefficients.
 
@@ -81,6 +112,14 @@ def sh_rt_coefficients(
         S-wave velocity and density of the incident medium.
     vs2, rho2 : float
         S-wave velocity and density of the transmitted medium.
+    q, vmax : float or array_like, optional
+        Transformed ray parameter
+        :math:`q = p\,v_{\max}/\sqrt{1 - p^2 v_{\max}^2}` and the largest
+        velocity :math:`v_{\max}` along the ray, given together.  The
+        vertical slownesses are then evaluated as
+        :math:`\eta_i = v_{Si}^{-1}\sqrt{(1 + (1 - v_{Si}^2/v_{\max}^2)\,q^2)/(1 + q^2)}`,
+        which keeps full precision near grazing incidence, where
+        :math:`p\,v_{\max} \to 1`.
 
     Returns
     -------
@@ -89,9 +128,14 @@ def sh_rt_coefficients(
     """
     p = np.asarray(p, dtype=complex)
     csqrt = np.lib.scimath.sqrt
+    _check_q_vmax(q, vmax)
 
-    eta1 = csqrt(1.0 / (vs1 * vs1) - p * p)
-    eta2 = csqrt(1.0 / (vs2 * vs2) - p * p)
+    if q is None:
+        eta1 = csqrt(1.0 / (vs1 * vs1) - p * p)
+        eta2 = csqrt(1.0 / (vs2 * vs2) - p * p)
+    else:
+        eta1 = _cosine_from_q(vs1, q, vmax) / vs1
+        eta2 = _cosine_from_q(vs2, q, vmax) / vs2
     zeta1 = rho1 * vs1 * vs1 * eta1
     zeta2 = rho2 * vs2 * vs2 * eta2
     denom = zeta1 + zeta2
@@ -115,6 +159,9 @@ def psv_rt_coefficients(
     vp2: float,
     vs2: float,
     rho2: float,
+    *,
+    q=None,
+    vmax=None,
 ) -> dict:
     r"""Compute all eight P-SV reflection/transmission coefficients.
 
@@ -134,6 +181,13 @@ def psv_rt_coefficients(
         P-velocity, S-velocity, density of the *incident* medium.
     vp2, vs2, rho2 : float
         Same for the *transmitted* medium.
+    q, vmax : float or array_like, optional
+        Transformed ray parameter
+        :math:`q = p\,v_{\max}/\sqrt{1 - p^2 v_{\max}^2}` and the largest
+        velocity :math:`v_{\max}` along the ray, given together.  The four
+        vertical slownesses are then evaluated from *q* as in
+        :func:`sh_rt_coefficients`, which keeps full precision near grazing
+        incidence.
 
     Returns
     -------
@@ -144,12 +198,19 @@ def psv_rt_coefficients(
     """
     p = np.asarray(p, dtype=complex)
     csqrt = np.lib.scimath.sqrt
+    _check_q_vmax(q, vmax)
 
     # Vertical slownesses
-    eta_a1 = csqrt(1.0 / (vp1 * vp1) - p * p)
-    eta_a2 = csqrt(1.0 / (vp2 * vp2) - p * p)
-    eta_b1 = csqrt(1.0 / (vs1 * vs1) - p * p)
-    eta_b2 = csqrt(1.0 / (vs2 * vs2) - p * p)
+    if q is None:
+        eta_a1 = csqrt(1.0 / (vp1 * vp1) - p * p)
+        eta_a2 = csqrt(1.0 / (vp2 * vp2) - p * p)
+        eta_b1 = csqrt(1.0 / (vs1 * vs1) - p * p)
+        eta_b2 = csqrt(1.0 / (vs2 * vs2) - p * p)
+    else:
+        eta_a1 = _cosine_from_q(vp1, q, vmax) / vp1
+        eta_a2 = _cosine_from_q(vp2, q, vmax) / vp2
+        eta_b1 = _cosine_from_q(vs1, q, vmax) / vs1
+        eta_b2 = _cosine_from_q(vs2, q, vmax) / vs2
 
     a = rho2 * (1.0 - 2.0 * vs2 * vs2 * p * p) - rho1 * (1.0 - 2.0 * vs1 * vs1 * p * p)
     b = rho2 * (1.0 - 2.0 * vs2 * vs2 * p * p) + 2.0 * rho1 * vs1 * vs1 * p * p
@@ -337,6 +398,9 @@ def normalize_rt_coefficient(
     rho_in: float,
     v_out: float,
     rho_out: float,
+    *,
+    q=None,
+    vmax=None,
 ):
     r"""Apply Červený (2001) normalization to a displacement R/T coefficient.
 
@@ -365,6 +429,12 @@ def normalize_rt_coefficient(
         Phase velocity of the outgoing (reflected/transmitted) wave (m/s).
     rho_out : float
         Density of the outgoing medium (kg/m³).
+    q, vmax : float or array_like, optional
+        Transformed ray parameter
+        :math:`q = p\,v_{\max}/\sqrt{1 - p^2 v_{\max}^2}` and the largest
+        velocity :math:`v_{\max}` along the ray, given together.  Then
+        :math:`P = \sqrt{(1 + (1 - V^2/v_{\max}^2)\,q^2)/(1 + q^2)}`, which
+        keeps full precision near grazing incidence.
 
     Returns
     -------
@@ -373,8 +443,14 @@ def normalize_rt_coefficient(
     """
     csqrt = np.lib.scimath.sqrt
     p = np.asarray(p)
-    P_in = csqrt(1.0 - v_in**2 * p**2)
-    P_out = csqrt(1.0 - v_out**2 * p**2)
+    _check_q_vmax(q, vmax)
+    if q is None:
+        P_in = csqrt(1.0 - v_in**2 * p**2)
+        P_out = csqrt(1.0 - v_out**2 * p**2)
+    else:
+        q = np.broadcast_to(np.asarray(q, dtype=float), p.shape)
+        P_in = _cosine_from_q(v_in, q, vmax)
+        P_out = _cosine_from_q(v_out, q, vmax)
     denom = v_in * rho_in * P_in
     if p.ndim == 0:
         if abs(denom) < 1e-30:

@@ -8,6 +8,7 @@ import psutil
 import pytest
 from dataclasses import fields
 from types import SimpleNamespace
+from scipy.optimize import brentq
 
 import laytracer
 from laytracer.api import TRACE_OUTPUTS, _trace_batch, _unpack_results
@@ -117,6 +118,43 @@ class TestTraceRays:
         np.testing.assert_allclose(result["SV"].tstar, result["SH"].tstar)
         np.testing.assert_allclose(result["SV"].spreading, result["SH"].spreading)
         np.testing.assert_allclose(result["SV"].rays[0], result["SH"].rays[0])
+
+    def test_shared_sh_coefficients_use_q_near_grazing(self):
+        """SH reuses the SV solve, including its q, for a grazing coefficient product."""
+        df = pd.DataFrame({
+            "Depth": [0.0, 1000.0, 2000.0],
+            "Vp":    [1500.0, 5000.0, 7000.0],
+            "Vs":    [857.0, 2857.0, 4000.0],
+            "Rho":   [2000.0, 2400.0, 2700.0],
+        })
+        src = np.array([0.0, 0.0, 2000.1])
+        rcv = np.array([21000.0, 0.0, 0.0])
+        kwargs = {"requested": {"travel_times", "trans_product"}, "tol": 1e-9, "verbose": False}
+
+        multi = laytracer.trace_rays(src, rcv, df, source_phase=["SV", "SH"], **kwargs)
+        single = laytracer.trace_rays(src, rcv, df, source_phase="SH", **kwargs)
+
+        # Reference: SH transmissions at 2000 m and 1000 m, evaluated from q
+        vs = np.array([857.0, 2857.0, 4000.0])
+        rho = np.array([2000.0, 2400.0, 2700.0])
+        h = np.array([1000.0, 1000.0, 0.1])
+        lmd = vs / vs.max()
+        s = 1.0 - lmd**2
+        q = brentq(
+            lambda q: np.sum(h * lmd * q / np.sqrt(1.0 + s * q * q)) - rcv[0],
+            0.0, 1e15, xtol=1e-300, rtol=4 * np.finfo(float).eps, maxiter=500,
+        )
+        p = q / (vs.max() * np.sqrt(1.0 + q * q))
+        expected = 1.0
+        for k in (2, 1):
+            RT = laytracer.sh_rt_coefficients(
+                p, vs[k], rho[k], vs[k - 1], rho[k - 1], q=q, vmax=vs.max()
+            )
+            expected *= abs(RT["Tshsh"])
+
+        assert q > 1e5
+        assert multi["SH"].trans_product[0] == pytest.approx(expected, rel=1e-10)
+        assert single.trans_product[0] == pytest.approx(expected, rel=1e-10)
 
     def test_multi_phase_duplicate_alias_returns_one_entry(self):
         """Duplicate canonical phases are de-duplicated."""

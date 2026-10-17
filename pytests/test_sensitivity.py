@@ -3,6 +3,7 @@
 import numpy as np
 import pandas as pd
 import pytest
+from scipy.optimize import brentq
 
 import laytracer
 
@@ -59,6 +60,44 @@ def test_homogeneous_velocity_and_endpoint_sensitivities():
         delta / (velocity * distance),
         rtol=1e-12,
         atol=1e-15,
+    )
+
+
+def test_grazing_sensitivities_match_q_evaluation():
+    """Leg cosines from q keep the sensitivities exact for a grazing ray."""
+    model = pd.DataFrame({
+        "Depth": [0.0, 1000.0, 2000.0],
+        "Vp": [1500.0, 5000.0, 7000.0],
+        "Vs": [857.0, 2857.0, 4000.0],
+    })
+    offset = 21000.0
+    result = _trace(
+        np.array([0.0, 0.0, 2000.1]),
+        np.array([offset, 0.0, 0.0]),
+        model,
+        requested={"travel_times", "sensitivities"},
+    )
+    sensitivity = result.sensitivities[0]
+
+    # Cancellation-free reference: solve X(q) = offset, cosines from q
+    h = np.array([1000.0, 1000.0, 0.1])
+    v = np.array([1500.0, 5000.0, 7000.0])
+    lmd = v / v.max()
+    s = 1.0 - lmd**2
+    q = brentq(
+        lambda q: np.sum(h * lmd * q / np.sqrt(1.0 + s * q * q)) - offset,
+        0.0, 1e15, xtol=1e-300, rtol=4 * np.finfo(float).eps, maxiter=500,
+    )
+    c = np.sqrt((1.0 + s * q * q) / (1.0 + q * q))
+    assert q > 1e5
+
+    assert sensitivity.valid
+    k = list(sensitivity.vp_layer_indices).index(2)
+    assert sensitivity.dtravel_time_dvp[k] == pytest.approx(
+        -h[2] / (v[2] ** 2 * c[2]), rel=1e-11
+    )
+    assert abs(sensitivity.dtravel_time_dsource[2]) == pytest.approx(
+        c[2] / v[2], rel=1e-11
     )
 
 
