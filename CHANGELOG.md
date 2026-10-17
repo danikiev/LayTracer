@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - the documentation of a release reaches GitHub Pages. After v0.5.0 the site kept showing ``0.4.1.dev38+gf9703a9be``, because Pages ignores a deployment made from a tag when ``main`` has already deployed the same commit ([actions/deploy-pages#383](https://github.com/actions/deploy-pages/issues/383)). Pushing a ``v*`` tag now starts a ``docs.yml`` run on ``main`` that builds and deploys the tag, only runs on ``main`` deploy, and each deployment checks that the live site shows the version it deployed
+- the quadratic Newton step in q no longer stalls at large offsets. Its small root came from the textbook formula, which cancels to a zero step once ``4|AC|`` drops below machine precision relative to ``B**2``; the bracketed fallback then finished the solve, and the diagnostics reported ``q_brentq`` for rays that are not ill-conditioned. In a seeded benchmark this affected 5% of rays at the default tolerance and 14% at ``tol=1e-6``, almost all beyond ten times the source depth. The roots are now evaluated in cancellation-free form, so these rays converge in the quadratic step; travel times at offsets below ten times the source depth change by less than 1e-7 s (#17)
 
 ## [v0.5.0] - 2026-10-12
 

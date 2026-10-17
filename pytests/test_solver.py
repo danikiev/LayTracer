@@ -196,6 +196,18 @@ class TestNewton:
         assert min(residuals) < 1e-2 * X_target
         assert residuals[-1] < residuals[0]
 
+    def test_far_field_quadratic_root_does_not_cancel(self):
+        """A far-field step still moves when 4|AC| is below eps * B**2."""
+        h = np.array([1000.0, 1000.0, 100.0])
+        lmd = np.array([1500.0, 5000.0, 7000.0]) / 7000.0
+        X_target = 105000.0
+        # Iterate at which the textbook root formula returned a zero step
+        q_stalled = 1037.59998733142
+        assert laytracer.offset(q_stalled, h, lmd) - X_target > 1e-4
+
+        _, X_new = laytracer.newton_step(q_stalled, X_target, h, lmd)
+        assert abs(X_new - X_target) < 1e-9
+
 
 # ═══════════════════════════════════════════════════════════════════════
 #  solve()
@@ -440,3 +452,70 @@ class TestSolve:
             f"Ray should be flatter in fast deep layer (dx/dz={ratios[0]:.3f}) "
             f"than in slow shallow layer (dx/dz={ratios[-1]:.3f})"
         )
+
+    @pytest.mark.parametrize("tol", [1e-4, 1e-6])
+    def test_far_field_converges_without_fallback(self, tol):
+        """A ray at 50 times the source depth converges in the quadratic step."""
+        df = pd.DataFrame({
+            "Depth": [0.0, 1000.0, 2000.0],
+            "Vp":    [1500.0, 5000.0, 7000.0],
+            "Vs":    [857.0, 2857.0, 4000.0],
+            "Rho":   [2000.0, 2400.0, 2700.0],
+            "Qp":    [100.0, 200.0, 400.0],
+            "Qs":    [50.0, 100.0, 200.0],
+        })
+        z_src, z_rcv = 2100.0, 0.0
+        stack = laytracer.build_layer_stack(df, z_src=z_src, z_rcv=z_rcv)
+
+        h = stack.h
+        v = stack.vp
+        segments = [{
+            "h": h, "v": v, "vp": stack.vp, "vs": stack.vs, "rho": stack.rho,
+            "qp": stack.qp, "qs": stack.qs, "phase": "P",
+            "start_z": z_src, "end_z": z_rcv
+        }]
+
+        res = laytracer.solve(
+            h,
+            v,
+            segments,
+            [],
+            105000.0,
+            z_src=z_src,
+            z_rcv=z_rcv,
+            requested={"travel_times", "diagnostics"},
+            tol=tol,
+        )
+        assert res.diagnostics.method == "q_newton"
+        assert res.diagnostics.iterations <= 2
+        assert res.diagnostics.absolute_offset_residual <= tol
+
+    def test_large_offset_rays_need_no_fallback(self):
+        """Seeded rays at 10-100 times the depth converge without the fallback."""
+        rng = np.random.default_rng(17)
+        for _ in range(200):
+            n = int(rng.integers(2, 21))
+            h = np.exp(rng.uniform(np.log(20.0), np.log(1000.0), n))
+            v = rng.uniform(1500.0, 7000.0, n)
+            z = float(np.sum(h))
+            segments = [{
+                "h": h, "v": v, "vp": v, "vs": v / 1.8, "rho": np.ones(n),
+                "qp": None, "qs": None, "phase": "P",
+                "start_z": z, "end_z": 0.0,
+            }]
+            target = 10.0 ** rng.uniform(1.0, 2.0) * z
+
+            res = laytracer.solve(
+                h,
+                v,
+                segments,
+                [],
+                target,
+                z_src=z,
+                z_rcv=0.0,
+                requested={"travel_times", "diagnostics"},
+                tol=1e-6,
+            )
+            assert res.diagnostics.method == "q_newton", (
+                f"fallback for {n} layers at offset/depth {target / z:.1f}"
+            )

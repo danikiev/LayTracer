@@ -157,7 +157,13 @@ step, :math:`X(q)` is expanded to second order about the current iterate
    + \bigl[X(q_i) - X_R\bigr] = 0
 
 This quadratic equation in :math:`\Delta q` yields two roots.  The root
-minimising :math:`|X(q_i + \Delta q) - X_R|` is selected.  The iteration is
+minimising :math:`|X(q_i + \Delta q) - X_R|` is selected.  With
+:math:`A = \tfrac{1}{2}X''(q_i)`, :math:`B = X'(q_i) > 0` and
+:math:`C = X(q_i) - X_R`, the roots are evaluated as :math:`C/Q` and
+:math:`Q/A`, where :math:`Q = -\tfrac{1}{2}\bigl(B + \sqrt{B^2 - 4AC}\bigr)`.
+Near convergence and in the far field :math:`4|AC| \ll B^2`; the textbook form
+:math:`(-B \pm \sqrt{B^2 - 4AC})/(2A)` then cancels to a zero step, whereas
+:math:`C/Q` approaches the Newton step :math:`-C/B`.  The iteration is
 usually rapid, but convergence is not inferred from a fixed iteration count;
 the independently recomputed endpoint residual below is the acceptance test.
 

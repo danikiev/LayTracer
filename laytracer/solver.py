@@ -256,6 +256,10 @@ def newton_step(
         + \bigl[X(q_i) - X_R\bigr] = 0
 
     and selects the root that minimises :math:`|X(q_i+\Delta q)-X_R|`.
+    With :math:`A = \tfrac{1}{2}X''(q_i)`, :math:`B = X'(q_i) > 0` and
+    :math:`C = X(q_i) - X_R`, the roots are evaluated as :math:`C/Q` and
+    :math:`Q/A` with :math:`Q = -\tfrac{1}{2}\bigl(B + \sqrt{B^2 - 4AC}\bigr)`,
+    which keeps the small root accurate when :math:`4|AC| \ll B^2`.
 
     Parameters
     ----------
@@ -298,9 +302,12 @@ def _newton_step_from_s(
         if disc < 0:
             dq = -C / B if abs(B) > 1e-15 else 0.0
         else:
-            sd = np.sqrt(disc)
-            dq1 = (-B + sd) / (2.0 * A)
-            dq2 = (-B - sd) / (2.0 * A)
+            # Cancellation-free roots: B = X'(q) > 0, so qq < 0 and the small
+            # root C/qq stays accurate when 4|AC| << B^2.
+            sd = math.sqrt(disc)
+            qq = -0.5 * (B + sd)
+            dq1 = C / qq
+            dq2 = qq / A
 
             q1, q2 = q_i + dq1, q_i + dq2
             ok1, ok2 = q1 > 0, q2 > 0
