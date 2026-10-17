@@ -1,5 +1,6 @@
 r"""Tests for the core solver: offset equation, Newton iteration, and solve()."""
 
+import decimal
 import inspect
 import warnings
 import numpy as np
@@ -106,6 +107,14 @@ def _q_reference(h, v, offset):
     dxdp = np.sum(lmd * h / (1.0 + s * q * q) ** 1.5) * vmax * (1.0 + q * q) ** 1.5
     spreading = np.sqrt(offset * dxdp * c[0] * c[-1] / p)
     return q, c, spreading
+
+
+def _margin_reference(x, z=1.0):
+    """1 - x / sqrt(x**2 + z**2), evaluated as written in 50-digit arithmetic."""
+    with decimal.localcontext() as ctx:
+        ctx.prec = 50
+        x, z = decimal.Decimal(x), decimal.Decimal(z)
+        return float(1 - x / (x * x + z * z).sqrt())
 
 
 
@@ -643,3 +652,29 @@ class TestSolve:
             _, c, _ = _q_reference(h, v, target)
             assert res.travel_time == pytest.approx(np.sum(h / (v * c)), rel=1e-11)
             assert res.ray_path[-1, 0] == pytest.approx(target, rel=1e-12, abs=1e-8)
+
+    @pytest.mark.parametrize("below", [10.0, 0.1, 1e-3, 1e-4])
+    def test_criticality_margin_keeps_precision_near_grazing(self, below):
+        """The criticality margin equals 1 - p vmax at the solved q to full precision."""
+        res, _ = _direct_solve(
+            _grazing_model(), 2000.0 + below, 0.0, 21000.0,
+            requested={"travel_times", "diagnostics"}, tol=1e-9,
+        )
+        margin = res.diagnostics.criticality_margin
+        assert margin > 0.0
+        assert margin == pytest.approx(
+            _margin_reference(res.diagnostics.final_q), rel=1e-13, abs=0.0
+        )
+
+    # Binary fractions keep 500 - dz exact, so the stack thickness is dz itself
+    @pytest.mark.parametrize("dz", [1.0, 2.0**-7, 2.0**-14])
+    def test_single_leg_criticality_margin_keeps_precision(self, dz):
+        """A nearly horizontal straight leg reports its exact criticality margin."""
+        offset = 10000.0
+        res, _ = _direct_solve(
+            _homo_model(), 500.0, 500.0 - dz, offset,
+            requested={"travel_times", "diagnostics"},
+        )
+        margin = res.diagnostics.criticality_margin
+        assert margin > 0.0
+        assert margin == pytest.approx(_margin_reference(offset, dz), rel=1e-13, abs=0.0)

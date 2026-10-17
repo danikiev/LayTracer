@@ -179,6 +179,21 @@ def p_from_q(q: float, vmax: float) -> float:
     return q / (vmax * np.sqrt(1.0 + q * q))
 
 
+def _criticality_margin(q: float) -> float:
+    r"""Return :math:`1 - p\,v_{\max}` from *q* without cancellation.
+
+    .. math::
+        1 - p\,v_{\max} = 1 - \frac{q}{\sqrt{1 + q^2}}
+        = \frac{1}{\sqrt{1 + q^2}\,\bigl(\sqrt{1 + q^2} + q\bigr)}
+
+    A horizontal ray, :math:`q = \infty`, has a margin of zero.
+    """
+    if not math.isfinite(q):
+        return 0.0
+    root = math.sqrt(1.0 + q * q)
+    return 1.0 / (root * (root + q))
+
+
 # ═══════════════════════════════════════════════════════════════════════
 #  Initial estimate
 # ═══════════════════════════════════════════════════════════════════════
@@ -358,7 +373,9 @@ class SolveDiagnostics:
         zero-offset limit is reported as one.
     criticality_margin : float
         ``1 - p * vmax``; values approaching zero indicate grazing
-        propagation in the fastest traversed leg.
+        propagation in the fastest traversed leg.  It is evaluated as
+        ``1 / (sqrt(1 + q**2) * (sqrt(1 + q**2) + q))``, which keeps full
+        precision as the margin approaches zero.
     failure_reason : str or None
         Populated only when a numerical certificate cannot be produced.
     """
@@ -645,7 +662,6 @@ def solve(
              if need_complex_coefficient_product:
                  complex_prod = 1.0 + 0.0j
 
-        pv = float(p * v[0])
         # q = tan(theta) of the straight leg; q_from_p(p) would cancel near grazing
         q_direct = float(epicentral_dist / dz) if dz > 0.0 else np.inf
         diagnostics = SolveDiagnostics(
@@ -659,7 +675,7 @@ def solve(
             signed_offset_residual=0.0,
             absolute_offset_residual=0.0,
             conditioning=0.0 if not np.isfinite(q_direct) else 1.0,
-            criticality_margin=max(0.0, 1.0 - pv),
+            criticality_margin=_criticality_margin(q_direct),
         ) if need_diagnostics else None
 
         return RayResult(
@@ -768,7 +784,7 @@ def solve(
             signed_offset_residual=float(signed_residual),
             absolute_offset_residual=float(abs(signed_residual)),
             conditioning=float(conditioning),
-            criticality_margin=float(max(0.0, 1.0 - p * vmax)),
+            criticality_margin=_criticality_margin(float(q)),
             fallback_iterations=fallback_iterations,
         )
 

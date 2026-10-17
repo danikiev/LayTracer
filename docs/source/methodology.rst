@@ -179,7 +179,9 @@ is not met, monotonicity of :math:`X(q)` is used to construct a bracket on
 returned :class:`~laytracer.SolveDiagnostics` record identifies the accepted
 route (``q_newton`` or ``q_brentq``), primary and fallback iteration counts,
 initial and final :math:`q` and :math:`p`, signed and absolute endpoint
-residuals, the criticality margin :math:`1-pv_{\max}`, and the dimensionless
+residuals, the criticality margin
+:math:`1-pv_{\max} = 1/\bigl(\sqrt{1+q^2}\,(\sqrt{1+q^2}+q)\bigr)`, evaluated in
+this form to avoid cancellation near grazing incidence, and the dimensionless
 logarithmic slope
 
 .. math::
