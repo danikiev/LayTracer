@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - optional ``q`` and ``vmax`` keyword arguments of ``psv_rt_coefficients``, ``sh_rt_coefficients`` and ``normalize_rt_coefficient``: given the transformed ray parameter of a ray and its maximum velocity, the vertical slownesses are evaluated without cancellation near grazing incidence (#18)
 - ``RayResult.q``, the transformed ray parameter of the solved ray (#18)
+- release tags may carry a PEP 440 pre-release segment, for example ``v1.0.0rc1``. The shared tag validation accepts ``aN``, ``bN`` and ``rcN`` after ``vMAJOR.MINOR.PATCH``, so a pre-release deploys its documentation and is published to TestPyPI and PyPI like a final release. ``RELEASE.md`` describes pre-releases (#23)
 
 ### Changed
 

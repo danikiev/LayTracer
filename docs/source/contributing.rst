@@ -37,7 +37,8 @@ Branches and releases
 =====================
 
 Development happens on ``dev``, and releases are made from ``main``. Release tags follow
-semantic versioning as ``vMAJOR.MINOR.PATCH`` and must point at a commit contained in
+semantic versioning as ``vMAJOR.MINOR.PATCH``, with an optional PEP 440 pre-release
+segment such as ``rc1`` (``v1.0.0rc1``), and must point at a commit contained in
 ``main``; the version itself is derived from the tag by ``setuptools_scm``. The full
 procedure, including the TestPyPI and PyPI uploads, is described in ``RELEASE.md``.
 

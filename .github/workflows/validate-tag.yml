@@ -36,7 +36,7 @@ jobs:
           fetch-depth: 0
           fetch-tags: true
 
-      - name: Validate strict semver tag
+      - name: Validate release tag
         id: tag
         shell: bash
         run: |
@@ -44,8 +44,11 @@ jobs:
           if [[ "$TAG" == refs/tags/* ]]; then
             TAG="${TAG##*/}"
           fi
-          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "Invalid tag '$TAG'. Expected strict semver format: vMAJOR.MINOR.PATCH"
+          # vMAJOR.MINOR.PATCH, optionally followed by a canonical PEP 440 pre-release
+          # segment (aN, bN or rcN), so that the tag equals the version setuptools_scm builds
+          pattern='^v[0-9]+\.[0-9]+\.[0-9]+((a|b|rc)[0-9]+)?$'
+          if [[ ! "$TAG" =~ $pattern ]]; then
+            echo "Invalid tag '$TAG'. Expected vMAJOR.MINOR.PATCH, or a pre-release such as vMAJOR.MINOR.PATCHrc1"
             exit 1
           fi
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"

@@ -1,7 +1,7 @@
 # Release Guide
 
 This project uses `setuptools_scm`, so the package version is derived from Git tags.
-Use semantic tags in the form `vX.Y.Z` (example: `v0.1.1`).
+Use semantic tags in the form `vX.Y.Z` (example: `v0.1.1`). A pre-release appends a PEP 440 segment `aN`, `bN` or `rcN` (example: `v1.0.0rc1`); see [Pre-releases](#pre-releases).
 
 ## 1. One-time setup
 
@@ -137,7 +137,7 @@ Notes:
 
 - The workflow fetches tags so `setuptools_scm` can resolve the release version correctly.
 - Release tags must point to a commit contained in `main`; tags created from `dev` or any other branch are rejected by the workflow.
-- Only strict semver tags in the form `vMAJOR.MINOR.PATCH` are accepted (example: `v1.2.3`).
+- Only tags in the form `vMAJOR.MINOR.PATCH` (example: `v1.2.3`) are accepted, optionally followed by a pre-release segment `aN`, `bN` or `rcN` (example: `v1.0.0rc1`).
 
 ### Deploying the docs manually
 
@@ -186,7 +186,16 @@ Release order:
 
 - Push the `vX.Y.Z` tag first to deploy versioned docs.
 - Publish the GitHub Release for that tag when you are ready to publish to TestPyPI/PyPI.
-- Both workflows enforce strict semver tags (`vMAJOR.MINOR.PATCH`) before doing release work.
+- Both workflows accept only `vMAJOR.MINOR.PATCH` tags, optionally with a pre-release segment (`aN`, `bN`, `rcN`), before doing release work.
+
+### Pre-releases
+
+A pre-release, such as a release candidate, follows the same flow with a pre-release tag:
+
+- Write the tag in canonical PEP 440 form: `v1.0.0a1`, `v1.0.0b1` or `v1.0.0rc1`. The build checks that the distribution files carry the version of the tag, and `setuptools_scm` normalizes other spellings: `v1.0.0-rc.1` would build `1.0.0rc1`. Tag validation therefore rejects such spellings.
+- Select **Set as a pre-release** when you create the GitHub Release. Its `published` event still starts `release-on-published.yml`, which uploads the pre-release to TestPyPI and PyPI.
+- `pip install laytracer` skips pre-releases. Install one with an explicit version, `pip install laytracer==1.0.0rc1`, or with `pip install --pre laytracer`.
+- The tag push deploys the documentation of the pre-release, so the live site shows its version until the next release.
 
 ## 7. Zenodo release plan (recommended order)
 
@@ -232,7 +241,7 @@ Notes:
     - Ensure `LICENSE` and `README.md` are current and consistent with release notes.
 
 2. Create the release in GitHub:
-    - Push the semver tag (`vMAJOR.MINOR.PATCH`).
+    - Push the release tag (`vMAJOR.MINOR.PATCH`, or `vMAJOR.MINOR.PATCHrcN` for a release candidate).
     - Create/publish a GitHub Release for that tag (include highlights from `CHANGELOG.md`).
 
 3. Validate Zenodo deposition:
