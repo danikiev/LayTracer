@@ -105,6 +105,20 @@ class ModelArrays:
     Use :meth:`from_dataframe` to construct once and pass to
     :func:`build_layer_stack` to avoid repeated DataFrame
     column access when tracing many rays.
+
+    Parameters
+    ----------
+    depths : numpy.ndarray
+        Layer-top depths (m, positive downward), shape ``(L,)``, from the
+        ``Depth`` column.  The last layer extends to infinite depth.
+    vp, vs : numpy.ndarray
+        P- and S-wave velocities (m/s), shape ``(L,)``.
+    rho : numpy.ndarray or None
+        Densities (kg/m^3), shape ``(L,)``, or *None* if the model has no
+        ``Rho`` column.
+    qp, qs : numpy.ndarray or None
+        P- and S-wave quality factors, shape ``(L,)``, or *None* if the
+        model has no ``Qp`` or ``Qs`` column.
     """
 
     depths: np.ndarray

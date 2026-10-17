@@ -5,8 +5,8 @@ Implements the method of :cite:t:`FangChen2019`:
 
 *   Dimensionless ray parameter :math:`q` for numerical stability
 *   Vectorised offset equation :math:`X(q)` and its derivatives
-*   Asymptotic initial estimate (Section 2.2 of the paper)
-*   Second-order Newton iteration (Section 2.3 of the paper)
+*   Asymptotic initial estimate (Section 2.2 of Fang and Chen, 2019)
+*   Second-order Newton iteration (Section 2.3 of Fang and Chen, 2019)
 """
 
 from __future__ import annotations
@@ -130,6 +130,20 @@ def offset_dq(q: float, h: np.ndarray, lmd: np.ndarray) -> float:
         = \sum_{k=1}^{N}
           \frac{\lambda_k\,h_k}
                {\bigl[1 + (1 - \lambda_k^2)\,q^2\bigr]^{3/2}}
+
+    Parameters
+    ----------
+    q : float
+        Dimensionless ray parameter.
+    h : numpy.ndarray
+        Layer thicknesses (m), shape ``(N,)``.
+    lmd : numpy.ndarray
+        Velocity ratios :math:`\lambda_k = v_k / v_{\max}`, shape ``(N,)``.
+
+    Returns
+    -------
+    float
+        :math:`\mathrm{d}X/\mathrm{d}q` (m), positive for :math:`q \ge 0`.
     """
     s = 1.0 - lmd * lmd
     return _offset_dq_from_s(q, h, lmd, s)
@@ -153,6 +167,21 @@ def offset_dq2(q: float, h: np.ndarray, lmd: np.ndarray) -> float:
         = -3\,q\,\sum_{k=1}^{N}
           \frac{(1 - \lambda_k^2)\,\lambda_k\,h_k}
                {\bigl[1 + (1 - \lambda_k^2)\,q^2\bigr]^{5/2}}
+
+    Parameters
+    ----------
+    q : float
+        Dimensionless ray parameter.
+    h : numpy.ndarray
+        Layer thicknesses (m), shape ``(N,)``.
+    lmd : numpy.ndarray
+        Velocity ratios :math:`\lambda_k = v_k / v_{\max}`, shape ``(N,)``.
+
+    Returns
+    -------
+    float
+        :math:`\mathrm{d}^2X/\mathrm{d}q^2` (m), zero or negative for
+        :math:`q \ge 0`.
     """
     s = 1.0 - lmd * lmd
     return _offset_dq2_from_s(q, h, lmd, s)
@@ -166,6 +195,25 @@ def q_from_p(p: float, vmax: float) -> float:
     r"""Convert horizontal slowness *p* to dimensionless parameter *q*.
 
     .. math:: q = \frac{p\,v_{\max}}{\sqrt{1 - p^2\,v_{\max}^2}}
+
+    Parameters
+    ----------
+    p : float
+        Horizontal slowness (s/m), with :math:`0 \le p\,v_{\max} < 1`.
+    vmax : float
+        Largest velocity along the path (m/s).
+
+    Returns
+    -------
+    float
+        Dimensionless ray parameter :math:`q \ge 0`.
+
+    Notes
+    -----
+    Near grazing incidence, where :math:`p\,v_{\max} \to 1`, the difference
+    :math:`1 - p^2 v_{\max}^2` cancels and the relative error of the result
+    grows like :math:`\varepsilon\,q^2`.  For a solved ray, use the exact
+    :attr:`RayResult.q` instead of converting its ray parameter.
     """
     pv = p * vmax
     return pv / np.sqrt(1.0 - pv * pv)
@@ -175,6 +223,19 @@ def p_from_q(q: float, vmax: float) -> float:
     r"""Convert dimensionless parameter *q* to horizontal slowness *p*.
 
     .. math:: p = \frac{q}{v_{\max}\,\sqrt{1 + q^2}}
+
+    Parameters
+    ----------
+    q : float
+        Dimensionless ray parameter, :math:`q \ge 0`.
+    vmax : float
+        Largest velocity along the path (m/s).
+
+    Returns
+    -------
+    float
+        Horizontal slowness (s/m), with :math:`0 \le p\,v_{\max} < 1` for
+        finite *q*.
     """
     return q / (vmax * np.sqrt(1.0 + q * q))
 
@@ -222,6 +283,21 @@ def initial_q(
     *   :math:`q_0 = (X - b_\infty) / m_\infty` otherwise.
 
     where :math:`X^* = m_0\,q^*` and :math:`q^* = b_\infty/(m_0-m_\infty)`.
+
+    Parameters
+    ----------
+    X_target : float
+        Requested horizontal range :math:`X_R` (m).
+    h : numpy.ndarray
+        Layer thicknesses (m), shape ``(N,)``.
+    lmd : numpy.ndarray
+        Velocity ratios :math:`\lambda_k = v_k / v_{\max}`, shape ``(N,)``.
+
+    Returns
+    -------
+    float
+        Initial estimate :math:`q_0`, at least ``1e-10``.  If
+        :math:`m_0` vanishes, the estimate is ``1.0``.
     """
     m0 = float(np.sum(lmd * h))  # near-field slope
 
@@ -354,7 +430,9 @@ class SolveDiagnostics:
     Attributes
     ----------
     converged : bool
-        Whether the independently recomputed offset meets ``tol``.
+        Whether the independently recomputed offset meets the tolerance.
+        :func:`solve` raises :class:`RuntimeError` when it does not, so the
+        diagnostics it returns always have ``converged=True``.
     method : str
         ``"q_newton"`` for the quadratic iteration or ``"q_brentq"`` for
         the safeguarded bracketed fallback.
@@ -377,7 +455,8 @@ class SolveDiagnostics:
         ``1 / (sqrt(1 + q**2) * (sqrt(1 + q**2) + q))``, which keeps full
         precision as the margin approaches zero.
     failure_reason : str or None
-        Populated only when a numerical certificate cannot be produced.
+        Reserved for a solve without a numerical certificate.  Failed solves
+        raise instead, so returned diagnostics always have *None*.
     """
 
     converged: bool
@@ -517,10 +596,67 @@ def solve(
     segments : list of dict
         Metadata for each logical monotonic segment (used for reconstruction).
         Dict keys: 'h', 'v', 'phase', 'start_z', 'end_z'.
+        Interface coefficients also use 'vp', 'vs' and 'rho', and t* uses
+        'qp' or 'qs'.
     interactions : list of dict
         Metadata for interactions (reflections/refractions) impacting amplitude.
         Dict keys: 'type', 'depth', 'in_phase', 'out_phase', 'seg_idx'.
-    interactions are assumed to occur at the END of the defined segment.
+        Interface coefficients also use 'vp_beyond', 'vs_beyond' and
+        'rho_beyond'.  An interaction occurs at the end of the segment
+        given by 'seg_idx'.
+    epicentral_dist : float
+        Horizontal source-receiver distance :math:`X_R` (m).
+    z_src, z_rcv : float
+        Source and receiver depths (m, positive downward).  They locate the
+        endpoints of the returned ray path.
+    requested : collection of str, optional
+        Outputs to compute: ``travel_times``, ``rays``, ``ray_parameters``,
+        ``tstar``, ``spreading``, ``trans_product``,
+        ``complex_coefficient_product`` and ``diagnostics``.  The set must
+        include ``travel_times``.  When given, it overrides the boolean
+        flags below.
+    return_ray_path : bool
+        Return the ray path.
+    need_ray_parameter : bool
+        Return the horizontal slowness *p*.
+    need_tstar : bool
+        Compute the attenuation operator :math:`t^*`.  Requires finite,
+        positive Q values in the segments.
+    need_spreading : bool
+        Compute the relative geometrical spreading.
+    need_trans_product : bool
+        Compute the product of interface-coefficient magnitudes.  Requires
+        finite, positive densities on both sides of every interface crossed.
+    transcoef_method : str
+        ``'standard'`` (Zoeppritz) or ``'normalized'`` (energy-flux
+        normalized) interface coefficients.  The legacy spelling ``'angle'``
+        is an alias for ``'standard'``.
+    tol : float
+        Absolute tolerance on the offset :math:`|X(q) - X_R|` (m) that ends
+        the quadratic iteration.  The independent recheck of the final ray
+        accepts a residual up to ``max(tol, 64 * eps * max(X_R, 1 m))``,
+        where ``eps`` is the machine epsilon.
+    max_iter : int
+        Maximum number of quadratic Newton updates before the bracketed
+        Brent fallback.
+    need_complex_coefficient_product : bool
+        Compute the signed or complex product of interface coefficients.
+    need_diagnostics : bool
+        Return a :class:`SolveDiagnostics` record.
+
+    Returns
+    -------
+    RayResult
+        The solved ray.  Outputs that were not requested are *None*.
+
+    Raises
+    ------
+    ValueError
+        If *requested* or *transcoef_method* is invalid, or if Q values or
+        densities required by a requested output are missing or invalid.
+    RuntimeError
+        If the root in *q* cannot be bracketed, or if the recomputed offset
+        misses the tolerance.
     """
     requested = _normalize_requested(requested)
     if requested is not None:

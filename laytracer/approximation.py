@@ -482,12 +482,25 @@ class TravelTimeApproximator:
 
     Attributes
     ----------
+    velocity_model : pandas.DataFrame
+        Layer model used for fitting.
+    source_phase : str
+        Canonical source phase, ``"P"``, ``"SV"`` or ``"SH"``.
+    itinerary : RayItinerary or None
+        Fitted fixed-topology path, or *None* for a direct ray.
+    fit_sources, fit_receivers : numpy.ndarray
+        Target-domain endpoints supplied to :meth:`fit`, shape ``(N, 3)``.
+        :meth:`predict` uses them when it is called without endpoints.
     source_anchor_indices, receiver_anchor_indices : numpy.ndarray
         Original endpoint indices retained as anchors.
     anchor_sources, anchor_receivers : numpy.ndarray
         Anchor coordinates.
     anchor_trace : TraceResult
         Exact Cartesian-product ray trace at the anchors.
+    anchor_topologies : numpy.ndarray of object
+        Path-leg key of each anchor ray in source-major order, or *None*
+        where the path cannot reach that anchor pair.  A target is predicted
+        only from anchors that share its key.
     source_max_distance, receiver_max_distance : float or None
         Endpoint coverage limits used during fitting.
     """

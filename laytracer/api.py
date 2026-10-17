@@ -84,7 +84,16 @@ class Interaction:
 
 @dataclass(frozen=True)
 class RayItinerary:
-    """An ordered, fixed-topology phase itinerary."""
+    """An ordered, fixed-topology phase itinerary.
+
+    Parameters
+    ----------
+    source_phase : {"P", "SV", "SH", "S"}
+        Phase leaving the source. ``"S"`` is normalized to ``"SV"``.
+    interactions : sequence of Interaction
+        Reflections and transmissions in the order the ray meets them,
+        stored as a tuple.
+    """
 
     source_phase: str
     interactions: Sequence[Interaction]

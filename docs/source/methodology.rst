@@ -295,12 +295,18 @@ ray parameter :math:`p`.  Calculating the derivatives in :math:`p` avoids
 introducing an artificial discontinuity when the identity of the fastest
 traversed leg changes.
 
-These are deliberately **local** derivatives.  They are valid only while the
-endpoint layer membership, prescribed phase itinerary, and propagating branch
-remain unchanged.  A perturbation that moves an endpoint across an interface,
-creates or removes a leg, changes the selected arrival, or reaches a critical
-or evanescent path is outside this linearization; such sensitivity records are
-marked invalid rather than being silently extrapolated.
+These are deliberately **local** derivatives of the solved ray.  They are
+valid only while the endpoint layer membership, prescribed phase itinerary,
+and propagating branch remain unchanged.  A perturbation that moves an
+endpoint across an interface, creates or removes a leg, changes the selected
+arrival, or reaches critical incidence is outside this linearization, and
+the derivatives themselves do not detect it.  A sensitivity record is marked
+invalid, with a reason, only when the solved ray cannot be differentiated:
+its ray parameter is not finite, a leg is at or beyond critical incidence,
+or :math:`X_p` is not positive and finite.  Near-critical rays, whose
+linearization holds only for small perturbations, can be identified with the
+``criticality_margin`` and ``conditioning`` fields of
+:class:`~laytracer.SolveDiagnostics`.
 
 ----
 

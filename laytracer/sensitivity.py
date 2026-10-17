@@ -45,6 +45,42 @@ class RaySensitivity:
     ``ray_parameter`` and ``doffset_dray_parameter`` retain :math:`p` and
     :math:`X_p=\partial X/\partial p` from the solved ray.  They support the
     optional second-order endpoint predictor without another ray solve.
+
+    Attributes
+    ----------
+    vp_layer_indices : numpy.ndarray of int
+        Model-layer indices with a P-wave velocity derivative.
+    dtravel_time_dvp, dray_parameter_dvp : numpy.ndarray
+        Derivatives of the traveltime (s^2/m) and of the ray parameter
+        (s^2/m^2) with respect to the P-wave velocity of each layer in
+        ``vp_layer_indices``.
+    vs_layer_indices : numpy.ndarray of int
+        Model-layer indices with an S-wave velocity derivative.
+    dtravel_time_dvs, dray_parameter_dvs : numpy.ndarray
+        The same derivatives with respect to the S-wave velocities.
+    interface_indices : numpy.ndarray of int
+        Row indices into the model ``Depth`` array of the interfaces that
+        bound a leg of the ray.
+    dtravel_time_dinterface_depths, dray_parameter_dinterface_depths : numpy.ndarray
+        Derivatives of the traveltime (s/m) and of the ray parameter
+        (s/m^2) with respect to each interface depth (positive downward).
+    dtravel_time_dsource, dtravel_time_dreceiver : numpy.ndarray
+        Traveltime gradients (s/m) with respect to the source and receiver
+        coordinates ``(x, y, z)``, shape ``(3,)``.
+    dray_parameter_dsource, dray_parameter_dreceiver : numpy.ndarray
+        Ray-parameter gradients (s/m^2) with respect to the source and
+        receiver coordinates, shape ``(3,)``.
+    ray_parameter : float
+        Horizontal slowness :math:`p` of the solved ray (s/m).
+    doffset_dray_parameter : float
+        :math:`X_p` of the solved ray (m^2/s); infinite for a horizontal
+        ray within one layer.
+    valid : bool
+        *False* if the ray cannot be differentiated.  The layer and
+        interface arrays are then empty, and the endpoint gradients,
+        ``ray_parameter`` and ``doffset_dray_parameter`` are NaN.
+    reason : str or None
+        Why the record is invalid, or *None*.
     """
 
     vp_layer_indices: np.ndarray
